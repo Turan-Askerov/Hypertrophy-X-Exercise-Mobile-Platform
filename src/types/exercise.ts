@@ -1,0 +1,2 @@
+// egzersiz kataloğu tipleri
+export {};

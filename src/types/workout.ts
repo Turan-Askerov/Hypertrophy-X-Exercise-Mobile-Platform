@@ -1,0 +1,2 @@
+// antrenman, set tipleri
+export {};

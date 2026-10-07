@@ -1,0 +1,2 @@
+// boşluk ölçeği
+export {};

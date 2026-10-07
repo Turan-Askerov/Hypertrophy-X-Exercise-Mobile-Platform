@@ -1,0 +1,2 @@
+// beslenme tipleri
+export {};

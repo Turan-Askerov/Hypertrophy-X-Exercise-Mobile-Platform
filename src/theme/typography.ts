@@ -1,0 +1,2 @@
+// yazı stilleri
+export {};
