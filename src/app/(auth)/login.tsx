@@ -1,9 +1,5 @@
-import { Text, View } from "react-native";
+import SessionLab from '@/components/lab/session-lab';
 
-export default function Screen() {
-  return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-      <Text>Giriş</Text>
-    </View>
-  );
+export default function Login() {
+  return <SessionLab />;
 }
