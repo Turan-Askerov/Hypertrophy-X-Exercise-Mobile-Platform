@@ -48,3 +48,17 @@
 - `created_at`, `updated_at`: ISO metin, farklı UTC farkıyla gelebilir (`+00:00`, `+03:00`).
 - Bilinmeyen `/api/...` GET yolu 404 değil **405** döner (`detail: "Not Found"`). Sebep: `main.py` içindeki SPA yakalayıcısı.
 - `custom_split`, `dashboard_preferences`, `daily_nutrition`: veritabanında JSON metni (varsayılan `'[]'` / `'{}'`). Cevapta metin mi nesne mi olduğu henüz doğrulanmadı.
+
+## Karar 6 ve oturum durumları (güncel)
+
+Yukarıdaki "Oturum durumları" listesine dördüncü durum eklendi:
+
+1. **loading:** kayıtlı token var mı, geçerli mi bakılıyor
+2. **signedOut:** çıkış yapılmış
+3. **signedIn:** giriş yapılmış (kullanıcıyla birlikte, token durumda tutulmaz)
+4. **unreachable:** sunucuya ulaşılamıyor, "tekrar dene" ekranı
+
+Açılışta token varsa `GET /api/user`:
+- 200 → signedIn
+- 401 → token silinir, signedOut
+- ağ hatası, zaman aşımı, 429, 5xx → unreachable (token SİLİNMEZ)
