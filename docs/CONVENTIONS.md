@@ -9,3 +9,5 @@
 - Falsy tuzağı: `0`, `""`, `false` geçerli değer olabilir. `if (x)` yerine `x !== undefined` / `x !== null` yaz.
 - Dış veriyi (`unknown`) kontrollerle daralt, `as` ile zorlama.
 - Her mantık değişikliğinden sonra: ilgili test + `npx tsc -p ts-playground` + `npx tsc --noEmit`.
+- Yalnızca TİP olan şeyleri `import type { ... }` ile içe aktar (aksi halde Node "dışa aktarma yok" der).
+- VS Code'un otomatik içe aktarmasını kabul ettikten sonra yolu (göreli mi?) ve `type`'ı kontrol et.

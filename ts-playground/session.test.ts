@@ -121,6 +121,20 @@ for (const kind of ["network", "timeout", "server", "rate-limited"] as const) {
   assert.equal(s.calls.login, 0); // kayıt başarısızsa giriş denenmez
 }
 
+// ---- completeSignIn (kayıt onayından sonra) ----
+{
+  const s = setup();
+  const state = await s.service.completeSignIn("jwt-1", sampleUser);
+  assert.deepEqual(state, { status: "signedIn", user: sampleUser });
+  assert.equal(s.mem.data.get("hx_token"), "jwt-1"); // token güvenli depoda
+  assert.equal("token" in (state.status === "signedIn" ? state.user : {}), false);
+}
+{
+  const s = setup();
+  s.mem.stats.failSet = true;
+  await assert.rejects(s.service.completeSignIn("jwt-1", sampleUser), /yazılamadı/);
+}
+
 // ---- signOut ----
 {
   const s = setup({ token: "tkn" });

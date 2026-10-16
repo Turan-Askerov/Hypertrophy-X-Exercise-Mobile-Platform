@@ -62,3 +62,20 @@ Açılışta token varsa `GET /api/user`:
 - 200 → signedIn
 - 401 → token silinir, signedOut
 - ağ hatası, zaman aşımı, 429, 5xx → unreachable (token SİLİNMEZ)
+
+## GÜNCEL: kayıt iki adımlıdır (kaynak: Hypertrophy-X-v4_0_1.zip)
+
+Önceki "Karar 3 (e-posta isteğe bağlı)" ve "Karar 4 (kayıttan sonra otomatik giriş)" GEÇERSİZ.
+
+| Adım | Uç | İstek | Cevap |
+|---|---|---|---|
+| 1 | `POST /api/auth/register` | `username`, `password`, `email` (zorunlu) | `{success, token, masked_email, message}`. Buradaki `token` bir **işlem bileti**, JWT değil |
+| 2 | `POST /api/auth/register/confirm` | `token` (bilet), `code` (6 rakam) | `{success, message, token, user, username}`. Buradaki `token` **JWT**, `user` **iç içe** (girişteki gibi düz değil) |
+
+- Kod 15 dakika geçerli. 5 hatalı denemede talep iptal olur, yeniden kayıt gerekir.
+- Yanlış kod: 400, "Girdiğiniz doğrulama kodu hatalı. Kalan deneme hakkı: N".
+- "Tekrar gönder" ucu yok: `/register`'ı aynı bilgilerle yeniden çağırmak eski talebi geçersiz kılar ve yeni bilet + kod verir. Form bilgileri (şifre dahil) akış boyunca bellekte tutulur.
+- Çakışma (kullanıcı adı ya da e-posta): 409, büyük/küçük harfe duyarsız.
+- `/register` hız sınırı kapsamında, `/register/confirm` değil (her talep 5 denemeyle sınırlı).
+- Giriş ve `GET /api/user` cevabı DEĞİŞMEDİ (`User` tipi geçerli). Şifre sıfırlama aynı.
+- Diğer iki adımlı akışlar (profil aşamasında): şifre değiştirme (`/change-password/request` + `/confirm`), e-posta güncelleme (`/api/user/email/request-update` + `/confirm-update`).

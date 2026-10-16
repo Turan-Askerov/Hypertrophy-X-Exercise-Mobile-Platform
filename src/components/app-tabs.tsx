@@ -28,6 +28,14 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="history">
+        <NativeTabs.Trigger.Label>Geçmiş</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={require('@/assets/images/tabIcons/explore.png')}
+          renderingMode="template"
+        />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="progress">
         <NativeTabs.Trigger.Label>İlerleme</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

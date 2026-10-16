@@ -41,10 +41,15 @@ export function createSessionService(deps: SessionDeps) {
     }
   }
 
-  async function signIn(username: string, password: string): Promise<SessionState> {
-    const { token, ...user } = await deps.authApi.login(username, password);
+    // Token'ı güvenli depoya yazar, durumda yalnızca kullanıcıyı tutar.
+  async function completeSignIn(token: string, user: User): Promise<SessionState> {
     await deps.tokenStorage.saveToken(token);
     return { status: "signedIn", user };
+  }
+
+  async function signIn(username: string, password: string): Promise<SessionState> {
+    const { token, ...user } = await deps.authApi.login(username, password);
+    return completeSignIn(token, user);
   }
 
   async function register(
@@ -55,11 +60,11 @@ export function createSessionService(deps: SessionDeps) {
     await deps.authApi.register(username, password, email);
     return signIn(username, password);
   }
-
+  
   async function signOut(): Promise<SessionState> {
     await deps.tokenStorage.clearToken();
     return { status: "signedOut" };
   }
 
-  return { restore, signIn, register, signOut };
+  return { restore,completeSignIn, signIn, register, signOut };
 }

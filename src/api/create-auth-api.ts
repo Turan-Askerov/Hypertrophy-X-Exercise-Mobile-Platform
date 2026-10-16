@@ -2,6 +2,13 @@ import { isAdminAccount } from "../auth/account-kind.ts";
 import type { LoginResponse, RegisterResponse, UserLoginResponse } from "../types/user";
 import type { createApiClient } from "./api-client.ts";
 import { ApiError } from "./api-error.ts";
+import type {
+  ForgotPasswordResponse,
+  RegisterConfirmResponse,
+  RegisterStartResponse,
+  ResetPasswordResponse,
+  VerifyResetCodeResponse,
+} from "../types/auth";
 
 
 export type ApiCaller = ReturnType<typeof createApiClient>;
@@ -31,20 +38,43 @@ export function createAuthApi(client: ApiCaller) {
     return client.call<RegisterResponse>("/api/auth/register", { method: "POST", body: { username: username.trim(), password, ...(email?.trim() ? { email: email.trim() } : {}) }, auth: false });
   } 
 
+    function startRegistration(username: string, password: string, email: string) {
+    return client.call<RegisterStartResponse>("/api/auth/register", {
+      method: "POST",
+      body: { username: username.trim(), password, email: email.trim() },
+      auth: false,
+    });
+  }
+
+  function confirmRegistration(ticket: string, code: string) {
+    return client.call<RegisterConfirmResponse>("/api/auth/register/confirm", {
+      method: "POST",
+      body: { token: ticket, code: code.trim() },
+      auth: false,
+    });
+  }
+
   function forgotPassword(emailOrUsername: string) {
     // POST /api/auth/forgot-password, gövde { email_or_username: kırpılmış }, auth: false
-    return client.call("/api/auth/forgot-password", { method: "POST", body: { email_or_username: emailOrUsername.trim() }, auth: false });
+    return client.call<ForgotPasswordResponse>("/api/auth/forgot-password", { method: "POST", body: { email_or_username: emailOrUsername.trim() }, auth: false });
   }
 
   function verifyResetCode(resetToken: string, code: string) {
     // POST /api/auth/verify-reset-code, gövde { reset_token, code: kırpılmış }, auth: false
-    return client.call("/api/auth/verify-reset-code", { method: "POST", body: { reset_token: resetToken, code: code.trim() }, auth: false });
+    return client.call<VerifyResetCodeResponse>("/api/auth/verify-reset-code", { method: "POST", body: { reset_token: resetToken, code: code.trim() }, auth: false });
   }
 
   function resetPassword(verifiedToken: string, newPassword: string) {
     // POST /api/auth/reset-password, gövde { verified_token, new_password }, auth: false
-    return client.call("/api/auth/reset-password", { method: "POST", body: { verified_token: verifiedToken, new_password: newPassword }, auth: false });
+    return client.call<ResetPasswordResponse>("/api/auth/reset-password", { method: "POST", body: { verified_token: verifiedToken, new_password: newPassword }, auth: false });
   }
 
-  return { login, register, forgotPassword, verifyResetCode, resetPassword };
-}
+  return {
+    login,
+    register,
+    startRegistration,
+    confirmRegistration,
+    forgotPassword,
+    verifyResetCode,
+    resetPassword,
+};}

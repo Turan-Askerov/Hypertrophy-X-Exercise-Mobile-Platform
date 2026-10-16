@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-
+import type { User } from "@/types/user";
 import { authApi } from "@/api/auth";
 import { setUnauthorizedHandler } from "@/api/client";
 import { usersApi } from "@/api/users";
@@ -14,6 +14,7 @@ type AuthContextValue = {
   signIn: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, email?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  completeSignIn: (token: string, user: User) => Promise<void>;
   retry: () => void;
 };
 
@@ -48,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn: async (username, password) => setState(await service.signIn(username, password)),
     register: async (username, password, email) =>
       setState(await service.register(username, password, email)),
+        completeSignIn: async (token, user) =>
+      setState(await service.completeSignIn(token, user)),
     signOut: async () => setState(await service.signOut()),
     retry: () => setAttempt((n) => n + 1),
   };

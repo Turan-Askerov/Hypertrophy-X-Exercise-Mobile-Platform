@@ -81,6 +81,28 @@ for (const adminLike of [
   assert.deepEqual(f.calls[2].options?.body, { username: "ali", password: "123456", email: "Ali@Ornek.com" });
 }
 
+// ---- kayıt (2 adım: başlat + onayla) ----
+{
+  const f = fakeClient({ success: true });
+  const api = createAuthApi(f.client);
+
+  await api.startRegistration("  ali ", "123456", "  ali@ornek.com ");
+  assert.equal(f.calls[0].path, "/api/auth/register");
+  assert.equal(f.calls[0].options?.method, "POST");
+  assert.equal(f.calls[0].options?.auth, false);
+  assert.deepEqual(f.calls[0].options?.body, {
+    username: "ali",
+    password: "123456",
+    email: "ali@ornek.com",
+  });
+
+  await api.confirmRegistration("ticket1", " 123456 ");
+  assert.equal(f.calls[1].path, "/api/auth/register/confirm");
+  assert.equal(f.calls[1].options?.method, "POST");
+  assert.equal(f.calls[1].options?.auth, false);
+  assert.deepEqual(f.calls[1].options?.body, { token: "ticket1", code: "123456" });
+}
+
 // ---- şifre sıfırlama (3 adım) ----
 {
   const f = fakeClient({ success: true });
