@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { User } from "@/types/user";
+
 import { authApi } from "@/api/auth";
 import { setUnauthorizedHandler } from "@/api/client";
 import { usersApi } from "@/api/users";
+import type { User } from "@/types/user";
 
 import { createSessionService, type SessionState } from "./create-session-service";
 import { tokenStorage } from "./token-storage";
@@ -12,9 +13,8 @@ const service = createSessionService({ tokenStorage, authApi, usersApi });
 type AuthContextValue = {
   state: SessionState;
   signIn: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string, email?: string) => Promise<void>;
-  signOut: () => Promise<void>;
   completeSignIn: (token: string, user: User) => Promise<void>;
+  signOut: () => Promise<void>;
   retry: () => void;
 };
 
@@ -47,9 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     state,
     signIn: async (username, password) => setState(await service.signIn(username, password)),
-    register: async (username, password, email) =>
-      setState(await service.register(username, password, email)),
-        completeSignIn: async (token, user) =>
+    completeSignIn: async (token, user) =>
       setState(await service.completeSignIn(token, user)),
     signOut: async () => setState(await service.signOut()),
     retry: () => setAttempt((n) => n + 1),

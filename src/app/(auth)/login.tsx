@@ -1,12 +1,13 @@
 import { Link } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useAuth } from '@/auth/auth-provider';
 import { Button } from '@/components/ui/button';
 import { FormScreen } from '@/components/ui/form-screen';
 import { TextField } from '@/components/ui/text-field';
-import { formatWait, authFailureFrom } from '@/lib/auth-error';
+import { useCooldown } from '@/hooks/use-cooldown';
+import { authFailureFrom, formatWait } from '@/lib/auth-error';
 import { validateLoginPassword, validateLoginUsername } from '@/lib/validators';
 
 export default function LoginScreen() {
@@ -19,17 +20,10 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-
-  // "Çok fazla deneme" geri sayımı: her saniye bir azalt
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [cooldown]);
+  const cooldown = useCooldown();
 
   async function handleSubmit() {
-    if (busy || cooldown > 0) return;
+    if (busy || cooldown.seconds > 0) return;
 
     const uError = validateLoginUsername(username);
     const pError = validateLoginPassword(password);
@@ -45,7 +39,7 @@ export default function LoginScreen() {
     } catch (err) {
       const failure = authFailureFrom(err);
       setFormError(failure.message);
-      setCooldown(failure.cooldownSeconds);
+      cooldown.start(failure.cooldownSeconds);
       setBusy(false);
     }
   }
@@ -90,10 +84,14 @@ export default function LoginScreen() {
       )}
 
       <Button
-        title={cooldown > 0 ? `Tekrar denemek için ${formatWait(cooldown)}` : 'Giriş yap'}
+        title={
+          cooldown.seconds > 0
+            ? `Tekrar denemek için ${formatWait(cooldown.seconds)}`
+            : 'Giriş yap'
+        }
         onPress={handleSubmit}
         loading={busy}
-        disabled={cooldown > 0}
+        disabled={cooldown.seconds > 0}
       />
 
       <View style={styles.links}>

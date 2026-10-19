@@ -15,7 +15,6 @@ export type SessionDeps = {
   };
   authApi: {
     login: (username: string, password: string) => Promise<UserLoginResponse>;
-    register: (username: string, password: string, email?: string) => Promise<unknown>;
   };
   usersApi: {
     getMe: () => Promise<User>;
@@ -41,7 +40,7 @@ export function createSessionService(deps: SessionDeps) {
     }
   }
 
-    // Token'ı güvenli depoya yazar, durumda yalnızca kullanıcıyı tutar.
+  // Token'ı güvenli depoya yazar, durumda yalnızca kullanıcıyı tutar.
   async function completeSignIn(token: string, user: User): Promise<SessionState> {
     await deps.tokenStorage.saveToken(token);
     return { status: "signedIn", user };
@@ -52,19 +51,10 @@ export function createSessionService(deps: SessionDeps) {
     return completeSignIn(token, user);
   }
 
-  async function register(
-    username: string,
-    password: string,
-    email?: string
-  ): Promise<SessionState> {
-    await deps.authApi.register(username, password, email);
-    return signIn(username, password);
-  }
-  
   async function signOut(): Promise<SessionState> {
     await deps.tokenStorage.clearToken();
     return { status: "signedOut" };
   }
 
-  return { restore,completeSignIn, signIn, register, signOut };
+  return { restore, signIn, completeSignIn, signOut };
 }

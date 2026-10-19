@@ -1,0 +1,8 @@
+Üzerinde bulunulan dal: master
+İzlenmeyen dosyalar:
+  (işlenecekler arasına koymak için "git add <dosya>..." kullanın)
+	docs/Testler.md
+	son_durum.txt
+
+işlemeye bir şey eklenmedi; ancak izlenmeyen dosyalar var
+  (izlemek için "git add" kullanın)

@@ -26,12 +26,11 @@ type Options = {
   token?: string;
   getMe?: () => Promise<User>;
   login?: () => Promise<UserLoginResponse>;
-  register?: () => Promise<unknown>;
 };
 
 function setup(options: Options = {}) {
   const mem = memoryAdapter(options.token);
-  const calls = { getMe: 0, login: 0, register: 0 };
+  const calls = { getMe: 0, login: 0 };
   const service = createSessionService({
     tokenStorage: createTokenStorage(mem.adapter),
     usersApi: {
@@ -44,10 +43,6 @@ function setup(options: Options = {}) {
       login: async () => {
         calls.login += 1;
         return (options.login ?? (async () => userLogin({})))();
-      },
-      register: async () => {
-        calls.register += 1;
-        return (options.register ?? (async () => ({ message: "ok" })))();
       },
     },
   });
@@ -105,20 +100,6 @@ for (const kind of ["network", "timeout", "server", "rate-limited"] as const) {
   const s = setup();
   s.mem.stats.failSet = true;
   await assert.rejects(s.service.signIn("ali", "pw"), /yazılamadı/);
-}
-
-// ---- register (otomatik giriş) ----
-{
-  const s = setup();
-  const state = await s.service.register("ali", "123456", "a@b.com");
-  assert.equal(state.status, "signedIn");
-  assert.equal(s.calls.register, 1);
-  assert.equal(s.calls.login, 1);
-}
-{
-  const s = setup({ register: async () => { throw apiError("client", 409); } });
-  await assert.rejects(s.service.register("ali", "123456"), ApiError);
-  assert.equal(s.calls.login, 0); // kayıt başarısızsa giriş denenmez
 }
 
 // ---- completeSignIn (kayıt onayından sonra) ----

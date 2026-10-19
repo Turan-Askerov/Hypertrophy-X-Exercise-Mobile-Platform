@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import type { ApiCallOptions } from "../src/api/api-client.ts";
 import { ApiError } from "../src/api/api-error.ts";
+import type { ApiCallOptions } from "../src/api/api-client.ts";
 import { createAuthApi, type ApiCaller } from "../src/api/create-auth-api.ts";
 import { createUsersApi } from "../src/api/create-users-api.ts";
 import { sampleUser, userLogin } from "./fixtures.ts";
@@ -61,24 +61,6 @@ for (const adminLike of [
     assert.equal(err, original);
     return true;
   });
-}
-
-// ---- register ----
-{
-  const f = fakeClient({ message: "Hesap oluşturuldu", username: "ali" });
-  const api = createAuthApi(f.client);
-
-  await api.register("  ali ", "123456");
-  assert.equal(f.calls[0].path, "/api/auth/register");
-  assert.equal(f.calls[0].options?.method, "POST");
-  assert.equal(f.calls[0].options?.auth, false);
-  assert.deepEqual(f.calls[0].options?.body, { username: "ali", password: "123456" });
-
-  await api.register("ali", "123456", "   ");
-  assert.deepEqual(f.calls[1].options?.body, { username: "ali", password: "123456" });
-
-  await api.register("ali", "123456", "  Ali@Ornek.com ");
-  assert.deepEqual(f.calls[2].options?.body, { username: "ali", password: "123456", email: "Ali@Ornek.com" });
 }
 
 // ---- kayıt (2 adım: başlat + onayla) ----
