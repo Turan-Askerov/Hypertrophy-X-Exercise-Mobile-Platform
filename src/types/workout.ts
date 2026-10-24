@@ -1,35 +1,63 @@
-export type WorkoutSetItem = {
-  id: number;
-  workout_exercise_id: number;
-  set_number: number;
-  weight: number;
+// Backend schemas.py (SetData, ExerciseEntry, WorkoutCreate, WorkoutUpdate) modellerine uyumlu tipler
+
+export type SetData = {
   reps: number;
-  rir: number;
-  rest_seconds: number | null;
-  completed: number;
-  created_at: string;
-  updated_at: string;
+  weight_kg: number;
+  rir?: number | null;
 };
 
-export type WorkoutExerciseItem = {
-  id: number;
-  workout_id: number;
-  exercise_id: number;
+export type ExerciseEntry = {
+  exercise_id: string;
   exercise_name: string;
-  order_index: number;
-  notes: string | null;
-  sets: WorkoutSetItem[];
+  muscle_group: string;
+  sets_data: SetData[];
+  is_bodyweight: boolean;
+  canonical_exercise_id?: string | null;
+  exercise_meta_version?: number;
+  legacy_exercise_name?: string | null;
 };
 
-export type WorkoutListItem = {
+export type WorkoutCreate = {
+  date: string; // ISO format (YYYY-MM-DD)
+  session_type: string;
+  notes?: string;
+  exercises: ExerciseEntry[];
+  gym_id?: string | null;
+  gym_name?: string | null;
+};
+
+export type WorkoutUpdate = Partial<Omit<WorkoutCreate, "exercises">> & {
+  exercises?: ExerciseEntry[];
+};
+
+export type Workout = WorkoutCreate & {
   id: number;
   user_id: number;
-  workout_date: string;
-  start_time: string | null;
-  end_time: string | null;
-  duration_minutes: number | null;
-  notes: string | null;
-  total_sets: number | null;
-  total_volume: number | null;
-  exercises: WorkoutExerciseItem[];
+  total_volume: number;
+  created_at?: string;
+  updated_at?: string;
 };
+
+export type WorkoutSessionType =
+  | "Üst Vücut"
+  | "Alt Vücut"
+  | "Tam Vücut"
+  | "Push"
+  | "Pull"
+  | "Legs"
+  | "Kardiyo"
+  | "Diğer";
+
+export const DEFAULT_SESSION_TYPES: WorkoutSessionType[] = [
+  "Üst Vücut",
+  "Alt Vücut",
+  "Tam Vücut",
+  "Push",
+  "Pull",
+  "Legs",
+  "Kardiyo",
+  "Diğer",
+];
+
+// Geriye dönük uyumluluk alias'ı
+export type WorkoutListItem = Workout;

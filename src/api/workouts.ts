@@ -1,6 +1,9 @@
-import { api } from "./client";
-import type { WorkoutListItem } from "../types/workout";
+import { api } from "./client.ts";
+import { createWorkoutsApi } from "./create-workouts-api.ts";
+
+const rawWorkoutsApi = createWorkoutsApi(api);
 
 export const workoutsApi = {
-  list: () => api.call<WorkoutListItem[]>("/api/workouts"),
+  ...rawWorkoutsApi,
+  list: rawWorkoutsApi.listWorkouts,
 };

@@ -1,18 +1,50 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { workoutsApi } from '@/api/workouts';
-import type { WorkoutListItem } from '@/types/workout';
+import type { Workout, WorkoutCreate, WorkoutUpdate } from '@/types/workout';
+
+export const WORKOUTS_QUERY_KEY = ['workouts', 'list'];
 
 export function useWorkouts() {
-  const { data, isLoading, isError, refetch } = useQuery<WorkoutListItem[]>({
-    queryKey: ['workouts', 'list'],
-    queryFn: () => workoutsApi.list(),
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError, error, refetch } = useQuery<Workout[]>({
+    queryKey: WORKOUTS_QUERY_KEY,
+    queryFn: () => workoutsApi.listWorkouts(),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (newWorkout: WorkoutCreate) => workoutsApi.saveWorkout(newWorkout),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKOUTS_QUERY_KEY });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: WorkoutUpdate }) =>
+      workoutsApi.updateWorkout(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKOUTS_QUERY_KEY });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => workoutsApi.deleteWorkout(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKOUTS_QUERY_KEY });
+    },
   });
 
   return {
     workouts: data ?? [],
     loading: isLoading,
-    error: isError,
+    error: isError ? (error as Error) : null,
     refetch,
+    saveWorkout: saveMutation.mutateAsync,
+    isSaving: saveMutation.isPending,
+    updateWorkout: updateMutation.mutateAsync,
+    isUpdating: updateMutation.isPending,
+    deleteWorkout: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
   };
 }

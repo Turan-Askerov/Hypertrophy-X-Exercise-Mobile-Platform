@@ -3,7 +3,19 @@ export type LoginRequest = {
   password: string;
 };
 
+export type RegisterRequest = {
+  username: string;
+  password: string;
+  email?: string;
+};
+
+export type RegisterResponse = {
+  message: string;
+  username: string;
+};
+
 export type User = {
+  // çıktıdaki 22 alanın hepsi, çıktıdaki sırayla:
   id: number;
   username: string;
   email: string;
@@ -21,11 +33,11 @@ export type User = {
   days_per_week: number;
   session_time_mins: number;
   stagnation_detected: number;
-  custom_split: string;
-  dashboard_preferences: string;
-  daily_nutrition: string;
-  admin_role_title: string | null;
-  admin_permissions: string | null;
+  custom_split: string; // JSON
+  dashboard_preferences: string; // JSON
+  daily_nutrition: string; // JSON
+  admin_role_title: string | null; 
+  admin_permissions: string | null; 
 };
 
 export type UserLoginResponse = User & { token: string };
@@ -37,3 +49,54 @@ export type AdminLoginResponse = {
 };
 
 export type LoginResponse = UserLoginResponse | AdminLoginResponse;
+export type UserProfile = {
+  username: string;
+  email?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  height?: number | null;
+  weight?: number | null;
+  fitness_level?: string | null;
+  goal?: string | null;
+  days_per_week?: number | null;
+  session_time_mins?: number | null;
+  new_password?: string | null;
+};
+
+export type ChangePasswordRequest = {
+  old_password: string;
+  new_password: string;
+};
+
+export type ChangePasswordResponse = {
+  success: boolean;
+  token: string;
+  masked_email: string;
+  message: string;
+};
+
+export type ChangePasswordConfirmRequest = {
+  token: string;
+  code: string;
+};
+
+export type EmailUpdateRequest = {
+  new_email: string;
+};
+
+export type EmailUpdateResponse = {
+  success: boolean;
+  token: string;
+  masked_email: string;
+  message: string;
+};
+
+export type EmailConfirmRequest = {
+  token: string;
+  code: string;
+};
+
+export type DeleteAccountRequest = {
+  password: string;
+  confirmation: string;
+};

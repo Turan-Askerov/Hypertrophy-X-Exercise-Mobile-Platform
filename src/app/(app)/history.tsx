@@ -1,80 +1,166 @@
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
-import { useWorkouts } from '@/hooks/use-workouts';
-import { HistoryCard } from '@/components/workout/history-card';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { HistoryCard } from '@/components/workout/history-card';
+import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { useWorkouts } from '@/hooks/use-workouts';
+import { workoutDraft } from '@/lib/workout-draft';
+import type { Workout } from '@/types/workout';
 
 export default function HistoryScreen() {
-  const { workouts, loading, error, refetch } = useWorkouts();
+  const router = useRouter();
+  const { workouts, loading, error, refetch, deleteWorkout, isDeleting } =
+    useWorkouts();
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Antrenman Geçmişi</Text>
-        </View>
-        <View style={styles.list}>
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} height={90} radius={12} style={styles.skeleton} />
-          ))}
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
-  if (error) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Antrenman Geçmişi</Text>
-        </View>
-        <View style={styles.center}>
-          <Text style={styles.errorText}>Geçmiş yüklenemedi.</Text>
-          <Button title="Tekrar dene" onPress={() => refetch()} />
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const handleEdit = (workout: Workout) => {
+    workoutDraft.loadWorkout(workout);
+    router.push('/(app)/(tabs)/workout');
+  };
 
-  if (workouts.length === 0) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Antrenman Geçmişi</Text>
-        </View>
-        <EmptyState
-          title="Henüz kayıt yok"
-          description="İlk antrenmanını kaydettiğinde burada görünecek."
-        />
-      </SafeAreaView>
-    );
-  }
+  const handleConfirmDelete = async () => {
+    if (deleteTargetId === null) return;
+    try {
+      await deleteWorkout(deleteTargetId);
+      setDeleteTargetId(null);
+    } catch (err: any) {
+      Alert.alert(
+        'Hata',
+        err?.message || 'Antrenman silinirken bir sorun oluştu.'
+      );
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.backBtnText}>‹ Geri</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Antrenman Geçmişi</Text>
+        <View style={{ width: 48 }} />
       </View>
-      <FlatList
-        data={workouts}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => <HistoryCard workout={item} />}
-        showsVerticalScrollIndicator={false}
+
+      {loading ? (
+        <View style={styles.list}>
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton
+              key={i}
+              height={100}
+              borderRadius={Radius.md}
+              style={styles.skeleton}
+            />
+          ))}
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>
+            {error.message || 'Geçmiş yüklenemedi.'}
+          </Text>
+          <Button onPress={() => refetch()}>Tekrar dene</Button>
+        </View>
+      ) : workouts.length === 0 ? (
+        <EmptyState
+          title="Henüz kayıt yok"
+          description="İlk antrenmanını kaydettiğinde burada görünecek."
+          actionLabel="Hemen Antrenman Yap"
+          onAction={() => router.push('/(app)/(tabs)/workout')}
+        />
+      ) : (
+        <FlatList
+          data={workouts}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <HistoryCard
+              workout={item}
+              onEdit={handleEdit}
+              onDelete={(id) => setDeleteTargetId(id)}
+            />
+          )}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      {/* Silme Onay Diyaloğu */}
+      <ConfirmDialog
+        visible={deleteTargetId !== null}
+        title="Antrenmanı Sil"
+        message="Bu antrenman kaydı kalıcı olarak silinecek. Emin misiniz?"
+        confirmText="Sil"
+        destructive
+        busy={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-  header: { paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontSize: 20, fontWeight: '700', color: '#111' },
-  list: { paddingHorizontal: 16, paddingBottom: 24, gap: 12 },
-  skeleton: { marginBottom: 12 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 16 },
-  errorText: { fontSize: 16, color: '#111' },
+  safe: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.border,
+  },
+  backBtn: {
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.two,
+  },
+  backBtnText: {
+    fontSize: Typography.body,
+    fontWeight: '600',
+    color: AppColors.primary,
+  },
+  title: {
+    fontSize: Typography.heading,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  list: {
+    padding: Spacing.three,
+    gap: Spacing.three,
+    paddingBottom: Spacing.six,
+  },
+  skeleton: {
+    marginBottom: Spacing.two,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.four,
+  },
+  errorText: {
+    fontSize: Typography.body,
+    color: Colors.light.text,
+    textAlign: 'center',
+  },
 });

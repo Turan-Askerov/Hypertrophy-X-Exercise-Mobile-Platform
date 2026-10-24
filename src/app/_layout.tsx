@@ -1,6 +1,6 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { useEffect } from 'react';
+import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
 
 import { useAuth } from '@/auth/auth-provider';
 import { AppProviders } from '@/providers/app-providers';
@@ -12,6 +12,24 @@ SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
   const { state, retry } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Yükleme veya hata durumlarında yönlendirme yapmadan bekle
+    if (state.status === 'loading' || state.status === 'unreachable') return;
+
+    // Kullanıcının şu an (auth) klasöründe olup olmadığını kontrol et
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (state.status === 'signedIn' && inAuthGroup) {
+      // Giriş yapılmış ama kullanıcı login ekranındaysa ana sekmelere yönlendir
+      router.replace('/(app)/(tabs)');
+    } else if (state.status === 'signedOut' && !inAuthGroup) {
+      // Çıkış yapılmış ama kullanıcı uygulamanın içindeyse dışarı (login'e) at
+      router.replace('/(auth)/login');
+    }
+  }, [state.status, segments, router]);
 
   if (state.status === 'loading') {
     return <LoadingScreen />;
@@ -22,20 +40,16 @@ function RootNavigator() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={state.status === 'signedIn'}>
-        <Stack.Screen name="(app)" />
-      </Stack.Protected>
-      <Stack.Protected guard={state.status === 'signedOut'}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
+      {/* Protected sarmalları yerine doğrudan ekranları tanımlıyoruz */}
+      <Stack.Screen name="(app)" />
+      <Stack.Screen name="(auth)" />
     </Stack>
   );
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={DarkTheme}>
       <AppProviders>
         <AnimatedSplashOverlay />
         <RootNavigator />
