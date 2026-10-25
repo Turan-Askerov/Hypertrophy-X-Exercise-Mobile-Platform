@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View, type TextInputInstance } from 'react-native';
 
 import { authApi } from '@/api/auth';
 import { useAuth } from '@/auth/auth-provider';
@@ -24,9 +24,9 @@ const registrationFlow = createRegistrationFlow({ authApi });
 
 export default function RegisterScreen() {
   const { completeSignIn } = useAuth();
-  const emailRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
-  const confirmRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInputInstance>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
+  const confirmRef = useRef<TextInputInstance>(null);
 
   const [codeStep, setCodeStep] = useState<RegistrationCodeStep | null>(null);
   const [username, setUsername] = useState('');

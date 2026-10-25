@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Animated,
   DimensionValue,
+  Platform,
   StyleProp,
   StyleSheet,
   ViewStyle,
@@ -28,17 +29,19 @@ export function Skeleton({
   const effectiveRadius = borderRadius ?? radius ?? Radius.sm;
 
   useEffect(() => {
+    const useNativeDriver = Platform.OS !== 'web';
+
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {
           toValue: 0.8,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver,
         }),
         Animated.timing(opacity, {
           toValue: 0.4,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver,
         }),
       ])
     );

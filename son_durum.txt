@@ -1,4 +1,4 @@
-Üzerinde bulunulan dal: master
+Üzerinde bulunulan dal: main
 İzlenmeyen dosyalar:
   (işlenecekler arasına koymak için "git add <dosya>..." kullanın)
 	docs/Testler.md

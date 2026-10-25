@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
@@ -8,7 +9,9 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { LoadingScreen } from '@/components/session/loading-screen';
 import { UnreachableScreen } from '@/components/session/unreachable-screen';
 
-SplashScreen.preventAutoHideAsync();
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+}
 
 function RootNavigator() {
   const { state, retry } = useAuth();
@@ -19,14 +22,15 @@ function RootNavigator() {
     // Yükleme veya hata durumlarında yönlendirme yapmadan bekle
     if (state.status === 'loading' || state.status === 'unreachable') return;
 
-    // Kullanıcının şu an (auth) klasöründe olup olmadığını kontrol et
+    // Kullanıcının şu an nerede olduğunu kontrol et
     const inAuthGroup = segments[0] === '(auth)';
+    const inAppGroup = segments[0] === '(app)';
 
-    if (state.status === 'signedIn' && inAuthGroup) {
-      // Giriş yapılmış ama kullanıcı login ekranındaysa ana sekmelere yönlendir
+    if (state.status === 'signedIn' && !inAppGroup) {
+      // Giriş yapılmış ama kullanıcı (app) dışında bir yerdeyse ana sekmelere yönlendir
       router.replace('/(app)/(tabs)');
     } else if (state.status === 'signedOut' && !inAuthGroup) {
-      // Çıkış yapılmış ama kullanıcı uygulamanın içindeyse dışarı (login'e) at
+      // Çıkış yapılmış ama kullanıcı uygulamanın içindeyse login'e at
       router.replace('/(auth)/login');
     }
   }, [state.status, segments, router]);

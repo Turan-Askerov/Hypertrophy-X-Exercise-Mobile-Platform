@@ -1,6 +1,18 @@
+import { Redirect } from 'expo-router';
 import { View } from 'react-native';
 
+import { useAuth } from '@/auth/auth-provider';
+
 export default function Index() {
-  // Yönlendirme işlemi artık _layout.tsx içinde yapılacağı için burası boş bir tutucu olacak
-  return <View style={{ flex: 1 }} />;
+  const { state } = useAuth();
+
+  if (state.status === 'loading') {
+    return <View style={{ flex: 1, backgroundColor: '#121214' }} />;
+  }
+
+  if (state.status === 'signedIn') {
+    return <Redirect href="/(app)/(tabs)" />;
+  }
+
+  return <Redirect href="/(auth)/login" />;
 }

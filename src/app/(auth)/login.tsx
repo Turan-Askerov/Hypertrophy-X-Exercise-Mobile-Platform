@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View, type TextInputInstance } from 'react-native';
 
 import { useAuth } from '@/auth/auth-provider';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { validateLoginPassword, validateLoginUsername } from '@/lib/validators';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
-  const passwordRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

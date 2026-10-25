@@ -41,7 +41,11 @@ export default function AddExerciseScreen() {
 
   const handleSelectExercise = (exercise: Exercise) => {
     workoutDraft.addExercise(exercise);
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(app)/(tabs)/workout');
+    }
   };
 
   return (
@@ -51,7 +55,7 @@ export default function AddExerciseScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => router.back()}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(app)/(tabs)/workout'))}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text style={styles.backBtnText}>‹ Geri</Text>

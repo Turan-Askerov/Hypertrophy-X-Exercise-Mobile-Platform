@@ -43,6 +43,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "tunnel": "node ./scripts/tunnel.js",
     "lint": "expo lint"
   },
   "private": true

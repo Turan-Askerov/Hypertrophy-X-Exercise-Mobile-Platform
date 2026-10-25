@@ -1,11 +1,11 @@
 import { useState, type Ref } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type TextInputInstance } from 'react-native';
 
 type Props = Omit<TextInputProps, 'style'> & {
   label: string;
   error?: string | null;
   hint?: string;
-  inputRef?: Ref<TextInput>;
+  inputRef?: Ref<TextInputInstance>;
   passwordToggle?: boolean;
 };
 
