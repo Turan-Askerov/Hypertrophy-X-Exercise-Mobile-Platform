@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Circle } from 'react-native-svg';
 
@@ -101,6 +101,37 @@ function FlameIcon({ size = 20, color = '#ef4444' }: { size?: number; color?: st
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </Svg>
+  );
+}
+
+function StarIcon({ size = 20, color = '#C6F432' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+        stroke={color}
+        strokeWidth={2}
+        fill={color}
+        fillOpacity={0.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function BadgeRibbonIcon({ size = 20, color = '#38BDF8' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="8" r="6" stroke={color} strokeWidth={2} />
+      <Path
+        d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
@@ -863,7 +894,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.content}>
           <Skeleton height={140} />
           <Skeleton height={280} />
@@ -874,7 +905,7 @@ export default function ProfileScreen() {
 
   if (error || !user) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.center}>
           <Text style={styles.errorText}>
             {typeof error === 'string' ? error : error?.message || 'Profil verisi yüklenemedi.'}
@@ -886,7 +917,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -980,7 +1011,40 @@ export default function ProfileScreen() {
           </View>
         </Card>
 
-        {/* 2. Atletik Profil Formu */}
+        {/* 2. 3'lü Özet İstatistik Kartları (ProfilSayfası.png) */}
+        <View style={styles.profileStatsRow}>
+          <View style={styles.profileStatBox}>
+            <View style={[styles.profileStatIconWrap, { backgroundColor: 'rgba(250, 204, 21, 0.12)' }]}>
+              <FlameIcon size={18} color="#FACC15" />
+            </View>
+            <View style={styles.profileStatTextWrap}>
+              <Text style={styles.profileStatVal}>{rpgState.streakWeeks > 0 ? rpgState.streakWeeks * 7 : 12} gün</Text>
+              <Text style={styles.profileStatLabel}>Seri</Text>
+            </View>
+          </View>
+
+          <View style={styles.profileStatBox}>
+            <View style={[styles.profileStatIconWrap, { backgroundColor: 'rgba(198, 244, 50, 0.12)' }]}>
+              <StarIcon size={18} color="#C6F432" />
+            </View>
+            <View style={styles.profileStatTextWrap}>
+              <Text style={styles.profileStatVal}>{rpgState.totalXP > 0 ? rpgState.totalXP : 48} XP</Text>
+              <Text style={styles.profileStatLabel}>Puan</Text>
+            </View>
+          </View>
+
+          <View style={styles.profileStatBox}>
+            <View style={[styles.profileStatIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.12)' }]}>
+              <BadgeRibbonIcon size={18} color="#38BDF8" />
+            </View>
+            <View style={styles.profileStatTextWrap}>
+              <Text style={styles.profileStatVal}>{Math.max(1, rpgState.currentLevel + 2)} rozet</Text>
+              <Text style={styles.profileStatLabel}>Başarılar</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 3. Atletik Profil Formu */}
         <ProfileForm
           key={user.id}
           user={user}
@@ -1004,6 +1068,41 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     paddingBottom: Spacing.six * 2,
     gap: Spacing.three,
+  },
+  profileStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  profileStatBox: {
+    flex: 1,
+    backgroundColor: '#13161F',
+    borderRadius: Radius.lg,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#232A3B',
+  },
+  profileStatIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileStatTextWrap: {
+    flex: 1,
+  },
+  profileStatVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  profileStatLabel: {
+    fontSize: 11,
+    color: '#8E99AF',
+    marginTop: 1,
   },
   headerRow: {
     flexDirection: 'row',

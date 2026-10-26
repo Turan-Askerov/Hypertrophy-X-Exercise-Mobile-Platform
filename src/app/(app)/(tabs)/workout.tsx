@@ -1,7 +1,6 @@
 import { useSyncExternalStore, useState } from 'react';
 import {
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { Button } from '@/components/ui/button';
@@ -96,7 +96,7 @@ export default function WorkoutScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
         {/* Üst Bar: Başlık, Tarih ve Geçmişe Git */}
         <View style={styles.topBar}>

@@ -8,8 +8,6 @@ import {
   ViewStyle,
 } from 'react-native';
 
-import { AppColors } from '@/constants/theme';
-
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'outline';
 
 type Props = {
@@ -20,6 +18,7 @@ type Props = {
   loading?: boolean;
   variant?: ButtonVariant;
   style?: StyleProp<ViewStyle>;
+  rightIcon?: ReactNode;
 };
 
 export function Button({
@@ -30,6 +29,7 @@ export function Button({
   loading = false,
   variant = 'primary',
   style,
+  rightIcon,
 }: Props) {
   const inactive = disabled || loading;
   const label = title ?? (typeof children === 'string' ? children : null);
@@ -44,11 +44,15 @@ export function Button({
       : styles.primary;
 
   const textColor =
-    variant === 'outline'
-      ? AppColors.primary
+    variant === 'primary'
+      ? '#000000'
+      : variant === 'outline'
+      ? '#C6F432'
       : variant === 'secondary'
-      ? '#111'
-      : '#fff';
+      ? '#FFFFFF'
+      : variant === 'danger'
+      ? '#FFFFFF'
+      : '#FFFFFF';
 
   return (
     <Pressable
@@ -67,46 +71,53 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={textColor} />
       ) : label ? (
-        <Text style={[styles.text, { color: textColor }]}>{label}</Text>
+        <Text style={[styles.text, { color: inactive ? '#6B7280' : textColor }]}>
+          {label}
+        </Text>
       ) : (
         children
       )}
+      {!loading && rightIcon}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 10,
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 50,
+    gap: 8,
   },
   primary: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C6F432',
   },
   secondary: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#181C28',
+    borderWidth: 1,
+    borderColor: '#232A3B',
   },
   danger: {
-    backgroundColor: '#dc2626',
+    backgroundColor: '#EF4444',
   },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: '#2563eb',
+    borderColor: '#C6F432',
   },
   inactive: {
-    backgroundColor: '#9ca3af',
-    borderColor: '#9ca3af',
+    backgroundColor: '#1E2330',
+    borderColor: '#1E2330',
   },
   pressed: {
     opacity: 0.85,
   },
   text: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
   },
 });

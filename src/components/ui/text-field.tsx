@@ -1,5 +1,13 @@
 import { useState, type Ref } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type TextInputInstance } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+  type TextInputInstance,
+} from 'react-native';
 
 type Props = Omit<TextInputProps, 'style'> & {
   label: string;
@@ -7,6 +15,7 @@ type Props = Omit<TextInputProps, 'style'> & {
   hint?: string;
   inputRef?: Ref<TextInputInstance>;
   passwordToggle?: boolean;
+  leftIcon?: React.ReactNode;
 };
 
 export function TextField({
@@ -15,25 +24,47 @@ export function TextField({
   hint,
   inputRef,
   passwordToggle = false,
+  leftIcon,
   ...inputProps
 }: Props) {
   const [hidden, setHidden] = useState(true);
+  const [isFocused, setIsFocused] = useState(false);
   const hasError = typeof error === 'string' && error !== '';
 
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.field, hasError && styles.fieldError]}>
+      <View
+        style={[
+          styles.field,
+          isFocused && styles.fieldFocused,
+          hasError && styles.fieldError,
+        ]}
+      >
+        {leftIcon ? <View style={styles.leftIconContainer}>{leftIcon}</View> : null}
         <TextInput
           {...inputProps}
           ref={inputRef}
           style={styles.input}
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor="#6B7280"
           accessibilityLabel={label}
           secureTextEntry={passwordToggle ? hidden : inputProps.secureTextEntry}
+          onFocus={(e) => {
+            setIsFocused(true);
+            inputProps.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            inputProps.onBlur?.(e);
+          }}
         />
         {passwordToggle && (
-          <Pressable onPress={() => setHidden((h) => !h)} accessibilityRole="button" hitSlop={8}>
+          <Pressable
+            onPress={() => setHidden((h) => !h)}
+            accessibilityRole="button"
+            hitSlop={8}
+            style={styles.toggleBtn}
+          >
             <Text style={styles.toggle}>{hidden ? 'Göster' : 'Gizle'}</Text>
           </Pressable>
         )}
@@ -45,20 +76,57 @@ export function TextField({
 }
 
 const styles = StyleSheet.create({
-  wrapper: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 6 },
+  wrapper: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8E99AF',
+    marginBottom: 6,
+  },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#fff',
+    borderColor: '#232A3B',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#13161F',
   },
-  fieldError: { borderColor: '#dc2626' },
-  input: { flex: 1, paddingVertical: 12, fontSize: 16, color: '#111' },
-  toggle: { color: '#2563eb', fontWeight: '600', marginLeft: 8 },
-  error: { color: '#dc2626', fontSize: 13, marginTop: 6 },
-  hint: { color: '#6b7280', fontSize: 13, marginTop: 6 },
+  fieldFocused: {
+    borderColor: '#C6F432',
+  },
+  fieldError: {
+    borderColor: '#EF4444',
+  },
+  leftIconContainer: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  toggleBtn: {
+    paddingVertical: 4,
+  },
+  toggle: {
+    color: '#C6F432',
+    fontWeight: '700',
+    fontSize: 13,
+    marginLeft: 8,
+  },
+  error: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: '500',
+  },
+  hint: {
+    color: '#6B7280',
+    fontSize: 12,
+    marginTop: 6,
+  },
 });

@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/auth-provider';
 import { AppProviders } from '@/providers/app-providers';
@@ -53,11 +55,14 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider value={DarkTheme}>
-      <AppProviders>
-        <AnimatedSplashOverlay />
-        <RootNavigator />
-      </AppProviders>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider value={DarkTheme}>
+        <AppProviders>
+          <StatusBar style="light" />
+          <AnimatedSplashOverlay />
+          <RootNavigator />
+        </AppProviders>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

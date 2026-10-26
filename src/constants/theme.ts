@@ -69,17 +69,28 @@ export const Typography = {
 } as const;
 
 export const AppColors = {
-  primary: '#3b82f6',
-  primaryMuted: '#1e3a8a',
+  primary: '#C6F432', // Neon Lime (Design System Primary Accent)
+  primaryDark: '#9BC71B',
+  primaryMuted: '#2D3A12',
+  accentLime: '#C6F432',
+  accentCyan: '#38BDF8',
+  accentPurple: '#A855F7',
+  accentOrange: '#FB923C',
+  bgDark: '#090A0F',
+  surface: '#13161F',
+  surfaceAlt: '#181C28',
+  surfaceCard: '#151923',
   danger: '#ef4444',
   dangerMuted: '#450a0a',
   success: '#22c55e',
   successMuted: '#052e16',
   warning: '#f59e0b',
   warningMuted: '#451a03',
-  border: '#2d3139',
-  borderDark: '#2d3139',
-  muted: '#4b5563',
+  border: '#232A3B',
+  borderDark: '#1A1E29',
+  borderSoft: 'rgba(255, 255, 255, 0.08)',
+  muted: '#8E99AF',
+  textSecondary: '#8E99AF',
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
