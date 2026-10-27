@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useNutrition } from '@/hooks/use-nutrition';
 import { useUser } from '@/hooks/use-user';
@@ -33,11 +33,12 @@ const colors = {
   text: '#F5F7FF',
   muted: '#8995B2',
   violet: '#A78BFA', // Kalori & Ana Vurgu
-  mint: '#43D6AD',   // Protein
+  mint: '#43D6AD',   // Protein (İkincil)
   orange: '#FFAD21', // Karbonhidrat
-  cyan: '#39C6EF',   // Yağ
-  danger: '#FF7898', // Temizle & Hata
-  blue: '#2F80ED',   // Kalori İlerleme Çubuğu
+  cyan: '#38BDF8',   // Yağ
+  rose: '#FB7185',   // Protein (Vurgu)
+  danger: '#FF7898', // Hata / Aşım
+  blue: '#2F80ED',   // Kalori İlerleme
 };
 
 // ─── Metrik Yapılandırması ───
@@ -61,13 +62,13 @@ const METRICS: Record<
   protein: {
     label: 'Ort. Protein 🥩',
     unit: 'g',
-    color: '#34D399',
+    color: '#FB7185',
     key: 'protein',
   },
   carbs: {
     label: 'Ort. Karbonhidrat 🍞',
     unit: 'g',
-    color: '#FBBF24',
+    color: '#FFAD21',
     key: 'carbs',
   },
   fat: {
@@ -106,19 +107,6 @@ function CheckMiniIcon({ size = 11, color = '#070B18' }: { size?: number; color?
   );
 }
 
-function SwapIcon({ size = 16, color = colors.muted }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-        d="M8 7h12m0 0l-4-4m4 4l-4 4m-4 6H4m0 0l4 4m-4-4l4-4"
-      />
-    </Svg>
-  );
-}
-
 function PencilEditIcon({ size = 16, color = colors.mint }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
@@ -150,6 +138,102 @@ function CloseIcon({ size = 16, color = colors.muted }: { size?: number; color?:
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M18 6L6 18M6 6l12 12" />
     </Svg>
+  );
+}
+
+// ─── Mini Donut / Daire İlerleme Halkası ───
+
+function MiniDonutRing({ percent, color }: { percent: number; color: string }) {
+  const size = 18;
+  const strokeWidth = 2.8;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clampedPercent = Math.min(100, Math.max(0, percent));
+  const strokeDashoffset = circumference * (1 - clampedPercent / 100);
+
+  return (
+    <Svg width={size} height={size}>
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke="rgba(255, 255, 255, 0.12)"
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+        fill="none"
+        rotation="-90"
+        origin={`${size / 2}, ${size / 2}`}
+      />
+    </Svg>
+  );
+}
+
+// ─── Yay / At Nalı Göstergesi (Horseshoe Arch Gauge - 240° Ferah Kubbe) ───
+
+type SemiCircleGaugeProps = {
+  percent: number;
+  color: string;
+  amountText: string;
+  statusText: string;
+};
+
+function SemiCircleGauge({
+  percent,
+  color,
+  amountText,
+  statusText,
+}: SemiCircleGaugeProps) {
+  // 240 derecelik ferah at nalı yay (Referans tasarıma birebir uyumlu)
+  // cx = 46, cy = 40, r = 35, strokeWidth = 7
+  // Başlangıç açısı = 150° (sol alt), Bitiş açısı = 30° (sağ alt)
+  // x1 = 15.69, y1 = 57.50 | x2 = 76.31, y2 = 57.50
+  const radius = 35;
+  const strokeWidth = 7;
+  const sweepDeg = 240;
+  const arcLength = (sweepDeg / 360) * 2 * Math.PI * radius; // ~146.61
+  const clampedPercent = Math.min(100, Math.max(0, percent));
+  const strokeDashoffset = arcLength * (1 - clampedPercent / 100);
+
+  return (
+    <View style={styles.gaugeContainer}>
+      <Svg width={92} height={66}>
+        {/* Arka Plan Kılavuz Yayı (240° At Nalı Kubbesi) */}
+        <Path
+          d="M 15.69 57.50 A 35 35 0 1 1 76.31 57.50"
+          stroke="rgba(255, 255, 255, 0.08)"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          fill="none"
+        />
+        {/* Ön Plan İlerleme Yayı */}
+        {clampedPercent > 0 && (
+          <Path
+            d="M 15.69 57.50 A 35 35 0 1 1 76.31 57.50"
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeDasharray={[arcLength, arcLength]}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+          />
+        )}
+      </Svg>
+      {/* Yay İçi Merkez Metinleri (Kubbeye Tam Oturan Ferah Boşluk) */}
+      <View style={styles.gaugeCenterTextWrapper}>
+        <Text style={styles.gaugeAmountText}>{amountText}</Text>
+        <Text style={styles.gaugeStatusText}>{statusText}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -698,7 +782,7 @@ export default function NutritionScreen() {
   // Sağa/Sola kaydırma (Swipe) için dokunma başlangıcı
   const touchStartX = useRef<number>(0);
 
-  // ─── Animasyon Değerleri ───
+  // ─── Animasyon Değerleri (useState ile kararlı referanslar) ───
   const [barAnim] = useState(() => new Animated.Value(0));
   const [tooltipAnim] = useState(() => new Animated.Value(1));
 
@@ -732,12 +816,13 @@ export default function NutritionScreen() {
     [selectedDate, todayIso]
   );
 
-  // Kalan Kalori & İlerleme Yüzdeleri
+  // Kalan Kalori & Makro Değerleri
   const caloriesLeft = targets.calories - (activeLog.calories || 0);
-  const calPercent = targets.calories > 0
-    ? Math.min(100, Math.max(0, Math.round(((activeLog.calories || 0) / targets.calories) * 100)))
-    : 0;
+  const fatRemaining = targets.fat - (activeLog.fat || 0);
+  const carbsRemaining = targets.carbs - (activeLog.carbs || 0);
+  const proteinRemaining = targets.protein - (activeLog.protein || 0);
 
+  // İlerleme Yüzdeleri (0-100)
   const carbsPercent = targets.carbs > 0
     ? Math.min(100, Math.max(0, Math.round(((activeLog.carbs || 0) / targets.carbs) * 100)))
     : 0;
@@ -778,19 +863,35 @@ export default function NutritionScreen() {
     return map;
   }, [history, todayLog, todayIso]);
 
-  // Aktif Döneme Göre Çubuk Grafik Verileri
+  // Son 7 Günün Kalori Verileri (Üst Kalori Kartındaki Mini 7 Günlük Çubuklar İçin)
+  const recentSevenDaysCal = useMemo(() => {
+    const list = [];
+    for (let i = 6; i >= 0; i--) {
+      const dStr = offsetIsoDate(todayIso, -i);
+      const log = logMap.get(dStr);
+      list.push({
+        date: dStr,
+        cal: log ? (log.calories || 0) : 0,
+      });
+    }
+    return list;
+  }, [todayIso, logMap]);
+
+  // ─── Aktif Döneme Göre Çubuk Grafik Verileri ───
+  // DÜZELTME: Haftalık ve aylık pencereler 'todayIso' ya sabitlendi.
+  // Böylece barlar tıklandığında seçili gün değişse bile grafik penceresi geriye kaymaz!
   const chartDays = useMemo(() => {
     const dates: string[] = [];
 
     if (statPeriod === 'weekly') {
-      // 7 gün (Seçili tarihten geriye doğru 7 gün)
+      // 7 gün (Bugünden geriye doğru 7 gün - sabit referans penceresi)
       for (let i = 6; i >= 0; i--) {
-        dates.push(offsetIsoDate(selectedDate, -i));
+        dates.push(offsetIsoDate(todayIso, -i));
       }
     } else if (statPeriod === 'monthly') {
-      // 30 gün (Seçili tarihten geriye doğru tam 30 çubuk)
+      // 30 gün (Bugünden geriye doğru 30 gün - sabit referans penceresi)
       for (let i = 29; i >= 0; i--) {
-        dates.push(offsetIsoDate(selectedDate, -i));
+        dates.push(offsetIsoDate(todayIso, -i));
       }
     } else {
       // 'all' -> Seçili ayın tüm gün sayısı (28, 29, 30 veya 31 gün)
@@ -816,7 +917,7 @@ export default function NutritionScreen() {
         fat: log?.fat || 0,
       };
     });
-  }, [statPeriod, selectedDate, activeMonth, logMap, selectedMetric]);
+  }, [statPeriod, todayIso, activeMonth, logMap, selectedMetric]);
 
   // Çubukların X Ekseninden Yukarıya Süzülme Animasyonu (Geçişler Yumuşak)
   useEffect(() => {
@@ -854,7 +955,7 @@ export default function NutritionScreen() {
 
   const yMax = ySteps[0];
 
-  // Aktif İncelenen Gün (Varsayılan olarak en son veri olan veya seçili tarihe denk gelen bar)
+  // Aktif İncelenen Gün (Varsayılan olarak seçili tarihe denk gelen bar veya en son veri olan gün)
   const resolvedActiveIndex = useMemo(() => {
     if (activeBarIndex !== null && activeBarIndex >= 0 && activeBarIndex < chartDays.length) {
       return activeBarIndex;
@@ -953,7 +1054,8 @@ export default function NutritionScreen() {
     }
   };
 
-  // Grafikte Bir Bara Dokunulduğunda Seçili Tarihi de Güncelle
+  // Grafikte Bir Bara Dokunulduğunda
+  // Çubuk seçilir ve o günün bilgileri üst kartlara aktarılır; grafik geriye kaymaz!
   const handleBarPress = (index: number, dateStr: string) => {
     setActiveBarIndex(index);
     setSelectedDate(dateStr);
@@ -1048,105 +1150,127 @@ export default function NutritionScreen() {
             ))}
           </View>
 
-          {/* ─── 3. Kalori Kartı ─── */}
-          <View style={styles.summaryCard}>
-            <Text style={styles.cardHeaderTitle}>Kalori</Text>
-            <View style={styles.calRow}>
-              <View style={styles.calLeftGroup}>
-                <Text style={styles.calBigNumber}>
-                  {(activeLog.calories || 0).toLocaleString('tr-TR')}
-                </Text>
-                <Text style={styles.calUnitText}> kcal</Text>
-                <Text style={styles.calTargetText}>
-                  {' '}/ {targets.calories.toLocaleString('tr-TR')}
+          {/* ─── 3. Yeni Kalori & 3 Mini Makro Kartları (Referans Tasarım Üst Kart) ─── */}
+          <View style={styles.topSummaryCard}>
+            {/* Kalori Başlığı ve Mini 7 Günlük Çubuk Çizelgesi */}
+            <View style={styles.calorieRow}>
+              <View style={styles.calorieTextGroup}>
+                <Text style={styles.calorieTitle}>Kalori</Text>
+                <Text style={styles.calorieStatusText}>
+                  {caloriesLeft >= 0
+                    ? `${caloriesLeft.toLocaleString('tr-TR')} kcal kaldı`
+                    : `${Math.abs(caloriesLeft).toLocaleString('tr-TR')} kcal aşıldı`}
                 </Text>
               </View>
-              <Text style={styles.calRemainingText}>
-                {caloriesLeft >= 0
-                  ? `${caloriesLeft.toLocaleString('tr-TR')} kaldı`
-                  : `${Math.abs(caloriesLeft).toLocaleString('tr-TR')} aşıldı`}
-              </Text>
+
+              {/* Sağdaki Mini Haftalık Bar Çizelgesi & Hedef Çizgisi */}
+              <View style={styles.miniCalorieChartBox}>
+                <View style={styles.miniDottedLineWrap}>
+                  <View style={styles.miniDottedLine} />
+                  <Text style={styles.miniTargetLabel}>
+                    {(targets.calories / 1000).toFixed(1)}k
+                  </Text>
+                </View>
+                <View style={styles.miniBarsRow}>
+                  {recentSevenDaysCal.map((dayCal, idx) => {
+                    const maxVal = Math.max(targets.calories * 1.25, 1000);
+                    const barH = Math.min(32, Math.max(4, Math.round((dayCal.cal / maxVal) * 32)));
+                    const isToday = dayCal.date === todayIso;
+                    return (
+                      <View
+                        key={dayCal.date || idx}
+                        style={[
+                          styles.miniCalBar,
+                          {
+                            height: barH,
+                            backgroundColor: isToday ? colors.violet : 'rgba(167, 139, 250, 0.45)',
+                          },
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
             </View>
-            <View style={styles.progressBarTrack}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  {
-                    width: `${calPercent}%`,
-                    backgroundColor: colors.blue,
-                  },
-                ]}
-              />
+
+            {/* 3'lü Mini Makro Kartları (Yağ, Karb, Protein) */}
+            <View style={styles.miniMacrosGrid}>
+              {/* Yağ Mini Kartı */}
+              <View style={styles.miniMacroCard}>
+                <View style={styles.miniMacroTop}>
+                  <Text style={styles.miniMacroName}>Yağ</Text>
+                  <MiniDonutRing percent={fatPercent} color={colors.cyan} />
+                </View>
+                <Text style={styles.miniMacroValue}>
+                  {fatRemaining >= 0
+                    ? `${fatRemaining}g kaldı`
+                    : `${Math.abs(fatRemaining)}g aşıldı`}
+                </Text>
+              </View>
+
+              {/* Karb Mini Kartı */}
+              <View style={styles.miniMacroCard}>
+                <View style={styles.miniMacroTop}>
+                  <Text style={styles.miniMacroName}>Karb</Text>
+                  <MiniDonutRing percent={carbsPercent} color={colors.orange} />
+                </View>
+                <Text style={styles.miniMacroValue}>
+                  {carbsRemaining >= 0
+                    ? `${carbsRemaining}g kaldı`
+                    : `${Math.abs(carbsRemaining)}g aşıldı`}
+                </Text>
+              </View>
+
+              {/* Protein Mini Kartı */}
+              <View style={styles.miniMacroCard}>
+                <View style={styles.miniMacroTop}>
+                  <Text style={styles.miniMacroName}>Protein</Text>
+                  <MiniDonutRing percent={proteinPercent} color={colors.rose} />
+                </View>
+                <Text style={styles.miniMacroValue}>
+                  {proteinRemaining >= 0
+                    ? `${proteinRemaining}g kaldı`
+                    : `${Math.abs(proteinRemaining)}g aşıldı`}
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* ─── 4. Makrolar Kartı (Karbonhidrat, Yağ, Protein) ─── */}
-          <View style={styles.summaryCard}>
-            <View style={styles.macrosTopRow}>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity style={styles.swapBtn} activeOpacity={0.7} hitSlop={8}>
-                <SwapIcon size={16} color={colors.muted} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.macroColumnsRow}>
-              {/* Karbonhidrat (Karb) */}
-              <View style={styles.macroColumn}>
-                <Text style={styles.macroColTitle}>Karbonhidrat</Text>
-                <View style={styles.macroValueRow}>
-                  <Text style={styles.macroBigNumber}>{activeLog.carbs || 0} g</Text>
-                  <Text style={styles.macroTargetNumber}> / {targets.carbs}</Text>
-                </View>
-                <View style={styles.miniBarTrack}>
-                  <View
-                    style={[
-                      styles.miniBarFill,
-                      {
-                        width: `${carbsPercent}%`,
-                        backgroundColor: '#2DD4BF',
-                      },
-                    ]}
-                  />
-                </View>
+          {/* ─── 4. Yeni Makro Hedefleri Kartı (Referans Tasarım Alt Kart - Yay Göstergeleri) ─── */}
+          <View style={styles.macroGoalsCard}>
+            <Text style={styles.macroGoalsTitle}>Makro hedefleri</Text>
+            <View style={styles.macroGaugesRow}>
+              {/* Yağ Yay Göstergesi */}
+              <View style={styles.macroGaugeCol}>
+                <SemiCircleGauge
+                  percent={fatPercent}
+                  color={colors.cyan}
+                  amountText={fatRemaining >= 0 ? `${fatRemaining}g` : `${Math.abs(fatRemaining)}g`}
+                  statusText={fatRemaining >= 0 ? 'kaldı' : 'aşıldı'}
+                />
+                <Text style={[styles.macroGaugeLabel, { color: colors.cyan }]}>Yağ</Text>
               </View>
 
-              {/* Yağ */}
-              <View style={styles.macroColumn}>
-                <Text style={styles.macroColTitle}>Yağ</Text>
-                <View style={styles.macroValueRow}>
-                  <Text style={styles.macroBigNumber}>{activeLog.fat || 0} g</Text>
-                  <Text style={styles.macroTargetNumber}> / {targets.fat}</Text>
-                </View>
-                <View style={styles.miniBarTrack}>
-                  <View
-                    style={[
-                      styles.miniBarFill,
-                      {
-                        width: `${fatPercent}%`,
-                        backgroundColor: '#8B5CF6',
-                      },
-                    ]}
-                  />
-                </View>
+              {/* Karb Yay Göstergesi */}
+              <View style={styles.macroGaugeCol}>
+                <SemiCircleGauge
+                  percent={carbsPercent}
+                  color={colors.orange}
+                  amountText={carbsRemaining >= 0 ? `${carbsRemaining}g` : `${Math.abs(carbsRemaining)}g`}
+                  statusText={carbsRemaining >= 0 ? 'kaldı' : 'aşıldı'}
+                />
+                <Text style={[styles.macroGaugeLabel, { color: colors.orange }]}>Karb</Text>
               </View>
 
-              {/* Protein */}
-              <View style={styles.macroColumn}>
-                <Text style={styles.macroColTitle}>Protein</Text>
-                <View style={styles.macroValueRow}>
-                  <Text style={styles.macroBigNumber}>{activeLog.protein || 0} g</Text>
-                  <Text style={styles.macroTargetNumber}> / {targets.protein}</Text>
-                </View>
-                <View style={styles.miniBarTrack}>
-                  <View
-                    style={[
-                      styles.miniBarFill,
-                      {
-                        width: `${proteinPercent}%`,
-                        backgroundColor: '#F59E0B',
-                      },
-                    ]}
-                  />
-                </View>
+              {/* Protein Yay Göstergesi */}
+              <View style={styles.macroGaugeCol}>
+                <SemiCircleGauge
+                  percent={proteinPercent}
+                  color={colors.rose}
+                  amountText={proteinRemaining >= 0 ? `${proteinRemaining}g` : `${Math.abs(proteinRemaining)}g`}
+                  statusText={proteinRemaining >= 0 ? 'kaldı' : 'aşıldı'}
+                />
+                <Text style={[styles.macroGaugeLabel, { color: colors.rose }]}>Protein</Text>
               </View>
             </View>
           </View>
@@ -1526,7 +1650,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
     paddingHorizontal: 4,
   },
   weekDayCol: {
@@ -1569,112 +1693,164 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
 
-  /* ─── 3. Özet Kartları (Kalori & Makrolar) ─── */
-  summaryCard: {
+  /* ─── 3. Yeni Üst Kalori & Mini Makro Kartı ─── */
+  topSummaryCard: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.borderSoft,
     padding: 16,
     marginBottom: 12,
   },
-  cardHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.muted,
-    marginBottom: 6,
-  },
-  calRow: {
+  calorieRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 12,
+    alignItems: 'center',
   },
-  calLeftGroup: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  calBigNumber: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  calUnitText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  calTargetText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.muted,
-  },
-  calRemainingText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.muted,
-  },
-  progressBarTrack: {
-    height: 6,
-    backgroundColor: '#17223B',
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-
-  /* ─── 4. Makrolar Kartı Detayları ─── */
-  macrosTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 2,
-  },
-  swapBtn: {
-    padding: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  macroColumnsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  macroColumn: {
+  calorieTextGroup: {
     flex: 1,
   },
-  macroColTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.muted,
-    marginBottom: 4,
-  },
-  macroValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
-    flexWrap: 'wrap',
-  },
-  macroBigNumber: {
-    fontSize: 16,
-    fontWeight: '800',
+  calorieTitle: {
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.text,
   },
-  macroTargetNumber: {
-    fontSize: 11.5,
-    fontWeight: '500',
+  calorieStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.muted,
+    marginTop: 4,
+  },
+  miniCalorieChartBox: {
+    width: 124,
+    height: 42,
+    justifyContent: 'flex-end',
+    position: 'relative',
+  },
+  miniDottedLineWrap: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    zIndex: 1,
+  },
+  miniDottedLine: {
+    flex: 1,
+    height: 1,
+    borderWidth: 0.8,
+    borderColor: 'rgba(167, 139, 250, 0.45)',
+    borderStyle: 'dashed',
+  },
+  miniTargetLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.violet,
+  },
+  miniBarsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 34,
+    paddingRight: 28,
+  },
+  miniCalBar: {
+    width: 6.5,
+    borderRadius: 3,
+  },
+  miniMacrosGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+  },
+  miniMacroCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    justifyContent: 'space-between',
+  },
+  miniMacroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  miniMacroName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  miniMacroValue: {
+    fontSize: 11,
+    fontWeight: '600',
     color: colors.muted,
   },
-  miniBarTrack: {
-    height: 5,
-    backgroundColor: '#17223B',
-    borderRadius: 999,
-    overflow: 'hidden',
+
+  /* ─── 4. Yeni Makro Hedefleri Kartı (Yay Göstergeleri) ─── */
+  macroGoalsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    padding: 16,
+    marginBottom: 12,
   },
-  miniBarFill: {
-    height: '100%',
-    borderRadius: 999,
+  macroGoalsTitle: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 14,
+  },
+  macroGaugesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  macroGaugeCol: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  gaugeContainer: {
+    width: 92,
+    height: 66,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  gaugeCenterTextWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 4,
+  },
+  gaugeAmountText: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  gaugeStatusText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: colors.muted,
+    marginTop: 0,
+  },
+  macroGaugeLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 6,
+    textAlign: 'center',
   },
 
   /* ─── Bölüm Başlıkları ─── */
@@ -1774,7 +1950,7 @@ const styles = StyleSheet.create({
   },
   proteinInput: {
     flex: 1,
-    borderColor: 'rgba(67, 214, 173, 0.45)',
+    borderColor: 'rgba(251, 113, 133, 0.45)',
   },
   carbInput: {
     flex: 1,
@@ -1782,7 +1958,7 @@ const styles = StyleSheet.create({
   },
   fatInput: {
     flex: 1,
-    borderColor: 'rgba(57, 198, 239, 0.45)',
+    borderColor: 'rgba(56, 189, 248, 0.45)',
   },
   notesInput: {
     minHeight: 52,
