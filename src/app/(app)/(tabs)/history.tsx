@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -11,6 +12,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +23,30 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkouts } from '@/hooks/use-workouts';
 import { workoutDraft } from '@/lib/workout-draft';
 import type { ExerciseEntry, Workout } from '@/types/workout';
+
+// Android için donanım hızlandırmalı LayoutAnimation etkinleştirme
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// 60fps - 90fps yüksek akıcılıkta natif yay (spring) ve yumuşak geçiş konfigürasyonu
+const triggerSmoothAnimation = () => {
+  LayoutAnimation.configureNext({
+    duration: 300,
+    create: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+    update: {
+      type: LayoutAnimation.Types.spring,
+      springDamping: 0.82,
+    },
+    delete: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+  });
+};
 
 // ─── Web Tema Renkleri (Web Platformuna Birebir Uyumlu Cyber Dark) ───
 const colors = {
@@ -381,11 +407,8 @@ export default function HistoryScreen() {
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
 
   // Kart Genişletme Durumları
-  // 1. Özet Görünümü Açık/Kapalı: Record<workoutId, boolean> (Varsayılan olarak hepsi özet halinde açık veya tıklanabilir)
-  const [openSummaries, setOpenSummaries] = useState<Record<number, boolean>>(() => {
-    // İlk renderda ilk 3 kart özet olarak açık olsun
-    return {};
-  });
+  // 1. Özet Görünümü Açık/Kapalı: Record<workoutId, boolean> (Görseldeki gibi varsayılan olarak hepsi KAPALI özet çubuğu)
+  const [openSummaries, setOpenSummaries] = useState<Record<number, boolean>>({});
 
   // 2. Detaylı Set & Tekrar Verileri Açık/Kapalı: Record<workoutId, boolean>
   const [openFullDetails, setOpenFullDetails] = useState<Record<number, boolean>>({});
@@ -429,17 +452,18 @@ export default function HistoryScreen() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [workouts, selectedDate, searchQuery]);
 
-  // Özet Açma / Kapama (Kart Header Tıklanınca)
+  // Özet Açma / Kapama (Karta basıldığında 60-90fps akıcı yay animasyonuyla açılır/kapanır)
   const toggleSummary = (workoutId: number) => {
-    setOpenSummaries((prev) => {
-      // Varsayılan olarak açık ise (undefined -> true kabul edilirse) kapat, değilse aç
-      const isCurrentlyOpen = prev[workoutId] !== false;
-      return { ...prev, [workoutId]: !isCurrentlyOpen };
-    });
+    triggerSmoothAnimation();
+    setOpenSummaries((prev) => ({
+      ...prev,
+      [workoutId]: !prev[workoutId],
+    }));
   };
 
   // Detaylı Set & Tekrar Görünümünü Açma / Kapama ("Daha Fazla" Butonu)
   const toggleFull = (workoutId: number) => {
+    triggerSmoothAnimation();
     setOpenFullDetails((prev) => {
       const next = !prev[workoutId];
       if (next) {
@@ -452,6 +476,7 @@ export default function HistoryScreen() {
 
   // Düzenleme Modunu Açma / Kapatma (Kalem İkonu)
   const toggleEdit = (workout: Workout) => {
+    triggerSmoothAnimation();
     const wId = workout.id;
     setEditModes((prev) => {
       const next = !prev[wId];
@@ -699,7 +724,7 @@ export default function HistoryScreen() {
           ) : (
             filteredWorkouts.map((w, index) => {
               const exercises = w.exercises || [];
-              const isSummaryOpen = openSummaries[w.id] !== false; // Varsayılan açık
+              const isSummaryOpen = !!openSummaries[w.id]; // Varsayılan kapalı özet çubuğu (Görseldeki gibi)
               const isFullOpen = !!openFullDetails[w.id];
               const isEditing = !!editModes[w.id];
               const isSaving = !!savingWorkoutIds[w.id];

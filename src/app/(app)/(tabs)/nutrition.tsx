@@ -5,6 +5,7 @@ import {
   Easing,
   GestureResponderEvent,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -13,6 +14,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +22,30 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useNutrition } from '@/hooks/use-nutrition';
 import { useUser } from '@/hooks/use-user';
+
+// Android için donanım hızlandırmalı LayoutAnimation etkinleştirme
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// 60fps - 90fps yüksek akıcılıkta natif yay (spring) ve yumuşak geçiş konfigürasyonu
+const smoothTransition = () => {
+  LayoutAnimation.configureNext({
+    duration: 300,
+    create: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+    update: {
+      type: LayoutAnimation.Types.spring,
+      springDamping: 0.82,
+    },
+    delete: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+  });
+};
 
 // ─── Renk Token'ları (Cyber Dark Theme) ───
 const colors = {
@@ -1311,6 +1337,7 @@ export default function NutritionScreen() {
               <Pressable
                 style={[styles.tab, statPeriod === 'weekly' && styles.activeTab]}
                 onPress={() => {
+                  smoothTransition();
                   setStatPeriod('weekly');
                   setActiveBarIndex(null);
                 }}
@@ -1327,6 +1354,7 @@ export default function NutritionScreen() {
               <Pressable
                 style={[styles.tab, statPeriod === 'monthly' && styles.activeTab]}
                 onPress={() => {
+                  smoothTransition();
                   setStatPeriod('monthly');
                   setActiveBarIndex(null);
                 }}
@@ -1343,6 +1371,7 @@ export default function NutritionScreen() {
               <Pressable
                 style={[styles.tab, statPeriod === 'all' && styles.activeTab]}
                 onPress={() => {
+                  smoothTransition();
                   setStatPeriod('all');
                   setActiveBarIndex(null);
                 }}
@@ -1365,28 +1394,40 @@ export default function NutritionScreen() {
                 value={`${stats.avgCal} kcal`}
                 color={METRICS.calories.color}
                 isSelected={selectedMetric === 'calories'}
-                onPress={() => setSelectedMetric('calories')}
+                onPress={() => {
+                  smoothTransition();
+                  setSelectedMetric('calories');
+                }}
               />
               <StatCardButton
                 label={METRICS.protein.label}
                 value={`${stats.avgProt} g`}
                 color={METRICS.protein.color}
                 isSelected={selectedMetric === 'protein'}
-                onPress={() => setSelectedMetric('protein')}
+                onPress={() => {
+                  smoothTransition();
+                  setSelectedMetric('protein');
+                }}
               />
               <StatCardButton
                 label={METRICS.carbs.label}
                 value={`${stats.avgCarb} g`}
                 color={METRICS.carbs.color}
                 isSelected={selectedMetric === 'carbs'}
-                onPress={() => setSelectedMetric('carbs')}
+                onPress={() => {
+                  smoothTransition();
+                  setSelectedMetric('carbs');
+                }}
               />
               <StatCardButton
                 label={METRICS.fat.label}
                 value={`${stats.avgFat} g`}
                 color={METRICS.fat.color}
                 isSelected={selectedMetric === 'fat'}
-                onPress={() => setSelectedMetric('fat')}
+                onPress={() => {
+                  smoothTransition();
+                  setSelectedMetric('fat');
+                }}
               />
             </View>
 
