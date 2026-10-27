@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -34,10 +35,23 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Düzgün, tek süzülme ile aşağı genişleme animasyon tetikleyicisi (Yay/salınım olmadan)
+// Düzgün, yumuşatılmış tek süzülme ile aşağı genişleme animasyon tetikleyicisi (Yay/salınım olmadan)
 const triggerSmoothTransition = () => {
   try {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    LayoutAnimation.configureNext({
+      duration: 340,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
   } catch {
     // LayoutAnimation hata verirse sessizce devam et
   }
@@ -284,6 +298,9 @@ type CalendarModalProps = {
   onClose: () => void;
 };
 
+// Ay geçiş animasyon kilidi
+let isCalendarMonthAnimating = false;
+
 function WorkoutCalendarModal({
   visible,
   selectedDate,
@@ -304,21 +321,176 @@ function WorkoutCalendarModal({
     selectedDate ? selectedDate.slice(0, 7) : todayIso.slice(0, 7)
   );
 
-  const handlePrev = () => {
-    const [y, m] = viewMonth.split('-').map(Number);
-    const prev = new Date(y, m - 2, 1);
-    const pY = prev.getFullYear();
-    const pM = String(prev.getMonth() + 1).padStart(2, '0');
-    setViewMonth(`${pY}-${pM}`);
+  // Ay geçişinde yumuşak kayma (slide) ve opasite animasyonları
+  const [slideAnim] = useState(() => new RNAnimated.Value(0));
+  const [opacityAnim] = useState(() => new RNAnimated.Value(1));
+
+  // Ay değiştirme fonksiyonu (direction: 1 = sonraki, -1 = önceki)
+  const changeMonth = (direction: 1 | -1) => {
+    if (isCalendarMonthAnimating) return;
+    isCalendarMonthAnimating = true;
+
+    // 1. Mevcut ayı yumuşakça dışarı kaydır
+    RNAnimated.parallel([
+      RNAnimated.timing(slideAnim, {
+        toValue: direction === 1 ? -65 : 65,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+      RNAnimated.timing(opacityAnim, {
+        toValue: 0.1,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // 2. Ayı güncelle
+      setViewMonth((cur) => {
+        const [y, m] = cur.split('-').map(Number);
+        const target = new Date(y, m - 1 + direction, 1);
+        const tY = target.getFullYear();
+        const tM = String(target.getMonth() + 1).padStart(2, '0');
+        return `${tY}-${tM}`;
+      });
+
+      // 3. Karşı tarafa hazırla
+      slideAnim.setValue(direction === 1 ? 65 : -65);
+
+      // 4. Yeni ayı merkeze yumuşakça süzdür
+      RNAnimated.parallel([
+        RNAnimated.timing(slideAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        RNAnimated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        isCalendarMonthAnimating = false;
+      });
+    });
   };
 
-  const handleNext = () => {
-    const [y, m] = viewMonth.split('-').map(Number);
-    const next = new Date(y, m, 1);
-    const nY = next.getFullYear();
-    const nM = String(next.getMonth() + 1).padStart(2, '0');
-    setViewMonth(`${nY}-${nM}`);
-  };
+  const handlePrev = () => changeMonth(-1);
+  const handleNext = () => changeMonth(1);
+
+  // Parmakla Kaydırma (Horizontal Swipe PanResponder)
+  const [panResponder] = useState(() =>
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return (
+          Math.abs(gestureState.dx) > 12 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5
+        );
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (isCalendarMonthAnimating) return;
+        slideAnim.setValue(gestureState.dx * 0.7);
+        const op = Math.max(0.3, 1 - Math.abs(gestureState.dx) / 250);
+        opacityAnim.setValue(op);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (isCalendarMonthAnimating) return;
+        const { dx, vx } = gestureState;
+
+        // Sola kaydırıldı -> Sonraki Ay
+        if (dx < -35 || vx < -0.3) {
+          isCalendarMonthAnimating = true;
+          RNAnimated.parallel([
+            RNAnimated.timing(slideAnim, {
+              toValue: -80,
+              duration: 110,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(opacityAnim, {
+              toValue: 0.1,
+              duration: 110,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            setViewMonth((cur) => {
+              const [y, m] = cur.split('-').map(Number);
+              const target = new Date(y, m, 1);
+              const tY = target.getFullYear();
+              const tM = String(target.getMonth() + 1).padStart(2, '0');
+              return `${tY}-${tM}`;
+            });
+            slideAnim.setValue(80);
+            RNAnimated.parallel([
+              RNAnimated.timing(slideAnim, {
+                toValue: 0,
+                duration: 180,
+                useNativeDriver: true,
+              }),
+              RNAnimated.timing(opacityAnim, {
+                toValue: 1,
+                duration: 180,
+                useNativeDriver: true,
+              }),
+            ]).start(() => {
+              isCalendarMonthAnimating = false;
+            });
+          });
+        }
+        // Sağa kaydırıldı -> Önceki Ay
+        else if (dx > 35 || vx > 0.3) {
+          isCalendarMonthAnimating = true;
+          RNAnimated.parallel([
+            RNAnimated.timing(slideAnim, {
+              toValue: 80,
+              duration: 110,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(opacityAnim, {
+              toValue: 0.1,
+              duration: 110,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            setViewMonth((cur) => {
+              const [y, m] = cur.split('-').map(Number);
+              const target = new Date(y, m - 2, 1);
+              const tY = target.getFullYear();
+              const tM = String(target.getMonth() + 1).padStart(2, '0');
+              return `${tY}-${tM}`;
+            });
+            slideAnim.setValue(-80);
+            RNAnimated.parallel([
+              RNAnimated.timing(slideAnim, {
+                toValue: 0,
+                duration: 180,
+                useNativeDriver: true,
+              }),
+              RNAnimated.timing(opacityAnim, {
+                toValue: 1,
+                duration: 180,
+                useNativeDriver: true,
+              }),
+            ]).start(() => {
+              isCalendarMonthAnimating = false;
+            });
+          });
+        }
+        // Yetersiz çekme -> Geri merkeze yaylan
+        else {
+          RNAnimated.parallel([
+            RNAnimated.timing(slideAnim, {
+              toValue: 0,
+              duration: 140,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(opacityAnim, {
+              toValue: 1,
+              duration: 140,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      },
+    })
+  );
 
   const calendarCells = useMemo(() => {
     const [y, m] = viewMonth.split('-').map(Number);
@@ -380,7 +552,7 @@ function WorkoutCalendarModal({
             </PressableScale>
           </View>
 
-          {/* Ay Gezintisi */}
+          {/* Ay Gezintisi (< > Butonları) */}
           <View style={styles.calNav}>
             <PressableScale style={styles.calNavBtn} onPress={handlePrev} activeScale={0.85} hitSlop={8}>
               <Text style={styles.calNavArrow}>‹</Text>
@@ -400,46 +572,61 @@ function WorkoutCalendarModal({
             ))}
           </View>
 
-          {/* Günler Grid */}
-          <View style={styles.calGrid}>
-            {calendarCells.map((cell, idx) => {
-              if (!cell) {
-                return <View key={`blank-${idx}`} style={styles.calCell} />;
-              }
+          {/* Günler Grid (Yumuşak Kayma Animasyonu ve Parmakla Kaydırma Alanı) */}
+          <View style={styles.calGridContainer}>
+            <RNAnimated.View
+              {...panResponder.panHandlers}
+              style={[
+                styles.calGrid,
+                {
+                  transform: [{ translateX: slideAnim }],
+                  opacity: opacityAnim,
+                },
+              ]}
+            >
+              {calendarCells.map((cell, idx) => {
+                if (!cell) {
+                  return <View key={`blank-${idx}`} style={styles.calCell} />;
+                }
 
-              const isSelected = cell.dateIso === selectedDate;
+                const isSelected = cell.dateIso === selectedDate;
 
-              return (
-                <PressableScale
-                  key={cell.dateIso}
-                  style={[
-                    styles.calCell,
-                    isSelected && styles.calCellSelected,
-                  ]}
-                  activeScale={0.88}
-                  onPress={() => {
-                    onSelect(cell.dateIso);
-                    onClose();
-                  }}
-                >
-                  <Text
+                return (
+                  <PressableScale
+                    key={cell.dateIso}
                     style={[
-                      styles.calCellText,
-                      isSelected && styles.calCellTextSelected,
-                      cell.isToday && !isSelected && styles.calCellTextToday,
+                      styles.calCell,
+                      isSelected && styles.calCellSelected,
                     ]}
+                    activeScale={0.88}
+                    onPress={() => {
+                      onSelect(cell.dateIso);
+                      onClose();
+                    }}
                   >
-                    {cell.dayNum}
-                  </Text>
-                  {cell.hasWorkout && !isSelected && (
-                    <View style={styles.calWorkoutDot} />
-                  )}
-                  {cell.isToday && !isSelected && !cell.hasWorkout && (
-                    <View style={styles.calTodayDot} />
-                  )}
-                </PressableScale>
-              );
-            })}
+                    <Text
+                      style={[
+                        styles.calCellText,
+                        isSelected && styles.calCellTextSelected,
+                        cell.isToday && !isSelected && styles.calCellTextToday,
+                      ]}
+                    >
+                      {cell.dayNum}
+                    </Text>
+
+                    {/* Antrenman Yapılan Günler: YEŞİL nokta. Bugün: MOR nokta */}
+                    <View style={styles.calDotsContainer}>
+                      {cell.hasWorkout && !isSelected && (
+                        <View style={styles.calWorkoutDot} />
+                      )}
+                      {cell.isToday && !isSelected && (
+                        <View style={styles.calTodayDot} />
+                      )}
+                    </View>
+                  </PressableScale>
+                );
+              })}
+            </RNAnimated.View>
           </View>
 
           {/* Alt Butonlar */}
@@ -801,12 +988,12 @@ export default function HistoryScreen() {
               return (
                 <Animated.View
                   key={w.id}
-                  layout={LinearTransition.duration(240)}
+                  layout={LinearTransition.duration(340)}
                   style={styles.sessionCard}
                 >
                   {/* ─── Seans Kartı Üst Barı (Header) ─── */}
                   <View style={styles.cardHeader}>
-                    {/* Sol Kısım: Başlık, Hareket Sayısı Rozeti, Tarih & Mekan (Yay Animasyonlu Dokunmatik) */}
+                    {/* Sol Kısım: Başlık, Hareket Sayısı Rozeti, Tarih & Mekan (Dokunmatik - Kapatır/Açar) */}
                     <PressableScale
                       style={styles.cardHeaderLeft}
                       activeScale={0.98}
@@ -836,9 +1023,9 @@ export default function HistoryScreen() {
                       </View>
                     </PressableScale>
 
-                    {/* Sağ Kısım: Sadece 3 Aksiyon Butonu (Hacim Göstergesi Kullanıcı İsteğiyle Kaldırıldı!) */}
+                    {/* Sağ Kısım: Sadece 3 Aksiyon Butonu */}
                     <View style={styles.cardHeaderRight}>
-                      {/* Setleri Düzenle Butonu (Kalem - Yay Animasyonlu) */}
+                      {/* Setleri Düzenle Butonu (Kalem) */}
                       <PressableScale
                         style={[styles.headerActionBtn, styles.editActionBtn]}
                         activeScale={0.88}
@@ -848,7 +1035,7 @@ export default function HistoryScreen() {
                         <PencilEditIcon size={14} color={colors.purple} />
                       </PressableScale>
 
-                      {/* Genel Düzenle / Seansı Aç Butonu (Sliders - Yay Animasyonlu) */}
+                      {/* Genel Düzenle / Seansı Aç Butonu (Sliders) */}
                       <PressableScale
                         style={[styles.headerActionBtn, styles.tuneActionBtn]}
                         activeScale={0.88}
@@ -858,7 +1045,7 @@ export default function HistoryScreen() {
                         <TuneSlidersIcon size={14} color={colors.cyanAction} />
                       </PressableScale>
 
-                      {/* Sil Butonu (Çöp Kutusu - Yay Animasyonlu) */}
+                      {/* Sil Butonu (Çöp Kutusu) */}
                       <PressableScale
                         style={[styles.headerActionBtn, styles.deleteActionBtn]}
                         activeScale={0.88}
@@ -870,7 +1057,7 @@ export default function HistoryScreen() {
                     </View>
                   </View>
 
-                  {/* Kapat / Aç İpucu Çubuğu (Görseldeki gibi ortalanmış ve animasyonlu) */}
+                  {/* Kapat / Aç İpucu Çubuğu */}
                   <PressableScale
                     onPress={() => toggleSummary(w.id)}
                     style={styles.hintBar}
@@ -881,16 +1068,23 @@ export default function HistoryScreen() {
                     </Text>
                   </PressableScale>
 
-                  {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (Tek süzülme ile aşağı açılır) ─── */}
+                  {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (Açıkken herhangi yerine basılarak kapatılabilir) ─── */}
                   {isSummaryOpen && (
                     <Animated.View
-                      entering={FadeIn.duration(200)}
-                      exiting={FadeOut.duration(150)}
+                      entering={FadeIn.duration(260)}
+                      exiting={FadeOut.duration(180)}
                     >
-                      <View style={styles.summaryContainer}>
-                        {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti */}
+                      <Pressable
+                        style={styles.summaryContainer}
+                        onPress={() => toggleSummary(w.id)}
+                      >
+                        {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti (Dokunulduğunda özeti kapatır) */}
                         {exercises.map((ex, exIdx) => (
-                          <View key={exIdx} style={styles.summaryExerciseRow}>
+                          <Pressable
+                            key={exIdx}
+                            style={styles.summaryExerciseRow}
+                            onPress={() => toggleSummary(w.id)}
+                          >
                             <Text style={styles.summaryExerciseName}>
                               {ex.exercise_name}
                             </Text>
@@ -899,18 +1093,21 @@ export default function HistoryScreen() {
                                 {ex.sets_data?.length || 0} Set
                               </Text>
                             </View>
-                          </View>
+                          </Pressable>
                         ))}
 
-                        {/* Not Bölümü (Görsel 1: 📝 NOT) */}
+                        {/* Not Bölümü (Dokunulduğunda özeti kapatır) */}
                         {w.notes && w.notes.trim() !== '' ? (
-                          <View style={styles.notesBox}>
+                          <Pressable
+                            style={styles.notesBox}
+                            onPress={() => toggleSummary(w.id)}
+                          >
                             <Text style={styles.notesBoxTitle}>📝 NOT</Text>
                             <Text style={styles.notesBoxContent}>{w.notes}</Text>
-                          </View>
+                          </Pressable>
                         ) : null}
 
-                        {/* Daha Fazla (Set & Ağırlık Detayları) Butonu (Yay Animasyonlu) */}
+                        {/* Daha Fazla (Set & Ağırlık Detayları) Butonu */}
                         <PressableScale
                           style={[
                             styles.btnMore,
@@ -925,13 +1122,13 @@ export default function HistoryScreen() {
                               : 'Daha Fazla (Set & Ağırlık Detayları) ▾'}
                           </Text>
                         </PressableScale>
-                      </View>
+                      </Pressable>
 
                       {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (Tek süzülme ile aşağı açılır) ─── */}
                       {isFullOpen && (
                         <Animated.View
-                          entering={FadeIn.duration(200)}
-                          exiting={FadeOut.duration(150)}
+                          entering={FadeIn.duration(260)}
+                          exiting={FadeOut.duration(180)}
                           style={styles.fullDetailsContainer}
                         >
                           {/* Detay Başlığı: ⚡ DETAYLI SET & TEKRAR VERİLERİ */}
@@ -1817,21 +2014,29 @@ const styles = StyleSheet.create({
     color: colors.purple,
     fontWeight: '800',
   },
-  calWorkoutDot: {
+  calGridContainer: {
+    overflow: 'hidden',
+    width: '100%',
+  },
+  calDotsContainer: {
     position: 'absolute',
-    bottom: 4,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.purple,
+    bottom: 3.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  calWorkoutDot: {
+    width: 4.5,
+    height: 4.5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981', // Yeşil (Antrenman yapılan gün)
   },
   calTodayDot: {
-    position: 'absolute',
-    bottom: 4,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#38BDF8',
+    width: 4.5,
+    height: 4.5,
+    borderRadius: 2.5,
+    backgroundColor: colors.purple, // Mor (Bugün)
   },
   calFooter: {
     flexDirection: 'row',
