@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -36,11 +36,11 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Seri ve akıcı tek süzülme ile aşağı genişleme animasyon tetikleyicisi (Gecikmesiz ~180ms)
+// Düzgün, yumuşatılmış tek süzülme ile aşağı genişleme animasyon tetikleyicisi (Yay/salınım olmadan 340ms)
 const triggerSmoothTransition = () => {
   try {
     LayoutAnimation.configureNext({
-      duration: 180,
+      duration: 340,
       create: {
         type: LayoutAnimation.Types.easeInEaseOut,
         property: LayoutAnimation.Properties.opacity,
@@ -112,6 +112,7 @@ type PressableScaleProps = {
   activeScale?: number;
   hitSlop?: any;
   disabled?: boolean;
+  unstable_pressDelay?: number;
 };
 
 function PressableScale({
@@ -121,6 +122,7 @@ function PressableScale({
   activeScale = 0.95,
   hitSlop,
   disabled,
+  unstable_pressDelay = 0,
 }: PressableScaleProps) {
   const [scale] = useState(() => new RNAnimated.Value(1));
   const [opacity] = useState(() => new RNAnimated.Value(1));
@@ -130,12 +132,12 @@ function PressableScale({
     RNAnimated.parallel([
       RNAnimated.timing(scale, {
         toValue: activeScale,
-        duration: 25,
+        duration: 80,
         useNativeDriver: true,
       }),
       RNAnimated.timing(opacity, {
-        toValue: 0.85,
-        duration: 25,
+        toValue: 0.82,
+        duration: 80,
         useNativeDriver: true,
       }),
     ]).start();
@@ -146,12 +148,12 @@ function PressableScale({
     RNAnimated.parallel([
       RNAnimated.timing(scale, {
         toValue: 1,
-        duration: 40,
+        duration: 90,
         useNativeDriver: true,
       }),
       RNAnimated.timing(opacity, {
         toValue: 1,
-        duration: 40,
+        duration: 90,
         useNativeDriver: true,
       }),
     ]).start();
@@ -164,6 +166,7 @@ function PressableScale({
       onPressOut={handlePressOut}
       hitSlop={hitSlop}
       disabled={disabled}
+      unstable_pressDelay={unstable_pressDelay}
     >
       <RNAnimated.View style={[style, { transform: [{ scale }], opacity }]}>
         {children}
@@ -754,6 +757,336 @@ function DeleteWorkoutConfirmModal({
   );
 }
 
+// ─── Seans Kartı Bileşeni (React.memo ile Yüksek Performanslı, Tetikleme Gecikmesiz) ───
+
+type SessionCardItemProps = {
+  workout: Workout;
+  isSummaryOpen: boolean;
+  isFullOpen: boolean;
+  isEditing: boolean;
+  isSaving: boolean;
+  editingExercises?: ExerciseEntry[];
+  onToggleSummary: (workoutId: number) => void;
+  onToggleFull: (workoutId: number) => void;
+  onToggleEdit: (workout: Workout) => void;
+  onLoadToDraft: (workout: Workout) => void;
+  onDelete: (workout: Workout) => void;
+  onSetChange: (
+    workoutId: number,
+    exIdx: number,
+    setIdx: number,
+    field: 'weight_kg' | 'reps' | 'rir',
+    rawText: string
+  ) => void;
+  onSaveEdit: (workoutId: number) => void;
+};
+
+const SessionCardItem = React.memo(function SessionCardItem({
+  workout,
+  isSummaryOpen,
+  isFullOpen,
+  isEditing,
+  isSaving,
+  editingExercises,
+  onToggleSummary,
+  onToggleFull,
+  onToggleEdit,
+  onLoadToDraft,
+  onDelete,
+  onSetChange,
+  onSaveEdit,
+}: SessionCardItemProps) {
+  const exercises = workout.exercises || [];
+  const currentExercises = isEditing && editingExercises ? editingExercises : exercises;
+
+  return (
+    <Animated.View
+      layout={LinearTransition.duration(340)}
+      style={styles.sessionCard}
+    >
+      {/* ─── Seans Kartı Üst Barı (Header) ─── */}
+      <View style={styles.cardHeader}>
+        {/* Sol Kısım: Başlık, Hareket Sayısı Rozeti, Tarih & Mekan (Dokunmatik - Kapatır/Açar) */}
+        <PressableScale
+          style={styles.cardHeaderLeft}
+          activeScale={0.98}
+          onPress={() => onToggleSummary(workout.id)}
+          unstable_pressDelay={0}
+        >
+          <View style={styles.titleRow}>
+            <Text style={styles.sessionTitle}>
+              {workout.session_type || 'Antrenman'}
+            </Text>
+            <View style={styles.movementBadge}>
+              <Text style={styles.movementBadgeText}>
+                {exercises.length} Hareket
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.subtitleRow}>
+            <CalendarIcon size={12} color={colors.textMuted} />
+            <Text style={styles.subtitleDateText}>
+              {formatDateTR(workout.date)}
+            </Text>
+            {workout.gym_name ? (
+              <Text style={styles.subtitleGymText}>
+                • 📍 {workout.gym_name}
+              </Text>
+            ) : null}
+          </View>
+        </PressableScale>
+
+        {/* Sağ Kısım: Sadece 3 Aksiyon Butonu */}
+        <View style={styles.cardHeaderRight}>
+          {/* Setleri Düzenle Butonu (Kalem) */}
+          <PressableScale
+            style={[styles.headerActionBtn, styles.editActionBtn]}
+            activeScale={0.88}
+            onPress={() => onToggleEdit(workout)}
+            hitSlop={6}
+            unstable_pressDelay={0}
+          >
+            <PencilEditIcon size={14} color={colors.purple} />
+          </PressableScale>
+
+          {/* Genel Düzenle / Seansı Aç Butonu (Sliders) */}
+          <PressableScale
+            style={[styles.headerActionBtn, styles.tuneActionBtn]}
+            activeScale={0.88}
+            onPress={() => onLoadToDraft(workout)}
+            hitSlop={6}
+            unstable_pressDelay={0}
+          >
+            <TuneSlidersIcon size={14} color={colors.cyanAction} />
+          </PressableScale>
+
+          {/* Sil Butonu (Çöp Kutusu - Bulanık Arka Planlı Panoyu Açar) */}
+          <PressableScale
+            style={[styles.headerActionBtn, styles.deleteActionBtn]}
+            activeScale={0.88}
+            onPress={() => onDelete(workout)}
+            hitSlop={6}
+            unstable_pressDelay={0}
+          >
+            <TrashIcon size={14} color={colors.danger} />
+          </PressableScale>
+        </View>
+      </View>
+
+      {/* Kapat / Aç İpucu Çubuğu */}
+      <PressableScale
+        onPress={() => onToggleSummary(workout.id)}
+        style={styles.hintBar}
+        activeScale={0.98}
+        unstable_pressDelay={0}
+      >
+        <Text style={styles.hintBarText}>
+          {isSummaryOpen ? 'Özeti kapatmak için tıkla ▴' : 'Antrenman özetini görmek için tıkla ▾'}
+        </Text>
+      </PressableScale>
+
+      {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ ─── */}
+      {isSummaryOpen && (
+        <Animated.View
+          entering={FadeIn.duration(260)}
+          exiting={FadeOut.duration(180)}
+        >
+          <View style={styles.summaryContainer}>
+            {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti */}
+            {exercises.map((ex, exIdx) => (
+              <PressableScale
+                key={exIdx}
+                style={styles.summaryExerciseRow}
+                onPress={() => onToggleSummary(workout.id)}
+                activeScale={0.98}
+                unstable_pressDelay={0}
+              >
+                <Text style={styles.summaryExerciseName}>
+                  {ex.exercise_name}
+                </Text>
+                <View style={styles.summarySetBadge}>
+                  <Text style={styles.summarySetBadgeText}>
+                    {ex.sets_data?.length || 0} Set
+                  </Text>
+                </View>
+              </PressableScale>
+            ))}
+
+            {/* Not Bölümü */}
+            {workout.notes && workout.notes.trim() !== '' ? (
+              <PressableScale
+                style={styles.notesBox}
+                onPress={() => onToggleSummary(workout.id)}
+                activeScale={0.98}
+                unstable_pressDelay={0}
+              >
+                <Text style={styles.notesBoxTitle}>📝 NOT</Text>
+                <Text style={styles.notesBoxContent}>{workout.notes}</Text>
+              </PressableScale>
+            ) : null}
+
+            {/* Daha Fazla (Set & Ağırlık Detayları) Butonu */}
+            <PressableScale
+              style={[
+                styles.btnMore,
+                isFullOpen && styles.btnMoreActive,
+              ]}
+              onPress={() => onToggleFull(workout.id)}
+              activeScale={0.97}
+              unstable_pressDelay={0}
+            >
+              <Text style={styles.btnMoreText}>
+                {isFullOpen
+                  ? 'Daha Az Göster ▴'
+                  : 'Daha Fazla (Set & Ağırlık Detayları) ▾'}
+              </Text>
+            </PressableScale>
+          </View>
+
+          {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ ─── */}
+          {isFullOpen && (
+            <Animated.View
+              entering={FadeIn.duration(260)}
+              exiting={FadeOut.duration(180)}
+              style={styles.fullDetailsContainer}
+            >
+              {/* Detay Başlığı */}
+              <View style={styles.fullDetailsHeaderRow}>
+                <Text style={styles.fullDetailsTitle}>
+                  ⚡ DETAYLI SET & TEKRAR VERİLERİ
+                </Text>
+                {isEditing && (
+                  <PressableScale
+                    style={[styles.saveInlineBtn, isSaving && { opacity: 0.6 }]}
+                    onPress={() => onSaveEdit(workout.id)}
+                    disabled={isSaving}
+                    activeScale={0.92}
+                    unstable_pressDelay={0}
+                  >
+                    {isSaving ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.saveInlineBtnText}>Kaydet</Text>
+                    )}
+                  </PressableScale>
+                )}
+              </View>
+
+              {/* Her Egzersiz İçin Tablo Kartı */}
+              {currentExercises.map((ex, exIdx) => {
+                const sets = ex.sets_data || [];
+
+                return (
+                  <View key={exIdx} style={styles.exerciseSetsCard}>
+                    <Text style={styles.exerciseSetsCardTitle}>
+                      {exIdx + 1}. {ex.exercise_name}
+                    </Text>
+
+                    <View style={styles.tableHeaderRow}>
+                      <Text style={[styles.thText, styles.colSet]}>SET</Text>
+                      <Text style={[styles.thText, styles.colWeight]}>AĞIRLIK</Text>
+                      <Text style={[styles.thText, styles.colReps]}>TEKRAR</Text>
+                      <Text style={[styles.thText, styles.colRir]}>RIR</Text>
+                    </View>
+
+                    {sets.map((set, sIdx) => {
+                      const wKg = parseFloat(String(set.weight_kg)) || 0;
+                      const isBw = !!ex.is_bodyweight;
+
+                      return (
+                        <View key={sIdx} style={styles.tableRow}>
+                          <Text style={styles.colSetText}>{sIdx + 1}. Set</Text>
+
+                          <View style={styles.colWeightContainer}>
+                            {isEditing ? (
+                              <View style={styles.editInputBox}>
+                                <TextInput
+                                  style={styles.editTextInput}
+                                  value={set.weight_kg !== undefined ? String(set.weight_kg) : ''}
+                                  onChangeText={(txt) =>
+                                    onSetChange(workout.id, exIdx, sIdx, 'weight_kg', txt)
+                                  }
+                                  keyboardType="numeric"
+                                  placeholder="0"
+                                  placeholderTextColor={colors.textDim}
+                                />
+                                <Text style={styles.editUnitLabel}>kg</Text>
+                              </View>
+                            ) : (
+                              <View style={styles.weightBadge}>
+                                <Text style={styles.weightBadgeText}>
+                                  {isBw ? 'V. Ağ.' : `${wKg} kg`}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={styles.colRepsContainer}>
+                            {isEditing ? (
+                              <View style={styles.editInputBox}>
+                                <TextInput
+                                  style={styles.editTextInput}
+                                  value={set.reps !== undefined ? String(set.reps) : ''}
+                                  onChangeText={(txt) =>
+                                    onSetChange(workout.id, exIdx, sIdx, 'reps', txt)
+                                  }
+                                  keyboardType="numeric"
+                                  placeholder="0"
+                                  placeholderTextColor={colors.textDim}
+                                />
+                                <Text style={styles.editUnitLabel}>Tkr</Text>
+                              </View>
+                            ) : (
+                              <View style={styles.repsBadge}>
+                                <Text style={styles.repsBadgeText}>
+                                  {set.reps || 0} Tekrar
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={styles.colRirContainer}>
+                            {isEditing ? (
+                              <View style={[styles.editInputBox, styles.editRirInputBox]}>
+                                <TextInput
+                                  style={[styles.editTextInput, styles.editRirTextInput]}
+                                  value={
+                                    set.rir !== undefined && set.rir !== null
+                                      ? String(set.rir)
+                                      : ''
+                                  }
+                                  onChangeText={(txt) =>
+                                    onSetChange(workout.id, exIdx, sIdx, 'rir', txt)
+                                  }
+                                  keyboardType="numeric"
+                                  placeholder="—"
+                                  placeholderTextColor={colors.textDim}
+                                />
+                                <Text style={styles.editRirUnitLabel}>RIR</Text>
+                              </View>
+                            ) : (
+                              <View style={styles.rirBadge}>
+                                <Text style={styles.rirBadgeText}>
+                                  {set.rir === 0 || set.rir ? `${set.rir} RIR` : '—'}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+            </Animated.View>
+          )}
+        </Animated.View>
+      )}
+    </Animated.View>
+  );
+});
+
 // ─── Ana Ekran Bileşeni (HistoryScreen) ───
 
 export default function HistoryScreen() {
@@ -809,18 +1142,16 @@ export default function HistoryScreen() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [workouts, selectedDate, searchQuery]);
 
-  // Özet Açma / Kapama (Karta basıldığında düzgün tek süzülme ile açılır/kapanır)
-  const toggleSummary = (workoutId: number) => {
-    triggerSmoothTransition();
+  // Özet Açma / Kapama (Karta basıldığında anında tetiklenir ve Reanimated ile 340ms süzülür)
+  const toggleSummary = useCallback((workoutId: number) => {
     setOpenSummaries((prev) => ({
       ...prev,
       [workoutId]: !prev[workoutId],
     }));
-  };
+  }, []);
 
   // Detaylı Set & Tekrar Görünümünü Açma / Kapama ("Daha Fazla" Butonu)
-  const toggleFull = (workoutId: number) => {
-    triggerSmoothTransition();
+  const toggleFull = useCallback((workoutId: number) => {
     setOpenFullDetails((prev) => {
       const next = !prev[workoutId];
       if (next) {
@@ -828,12 +1159,11 @@ export default function HistoryScreen() {
       }
       return { ...prev, [workoutId]: next };
     });
-  };
+  }, []);
 
   // Düzenleme Modunu Açma / Kapatma (Kalem İkonu)
-  const toggleEdit = (workout: Workout) => {
+  const toggleEdit = useCallback((workout: Workout) => {
     const wId = workout.id;
-    triggerSmoothTransition();
     setEditModes((prev) => {
       const next = !prev[wId];
       if (next) {
@@ -846,10 +1176,10 @@ export default function HistoryScreen() {
       }
       return { ...prev, [wId]: next };
     });
-  };
+  }, []);
 
   // Set Değeri Değiştirme (Düzenleme Modunda)
-  const handleSetChange = (
+  const handleSetChange = useCallback((
     workoutId: number,
     exIdx: number,
     setIdx: number,
@@ -868,10 +1198,10 @@ export default function HistoryScreen() {
 
       return { ...prev, [workoutId]: wExs };
     });
-  };
+  }, []);
 
   // Düzenlenen Seansı Kaydet
-  const handleSaveEdit = async (workoutId: number) => {
+  const handleSaveEdit = useCallback(async (workoutId: number) => {
     const currentExercises = editingData[workoutId];
     if (!currentExercises) return;
 
@@ -891,7 +1221,7 @@ export default function HistoryScreen() {
     } finally {
       setSavingWorkoutIds((prev) => ({ ...prev, [workoutId]: false }));
     }
-  };
+  }, [editingData, updateWorkout]);
 
   // Silme Onay Panosu Durumu
   const [workoutToDelete, setWorkoutToDelete] = useState<Workout | null>(null);
@@ -912,15 +1242,15 @@ export default function HistoryScreen() {
     }
   };
 
-  const handleDelete = (workout: Workout) => {
+  const handleDelete = useCallback((workout: Workout) => {
     setWorkoutToDelete(workout);
-  };
+  }, []);
 
   // Antrenman Sekmesine Yükle (Tune İkonu)
-  const handleLoadToDraft = (workout: Workout) => {
+  const handleLoadToDraft = useCallback((workout: Workout) => {
     workoutDraft.loadWorkout(workout);
     router.push('/(app)/(tabs)/workout');
-  };
+  }, [router]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -1035,300 +1365,24 @@ export default function HistoryScreen() {
               )}
             </View>
           ) : (
-            filteredWorkouts.map((w) => {
-              const exercises = w.exercises || [];
-              const isSummaryOpen = !!openSummaries[w.id]; // Varsayılan kapalı (Görseldeki gibi)
-              const isFullOpen = !!openFullDetails[w.id];
-              const isEditing = !!editModes[w.id];
-              const isSaving = !!savingWorkoutIds[w.id];
-              const currentExercises = isEditing && editingData[w.id] ? editingData[w.id] : exercises;
-
-              return (
-                <Animated.View
-                  key={w.id}
-                  layout={LinearTransition.duration(180)}
-                  style={styles.sessionCard}
-                >
-                  {/* ─── Seans Kartı Üst Barı (Header) ─── */}
-                  <View style={styles.cardHeader}>
-                    {/* Sol Kısım: Başlık, Hareket Sayısı Rozeti, Tarih & Mekan (Dokunmatik - Kapatır/Açar) */}
-                    <PressableScale
-                      style={styles.cardHeaderLeft}
-                      activeScale={0.98}
-                      onPress={() => toggleSummary(w.id)}
-                    >
-                      <View style={styles.titleRow}>
-                        <Text style={styles.sessionTitle}>
-                          {w.session_type || 'Antrenman'}
-                        </Text>
-                        <View style={styles.movementBadge}>
-                          <Text style={styles.movementBadgeText}>
-                            {exercises.length} Hareket
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.subtitleRow}>
-                        <CalendarIcon size={12} color={colors.textMuted} />
-                        <Text style={styles.subtitleDateText}>
-                          {formatDateTR(w.date)}
-                        </Text>
-                        {w.gym_name ? (
-                          <Text style={styles.subtitleGymText}>
-                            • 📍 {w.gym_name}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </PressableScale>
-
-                    {/* Sağ Kısım: Sadece 3 Aksiyon Butonu */}
-                    <View style={styles.cardHeaderRight}>
-                      {/* Setleri Düzenle Butonu (Kalem) */}
-                      <PressableScale
-                        style={[styles.headerActionBtn, styles.editActionBtn]}
-                        activeScale={0.88}
-                        onPress={() => toggleEdit(w)}
-                        hitSlop={6}
-                      >
-                        <PencilEditIcon size={14} color={colors.purple} />
-                      </PressableScale>
-
-                      {/* Genel Düzenle / Seansı Aç Butonu (Sliders) */}
-                      <PressableScale
-                        style={[styles.headerActionBtn, styles.tuneActionBtn]}
-                        activeScale={0.88}
-                        onPress={() => handleLoadToDraft(w)}
-                        hitSlop={6}
-                      >
-                        <TuneSlidersIcon size={14} color={colors.cyanAction} />
-                      </PressableScale>
-
-                      {/* Sil Butonu (Çöp Kutusu - Bulanık Arka Planlı Panoyu Açar) */}
-                      <PressableScale
-                        style={[styles.headerActionBtn, styles.deleteActionBtn]}
-                        activeScale={0.88}
-                        onPress={() => handleDelete(w)}
-                        hitSlop={6}
-                      >
-                        <TrashIcon size={14} color={colors.danger} />
-                      </PressableScale>
-                    </View>
-                  </View>
-
-                  {/* Kapat / Aç İpucu Çubuğu */}
-                  <PressableScale
-                    onPress={() => toggleSummary(w.id)}
-                    style={styles.hintBar}
-                    activeScale={0.98}
-                  >
-                    <Text style={styles.hintBarText}>
-                      {isSummaryOpen ? 'Özeti kapatmak için tıkla ▴' : 'Antrenman özetini görmek için tıkla ▾'}
-                    </Text>
-                  </PressableScale>
-
-                  {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (Açıkken herhangi yerine basılarak kapatılabilir) ─── */}
-                  {isSummaryOpen && (
-                    <Animated.View
-                      entering={FadeIn.duration(140)}
-                      exiting={FadeOut.duration(90)}
-                    >
-                      <View style={styles.summaryContainer}>
-                        {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti (Dokunulduğunda özeti kapatır) */}
-                        {exercises.map((ex, exIdx) => (
-                          <PressableScale
-                            key={exIdx}
-                            style={styles.summaryExerciseRow}
-                            onPress={() => toggleSummary(w.id)}
-                            activeScale={0.98}
-                          >
-                            <Text style={styles.summaryExerciseName}>
-                              {ex.exercise_name}
-                            </Text>
-                            <View style={styles.summarySetBadge}>
-                              <Text style={styles.summarySetBadgeText}>
-                                {ex.sets_data?.length || 0} Set
-                              </Text>
-                            </View>
-                          </PressableScale>
-                        ))}
-
-                        {/* Not Bölümü (Dokunulduğunda özeti kapatır) */}
-                        {w.notes && w.notes.trim() !== '' ? (
-                          <PressableScale
-                            style={styles.notesBox}
-                            onPress={() => toggleSummary(w.id)}
-                            activeScale={0.98}
-                          >
-                            <Text style={styles.notesBoxTitle}>📝 NOT</Text>
-                            <Text style={styles.notesBoxContent}>{w.notes}</Text>
-                          </PressableScale>
-                        ) : null}
-
-                        {/* Daha Fazla (Set & Ağırlık Detayları) Butonu */}
-                        <PressableScale
-                          style={[
-                            styles.btnMore,
-                            isFullOpen && styles.btnMoreActive,
-                          ]}
-                          onPress={() => toggleFull(w.id)}
-                          activeScale={0.97}
-                        >
-                          <Text style={styles.btnMoreText}>
-                            {isFullOpen
-                              ? 'Daha Az Göster ▴'
-                              : 'Daha Fazla (Set & Ağırlık Detayları) ▾'}
-                          </Text>
-                        </PressableScale>
-                      </View>
-
-                      {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (Tek süzülme ile aşağı açılır) ─── */}
-                      {isFullOpen && (
-                        <Animated.View
-                          entering={FadeIn.duration(140)}
-                          exiting={FadeOut.duration(90)}
-                          style={styles.fullDetailsContainer}
-                        >
-                          {/* Detay Başlığı: ⚡ DETAYLI SET & TEKRAR VERİLERİ */}
-                          <View style={styles.fullDetailsHeaderRow}>
-                            <Text style={styles.fullDetailsTitle}>
-                              ⚡ DETAYLI SET & TEKRAR VERİLERİ
-                            </Text>
-                            {isEditing && (
-                              <PressableScale
-                                style={[styles.saveInlineBtn, isSaving && { opacity: 0.6 }]}
-                                onPress={() => handleSaveEdit(w.id)}
-                                disabled={isSaving}
-                                activeScale={0.92}
-                              >
-                                {isSaving ? (
-                                  <ActivityIndicator size="small" color="#FFFFFF" />
-                                ) : (
-                                  <Text style={styles.saveInlineBtnText}>Kaydet</Text>
-                                )}
-                              </PressableScale>
-                            )}
-                          </View>
-
-                          {/* Her Egzersiz İçin Tablo Kartı (1. Bulgarian Split Squat vb.) */}
-                          {currentExercises.map((ex, exIdx) => {
-                            const sets = ex.sets_data || [];
-
-                            return (
-                              <View key={exIdx} style={styles.exerciseSetsCard}>
-                                {/* Egzersiz Başlığı: 1. Bulgarian Split Squat */}
-                                <Text style={styles.exerciseSetsCardTitle}>
-                                  {exIdx + 1}. {ex.exercise_name}
-                                </Text>
-
-                                {/* Tablo Başlıkları: SET | AĞIRLIK | TEKRAR | RIR */}
-                                <View style={styles.tableHeaderRow}>
-                                  <Text style={[styles.thText, styles.colSet]}>SET</Text>
-                                  <Text style={[styles.thText, styles.colWeight]}>AĞIRLIK</Text>
-                                  <Text style={[styles.thText, styles.colReps]}>TEKRAR</Text>
-                                  <Text style={[styles.thText, styles.colRir]}>RIR</Text>
-                                </View>
-
-                                {/* Tablo Satırları (Yeşil, Mavi ve Sarı Rozetler) */}
-                                {sets.map((set, sIdx) => {
-                                  const wKg = parseFloat(String(set.weight_kg)) || 0;
-                                  const isBw = !!ex.is_bodyweight;
-
-                                  return (
-                                    <View key={sIdx} style={styles.tableRow}>
-                                      {/* Sütun 1: SET (1. Set) */}
-                                      <Text style={styles.colSetText}>{sIdx + 1}. Set</Text>
-
-                                      {/* Sütun 2: AĞIRLIK (Yeşil Rozet) */}
-                                      <View style={styles.colWeightContainer}>
-                                        {isEditing ? (
-                                          <View style={styles.editInputBox}>
-                                            <TextInput
-                                              style={styles.editTextInput}
-                                              value={set.weight_kg !== undefined ? String(set.weight_kg) : ''}
-                                              onChangeText={(txt) =>
-                                                handleSetChange(w.id, exIdx, sIdx, 'weight_kg', txt)
-                                              }
-                                              keyboardType="numeric"
-                                              placeholder="0"
-                                              placeholderTextColor={colors.textDim}
-                                            />
-                                            <Text style={styles.editUnitLabel}>kg</Text>
-                                          </View>
-                                        ) : (
-                                          <View style={styles.weightBadge}>
-                                            <Text style={styles.weightBadgeText}>
-                                              {isBw ? 'V. Ağ.' : `${wKg} kg`}
-                                            </Text>
-                                          </View>
-                                        )}
-                                      </View>
-
-                                      {/* Sütun 3: TEKRAR (Mavi Rozet) */}
-                                      <View style={styles.colRepsContainer}>
-                                        {isEditing ? (
-                                          <View style={styles.editInputBox}>
-                                            <TextInput
-                                              style={styles.editTextInput}
-                                              value={set.reps !== undefined ? String(set.reps) : ''}
-                                              onChangeText={(txt) =>
-                                                handleSetChange(w.id, exIdx, sIdx, 'reps', txt)
-                                              }
-                                              keyboardType="numeric"
-                                              placeholder="0"
-                                              placeholderTextColor={colors.textDim}
-                                            />
-                                            <Text style={styles.editUnitLabel}>Tkr</Text>
-                                          </View>
-                                        ) : (
-                                          <View style={styles.repsBadge}>
-                                            <Text style={styles.repsBadgeText}>
-                                              {set.reps || 0} Tekrar
-                                            </Text>
-                                          </View>
-                                        )}
-                                      </View>
-
-                                      {/* Sütun 4: RIR (Sarı Rozet) */}
-                                      <View style={styles.colRirContainer}>
-                                        {isEditing ? (
-                                          <View style={[styles.editInputBox, styles.editRirInputBox]}>
-                                            <TextInput
-                                              style={[styles.editTextInput, styles.editRirTextInput]}
-                                              value={
-                                                set.rir !== undefined && set.rir !== null
-                                                  ? String(set.rir)
-                                                  : ''
-                                              }
-                                              onChangeText={(txt) =>
-                                                handleSetChange(w.id, exIdx, sIdx, 'rir', txt)
-                                              }
-                                              keyboardType="numeric"
-                                              placeholder="—"
-                                              placeholderTextColor={colors.textDim}
-                                            />
-                                            <Text style={styles.editRirUnitLabel}>RIR</Text>
-                                          </View>
-                                        ) : (
-                                          <View style={styles.rirBadge}>
-                                            <Text style={styles.rirBadgeText}>
-                                              {set.rir === 0 || set.rir ? `${set.rir} RIR` : '—'}
-                                            </Text>
-                                          </View>
-                                        )}
-                                      </View>
-                                    </View>
-                                  );
-                                })}
-                              </View>
-                            );
-                          })}
-                        </Animated.View>
-                      )}
-                    </Animated.View>
-                  )}
-                </Animated.View>
-              );
-            })
+            filteredWorkouts.map((w) => (
+              <SessionCardItem
+                key={w.id}
+                workout={w}
+                isSummaryOpen={!!openSummaries[w.id]}
+                isFullOpen={!!openFullDetails[w.id]}
+                isEditing={!!editModes[w.id]}
+                isSaving={!!savingWorkoutIds[w.id]}
+                editingExercises={editingData[w.id]}
+                onToggleSummary={toggleSummary}
+                onToggleFull={toggleFull}
+                onToggleEdit={toggleEdit}
+                onLoadToDraft={handleLoadToDraft}
+                onDelete={handleDelete}
+                onSetChange={handleSetChange}
+                onSaveEdit={handleSaveEdit}
+              />
+            ))
           )}
         </ScrollView>
       </KeyboardAvoidingView>
