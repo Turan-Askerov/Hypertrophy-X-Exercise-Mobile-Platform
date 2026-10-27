@@ -15,73 +15,135 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkouts } from '@/hooks/use-workouts';
 import { workoutDraft } from '@/lib/workout-draft';
-import type { ExerciseEntry, SetData, Workout } from '@/types/workout';
+import type { ExerciseEntry, Workout } from '@/types/workout';
 
-// ─── Cyber / Dark Tema Renkleri ───
+// ─── Web Tema Renkleri (Web Platformuna Birebir Uyumlu Cyber Dark) ───
 const colors = {
-  background: '#07090E',
-  surface: '#111624',
-  surfaceCard: '#151A28',
-  surfaceCardExpanded: '#181E30',
-  inputBg: '#1D2438',
-  inputBorder: '#2E3A59',
-  border: '#242C42',
-  borderSoft: 'rgba(255, 255, 255, 0.08)',
+  background: '#080B14',
+  cardBg: '#101524',
+  cardBgInner: 'rgba(15, 23, 42, 0.65)',
+  cardBorder: 'rgba(255, 255, 255, 0.08)',
+  cardBorderHover: 'rgba(139, 92, 246, 0.35)',
   text: '#F8FAFC',
-  textMuted: '#8E99AF',
+  textMuted: '#94A3B8',
   textDim: '#64748B',
-  orange: '#FF5722',       // Aktif gün ve vurgu turuncusu (Görsellerdeki tema)
-  orangeLight: '#FF7A59',
-  orangeBadge: 'rgba(255, 87, 34, 0.15)',
-  orangeBadgeBorder: 'rgba(255, 87, 34, 0.35)',
-  mint: '#43D6AD',
-  cyan: '#38BDF8',
+
+  // Mor / Vurgu (Web'deki hist-badge-purple, hist-badge-volume)
+  purple: '#C084FC',
+  purpleBg: 'rgba(139, 92, 246, 0.14)',
+  purpleBorder: 'rgba(139, 92, 246, 0.4)',
+  purpleButtonBg: 'rgba(139, 92, 246, 0.12)',
+
+  // Ağırlık Rozeti (Yeşil / Emerald)
+  weightGreen: '#34D399',
+  weightGreenBg: 'rgba(16, 185, 129, 0.14)',
+  weightGreenBorder: 'rgba(16, 185, 129, 0.38)',
+
+  // Tekrar Rozeti (Mavi / Cyan)
+  repsBlue: '#38BDF8',
+  repsBlueBg: 'rgba(56, 189, 248, 0.14)',
+  repsBlueBorder: 'rgba(56, 189, 248, 0.35)',
+
+  // RIR Rozeti (Amber / Turuncu)
+  rirAmber: '#FBBF24',
+  rirAmberBg: 'rgba(245, 158, 11, 0.12)',
+  rirAmberBorder: 'rgba(245, 158, 11, 0.3)',
+
+  // Eylemler
   danger: '#FF7898',
+  dangerBg: 'rgba(239, 68, 68, 0.12)',
+  dangerBorder: 'rgba(239, 68, 68, 0.35)',
+
+  cyanAction: '#38BDF8',
+  cyanActionBg: 'rgba(56, 189, 248, 0.12)',
+  cyanActionBorder: 'rgba(56, 189, 248, 0.35)',
+
+  inputBg: '#161E33',
+  inputBorder: '#283554',
 };
 
 // ─── SVG İkonları ───
 
-function CalendarHeaderIcon({ size = 18, color = colors.orange }: { size?: number; color?: string }) {
+function DumbbellTabIcon({ size = 15, color = '#FFFFFF' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Rect x="3" y="4" width="18" height="18" rx="3" stroke={color} strokeWidth={2} />
+      <Path
+        d="M6 5v14M18 5v14M3 8v8M21 8v8M6 12h12"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function NutritionTabIcon({ size = 15, color = colors.textMuted }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function CalendarIcon({ size = 14, color = colors.textMuted }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="3" y="4" width="18" height="18" rx="2" stroke={color} strokeWidth={2} />
       <Path d="M16 2v4M8 2v4M3 10h18" stroke={color} strokeWidth={2} strokeLinecap="round" />
-      <Circle cx="8" cy="14" r="1.2" fill={color} />
-      <Circle cx="12" cy="14" r="1.2" fill={color} />
-      <Circle cx="16" cy="14" r="1.2" fill={color} />
-      <Circle cx="8" cy="18" r="1.2" fill={color} />
-      <Circle cx="12" cy="18" r="1.2" fill={color} />
     </Svg>
   );
 }
 
-function ThreeDotsIcon({ size = 18, color = colors.textMuted }: { size?: number; color?: string }) {
+function PencilEditIcon({ size = 14, color = colors.purple }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="5" r="2" fill={color} />
-      <Circle cx="12" cy="12" r="2" fill={color} />
-      <Circle cx="12" cy="19" r="2" fill={color} />
+      <Path
+        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
 
-function ChevronDownIcon({ size = 16, color = colors.textMuted }: { size?: number; color?: string }) {
+function TuneSlidersIcon({ size = 14, color = colors.cyanAction }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M6 9l6 6 6-6" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path
+        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
 
-function ChevronUpIcon({ size = 16, color = colors.textMuted }: { size?: number; color?: string }) {
+function TrashIcon({ size = 14, color = colors.danger }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M18 15l-6-6-6 6" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
@@ -94,118 +156,16 @@ function CloseIcon({ size = 16, color = colors.textMuted }: { size?: number; col
   );
 }
 
-function TrashIcon({ size = 14, color = colors.danger }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
+// ─── Tarih Formatlama ───
 
-// Egzersiz Kategorisi İkonları
-function ExerciseIcon({ name, muscle }: { name: string; muscle?: string }) {
-  const lower = `${name} ${muscle || ''}`.toLowerCase();
-
-  // Benchpress / Göğüs
-  if (lower.includes('bench') || lower.includes('chest') || lower.includes('press') || lower.includes('göğüs')) {
-    return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-        <Path d="M4 18h16M7 18v-4h10v4M6 8h12M4 11h2M18 11h2M3 8v6M21 8v6" stroke={colors.orange} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    );
+function formatDateTR(dateIso?: string): string {
+  if (!dateIso) return '—';
+  const clean = dateIso.slice(0, 10);
+  const parts = clean.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
   }
-
-  // Deadlift / Sırt / Pull
-  if (lower.includes('deadlift') || lower.includes('back') || lower.includes('sırt') || lower.includes('row') || lower.includes('pull')) {
-    return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-        <Circle cx="12" cy="5" r="2.5" stroke={colors.orange} strokeWidth={2} />
-        <Path d="M7 21l3-7 2 3 2-3 3 7M6 14h12M4 14l2-5 6-1 6 1 2 5" stroke={colors.orange} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    );
-  }
-
-  // Push-Up / Şınav / Vücut Ağırlığı
-  if (lower.includes('push-up') || lower.includes('pushup') || lower.includes('şınav') || lower.includes('bodyweight')) {
-    return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-        <Circle cx="18" cy="8" r="2" stroke={colors.orange} strokeWidth={2} />
-        <Path d="M3 18l6-3 6-3 4 2M3 21h18M11 13l2 5" stroke={colors.orange} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    );
-  }
-
-  // Bicep / Curl / Kol
-  if (lower.includes('curl') || lower.includes('bicep') || lower.includes('arm') || lower.includes('kol') || lower.includes('tricep')) {
-    return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-        <Path d="M7 16a5 5 0 0110 0v2H7v-2zM9 11a3 3 0 016 0v2H9v-2zM6 18h12" stroke={colors.orange} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    );
-  }
-
-  // Bacak / Squat
-  if (lower.includes('squat') || lower.includes('leg') || lower.includes('bacak') || lower.includes('calf') || lower.includes('lunge')) {
-    return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-        <Circle cx="12" cy="4" r="2" stroke={colors.orange} strokeWidth={2} />
-        <Path d="M7 21l2-8 3 4 3-4 2 8M6 9h12M10 9l2 5 2-5" stroke={colors.orange} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      </Svg>
-    );
-  }
-
-  // Genel Dambıl
-  return (
-    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-      <Path d="M6 5v14M18 5v14M3 8v8M21 8v8M6 12h12" stroke={colors.orange} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-// ─── Tarih Yardımcıları ───
-
-function getTodayIso(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function offsetIsoDate(dateIso: string, offsetDays: number): string {
-  const [y, m, d] = dateIso.split('-').map(Number);
-  const dateObj = new Date(y, m - 1, d);
-  dateObj.setDate(dateObj.getDate() + offsetDays);
-  const rY = dateObj.getFullYear();
-  const rM = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const rD = String(dateObj.getDate()).padStart(2, '0');
-  return `${rY}-${rM}-${rD}`;
-}
-
-function formatHeaderSubtitle(dateIso: string, todayIso: string): string {
-  const months = [
-    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
-  ];
-  const [y, m, d] = dateIso.split('-').map(Number);
-
-  if (dateIso === todayIso) {
-    return `Bugün, ${d} ${months[m - 1]}`;
-  }
-  const yesterdayIso = offsetIsoDate(todayIso, -1);
-  if (dateIso === yesterdayIso) {
-    return `Dün, ${d} ${months[m - 1]}`;
-  }
-
-  const dt = new Date(y, m - 1, d);
-  const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-  return `${dayNames[dt.getDay()]}, ${d} ${months[m - 1]}`;
+  return clean;
 }
 
 function formatMonthTR(yearMonth: string): string {
@@ -221,9 +181,10 @@ function formatMonthTR(yearMonth: string): string {
 
 type CalendarModalProps = {
   visible: boolean;
-  selectedDate: string;
+  selectedDate: string | null;
   workoutDatesSet: Set<string>;
   onSelect: (dateIso: string) => void;
+  onClear: () => void;
   onClose: () => void;
 };
 
@@ -232,10 +193,20 @@ function WorkoutCalendarModal({
   selectedDate,
   workoutDatesSet,
   onSelect,
+  onClear,
   onClose,
 }: CalendarModalProps) {
-  const todayIso = useMemo(() => getTodayIso(), []);
-  const [viewMonth, setViewMonth] = useState<string>(() => selectedDate.slice(0, 7));
+  const todayIso = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
+
+  const [viewMonth, setViewMonth] = useState<string>(() =>
+    selectedDate ? selectedDate.slice(0, 7) : todayIso.slice(0, 7)
+  );
 
   const handlePrev = () => {
     const [y, m] = viewMonth.split('-').map(Number);
@@ -288,12 +259,6 @@ function WorkoutCalendarModal({
     return cells;
   }, [viewMonth, todayIso, workoutDatesSet]);
 
-  const handleQuick = (type: 'today' | 'yesterday') => {
-    const targetIso = type === 'today' ? todayIso : offsetIsoDate(todayIso, -1);
-    onSelect(targetIso);
-    onClose();
-  };
-
   return (
     <Modal
       visible={visible}
@@ -307,11 +272,11 @@ function WorkoutCalendarModal({
           <View style={styles.calHeader}>
             <View style={styles.calHeaderTitleBox}>
               <View style={styles.calIconBox}>
-                <CalendarHeaderIcon size={18} color={colors.orange} />
+                <CalendarIcon size={18} color={colors.purple} />
               </View>
               <View>
-                <Text style={styles.calTitle}>Tarih Seçimi</Text>
-                <Text style={styles.calSubtitle}>Geriye dönük antrenman kaydı</Text>
+                <Text style={styles.calTitle}>Tarihe Göre Filtrele</Text>
+                <Text style={styles.calSubtitle}>Seans geçmişinde tarih seç</Text>
               </View>
             </View>
             <TouchableOpacity style={styles.calCloseBtn} onPress={onClose} hitSlop={8}>
@@ -330,7 +295,7 @@ function WorkoutCalendarModal({
             </TouchableOpacity>
           </View>
 
-          {/* Hafta Günleri (Pzt - Paz) */}
+          {/* Hafta Günleri */}
           <View style={styles.calWeekdaysRow}>
             {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((wName) => (
               <Text key={wName} style={styles.calWeekdayName}>
@@ -382,20 +347,15 @@ function WorkoutCalendarModal({
 
           {/* Alt Butonlar */}
           <View style={styles.calFooter}>
-            <View style={styles.calQuickRow}>
-              <TouchableOpacity
-                style={styles.calQuickBtn}
-                onPress={() => handleQuick('today')}
-              >
-                <Text style={styles.calQuickBtnText}>Bugün</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.calQuickBtn}
-                onPress={() => handleQuick('yesterday')}
-              >
-                <Text style={styles.calQuickBtnText}>Dün</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.calClearBtn}
+              onPress={() => {
+                onClear();
+                onClose();
+              }}
+            >
+              <Text style={styles.calClearBtnText}>Filtreyi Temizle (Tümü)</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.calConfirmBtn} onPress={onClose}>
               <Text style={styles.calConfirmBtnText}>Kapat</Text>
             </TouchableOpacity>
@@ -406,24 +366,36 @@ function WorkoutCalendarModal({
   );
 }
 
-// ─── Ana Ekran Bileşeni ───
+// ─── Ana Ekran Bileşeni (Seans Kartları - Web Tasarımı) ───
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const { workouts, loading, refetch, updateWorkout, deleteWorkout } = useWorkouts();
+  const { workouts, loading, updateWorkout, deleteWorkout } = useWorkouts();
 
-  const todayIso = useMemo(() => getTodayIso(), []);
-  const [selectedDate, setSelectedDate] = useState<string>(todayIso);
+  // Aktif Sekme (Web'deki gibi: Antrenman Geçmişi | Beslenme Geçmişi)
+  const [activeTab, setActiveTab] = useState<'workout' | 'nutrition'>('workout');
+
+  // Filtreler
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
 
-  // Kart genişletme (Accordion) durumu: { [cardKey]: boolean }
-  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  // Kart Genişletme Durumları
+  // 1. Özet Görünümü Açık/Kapalı: Record<workoutId, boolean> (Varsayılan olarak hepsi özet halinde açık veya tıklanabilir)
+  const [openSummaries, setOpenSummaries] = useState<Record<number, boolean>>(() => {
+    // İlk renderda ilk 3 kart özet olarak açık olsun
+    return {};
+  });
 
-  // Düzenleme halindeki setler: { [cardKey]: SetData[] }
-  const [editingSets, setEditingSets] = useState<Record<string, SetData[]>>({});
-  const [savingKeys, setSavingKeys] = useState<Record<string, boolean>>({});
+  // 2. Detaylı Set & Tekrar Verileri Açık/Kapalı: Record<workoutId, boolean>
+  const [openFullDetails, setOpenFullDetails] = useState<Record<number, boolean>>({});
 
-  // DB'de antrenman kaydı olan tüm günlerin Set'i
+  // Düzenleme Modu Durumları: Record<workoutId, boolean>
+  const [editModes, setEditModes] = useState<Record<number, boolean>>({});
+  const [editingData, setEditingData] = useState<Record<number, ExerciseEntry[]>>({});
+  const [savingWorkoutIds, setSavingWorkoutIds] = useState<Record<number, boolean>>({});
+
+  // Tüm antrenman tarihlerinin Set'i
   const workoutDatesSet = useMemo(() => {
     const set = new Set<string>();
     for (const w of workouts) {
@@ -434,146 +406,119 @@ export default function HistoryScreen() {
     return set;
   }, [workouts]);
 
-  // Seçili tarihe ait antrenman seansları
-  const dayWorkouts = useMemo(() => {
-    return workouts.filter((w) => w.date && w.date.slice(0, 10) === selectedDate);
-  }, [workouts, selectedDate]);
+  // Filtrelenmiş ve Sıralanmış Seanslar
+  const filteredWorkouts = useMemo(() => {
+    return workouts
+      .filter((w) => {
+        // Tarih filtresi
+        if (selectedDate && w.date && !w.date.startsWith(selectedDate)) {
+          return false;
+        }
+        // Arama sorgusu
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchSession = (w.session_type || '').toLowerCase().includes(q);
+          const matchGym = (w.gym_name || '').toLowerCase().includes(q);
+          const matchEx = (w.exercises || []).some((e) =>
+            e.exercise_name.toLowerCase().includes(q)
+          );
+          if (!matchSession && !matchGym && !matchEx) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }, [workouts, selectedDate, searchQuery]);
 
-  // ─── Haftalık Takvim Şeridi Günleri (Pzt - Paz) ───
-  const weekDays = useMemo(() => {
-    const [y, m, d] = selectedDate.split('-').map(Number);
-    const dt = new Date(y, m - 1, d);
-    const dayOfWeek = dt.getDay(); // 0 is Sun, 1 is Mon
-    const mondayOffset = (dayOfWeek + 6) % 7; // 0 for Mon
-
-    const days = [];
-    const trDays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-
-    for (let i = 0; i < 7; i++) {
-      const dayDt = new Date(y, m - 1, d - mondayOffset + i);
-      const dayStr = String(dayDt.getDate()).padStart(2, '0');
-      const monthStr = String(dayDt.getMonth() + 1).padStart(2, '0');
-      const yearStr = dayDt.getFullYear();
-      const iso = `${yearStr}-${monthStr}-${dayStr}`;
-
-      days.push({
-        dateIso: iso,
-        dayNum: dayDt.getDate(),
-        dayName: trDays[i],
-        isSelected: iso === selectedDate,
-        hasWorkout: workoutDatesSet.has(iso),
-      });
-    }
-    return days;
-  }, [selectedDate, workoutDatesSet]);
-
-  // Önceki / Sonraki haftaya geçiş
-  const handleShiftWeek = (offsetWeeks: number) => {
-    setSelectedDate((curr) => offsetIsoDate(curr, offsetWeeks * 7));
-  };
-
-  // Kartı genişletme / daraltma
-  const toggleExpand = (cardKey: string, initialSets: SetData[]) => {
-    setExpandedCards((prev) => {
-      const nextState = !prev[cardKey];
-      if (nextState && !editingSets[cardKey]) {
-        // Genişlerken mevcut set verilerini kopyala
-        setEditingSets((ePrev) => ({
-          ...ePrev,
-          [cardKey]: initialSets.map((s) => ({ ...s })),
-        }));
-      }
-      return { ...prev, [cardKey]: nextState };
+  // Özet Açma / Kapama (Kart Header Tıklanınca)
+  const toggleSummary = (workoutId: number) => {
+    setOpenSummaries((prev) => {
+      // Varsayılan olarak açık ise (undefined -> true kabul edilirse) kapat, değilse aç
+      const isCurrentlyOpen = prev[workoutId] !== false;
+      return { ...prev, [workoutId]: !isCurrentlyOpen };
     });
   };
 
-  // Set verisi düzenleme (Kilo, Rep, RIR)
+  // Detaylı Set & Tekrar Görünümünü Açma / Kapama ("Daha Fazla" Butonu)
+  const toggleFull = (workoutId: number) => {
+    setOpenFullDetails((prev) => {
+      const next = !prev[workoutId];
+      if (next) {
+        // Detaylar açıldığında özet de açık kalmalı
+        setOpenSummaries((sPrev) => ({ ...sPrev, [workoutId]: true }));
+      }
+      return { ...prev, [workoutId]: next };
+    });
+  };
+
+  // Düzenleme Modunu Açma / Kapatma (Kalem İkonu)
+  const toggleEdit = (workout: Workout) => {
+    const wId = workout.id;
+    setEditModes((prev) => {
+      const next = !prev[wId];
+      if (next) {
+        // Düzenleme açılınca her iki panel de açılsın
+        setOpenSummaries((sPrev) => ({ ...sPrev, [wId]: true }));
+        setOpenFullDetails((fPrev) => ({ ...fPrev, [wId]: true }));
+        // Egzersiz verilerinin derin kopyasını hazırla
+        setEditingData((dPrev) => ({
+          ...dPrev,
+          [wId]: JSON.parse(JSON.stringify(workout.exercises || [])),
+        }));
+      }
+      return { ...prev, [wId]: next };
+    });
+  };
+
+  // Set Değeri Değiştirme (Düzenleme Modunda)
   const handleSetChange = (
-    cardKey: string,
-    setIndex: number,
+    workoutId: number,
+    exIdx: number,
+    setIdx: number,
     field: 'weight_kg' | 'reps' | 'rir',
     rawText: string
   ) => {
-    const numVal = rawText === '' ? 0 : Number(rawText.replace(',', '.'));
-    setEditingSets((prev) => {
-      const current = prev[cardKey] ? [...prev[cardKey]] : [];
-      if (!current[setIndex]) return prev;
+    const num = rawText === '' ? 0 : Number(rawText.replace(',', '.'));
+    setEditingData((prev) => {
+      const wExs: ExerciseEntry[] = prev[workoutId] ? JSON.parse(JSON.stringify(prev[workoutId])) : [];
+      if (!wExs[exIdx] || !wExs[exIdx].sets_data[setIdx]) return prev;
 
-      current[setIndex] = {
-        ...current[setIndex],
-        [field]: field === 'rir' && rawText === '' ? null : numVal,
+      wExs[exIdx].sets_data[setIdx] = {
+        ...wExs[exIdx].sets_data[setIdx],
+        [field]: field === 'rir' && rawText === '' ? null : num,
       };
 
-      return { ...prev, [cardKey]: current };
+      return { ...prev, [workoutId]: wExs };
     });
   };
 
-  // Yeni Set Ekleme
-  const handleAddSet = (cardKey: string) => {
-    setEditingSets((prev) => {
-      const current = prev[cardKey] ? [...prev[cardKey]] : [];
-      const last = current[current.length - 1];
-      const newSet: SetData = {
-        weight_kg: last?.weight_kg || 20,
-        reps: last?.reps || 10,
-        rir: 2,
-      };
-      return { ...prev, [cardKey]: [...current, newSet] };
-    });
-  };
+  // Düzenlenen Seansı Kaydet
+  const handleSaveEdit = async (workoutId: number) => {
+    const currentExercises = editingData[workoutId];
+    if (!currentExercises) return;
 
-  // Set Silme
-  const handleDeleteSet = (cardKey: string, setIndex: number) => {
-    setEditingSets((prev) => {
-      const current = prev[cardKey] ? [...prev[cardKey]] : [];
-      if (current.length <= 1) return prev;
-      const updated = current.filter((_, idx) => idx !== setIndex);
-      return { ...prev, [cardKey]: updated };
-    });
-  };
-
-  // Değişiklikleri Veritabanına Kaydetme
-  const handleSaveExercise = async (
-    workout: Workout,
-    exerciseIndex: number,
-    cardKey: string
-  ) => {
-    const currentSets = editingSets[cardKey];
-    if (!currentSets || currentSets.length === 0) {
-      Alert.alert('Uyarı', 'En az bir set verisi bulunmalıdır.');
-      return;
-    }
-
-    setSavingKeys((prev) => ({ ...prev, [cardKey]: true }));
+    setSavingWorkoutIds((prev) => ({ ...prev, [workoutId]: true }));
     try {
-      const updatedExercises: ExerciseEntry[] = workout.exercises.map((ex, idx) => {
-        if (idx !== exerciseIndex) return ex;
-        return {
-          ...ex,
-          sets_data: currentSets,
-        };
-      });
-
       await updateWorkout({
-        id: workout.id,
+        id: workoutId,
         data: {
-          exercises: updatedExercises,
+          exercises: currentExercises,
         },
       });
 
-      Alert.alert('Başarılı', `${workout.exercises[exerciseIndex].exercise_name} setleri güncellendi.`);
+      setEditModes((prev) => ({ ...prev, [workoutId]: false }));
+      Alert.alert('Başarılı', 'Antrenman seansı güncellendi.');
     } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Setler kaydedilirken sorun oluştu.');
+      Alert.alert('Hata', err?.message || 'Seans güncellenirken bir sorun oluştu.');
     } finally {
-      setSavingKeys((prev) => ({ ...prev, [cardKey]: false }));
+      setSavingWorkoutIds((prev) => ({ ...prev, [workoutId]: false }));
     }
   };
 
-  // Antrenmanı Komple Silme Seçeneği
-  const handleDeleteWorkout = (workoutId: number) => {
+  // Seansı Komple Sil
+  const handleDelete = (workoutId: number) => {
     Alert.alert(
       'Antrenmanı Sil',
-      'Bu antrenman kaydı tamamen silinecek. Emin misiniz?',
+      'Bu antrenman seansı tamamen silinecek. Emin misiniz?',
       [
         { text: 'Vazgeç', style: 'cancel' },
         {
@@ -582,7 +527,7 @@ export default function HistoryScreen() {
           onPress: async () => {
             try {
               await deleteWorkout(workoutId);
-              Alert.alert('Silindi', 'Antrenman kaydı silindi.');
+              Alert.alert('Silindi', 'Antrenman seansı silindi.');
             } catch (err: any) {
               Alert.alert('Hata', err?.message || 'Antrenman silinemedi.');
             }
@@ -592,8 +537,8 @@ export default function HistoryScreen() {
     );
   };
 
-  // Antrenmanı Düzenleme Ekranına Yükle
-  const handleEditInWorkoutTab = (workout: Workout) => {
+  // Antrenman Sekmesine Yükle (Tune İkonu)
+  const handleLoadToDraft = (workout: Workout) => {
     workoutDraft.loadWorkout(workout);
     router.push('/(app)/(tabs)/workout');
   };
@@ -609,368 +554,430 @@ export default function HistoryScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ─── 1. Header: Workout & Today Date & Calendar Button ─── */}
-          <View style={styles.topHeader}>
-            <View style={styles.titleColumn}>
-              <Text style={styles.mainTitle}>Antrenman</Text>
-              <Text style={styles.subtitleText}>
-                {formatHeaderSubtitle(selectedDate, todayIso)}
+          {/* ─── 1. Web Tarzı Üst Sekmeler & Seans Sayacı Rozeti (Görsel 1) ─── */}
+          <View style={styles.topTabsBar}>
+            {/* Sol: Sekme Butonları (Antrenman Geçmişi | Beslenme Geçmişi) */}
+            <View style={styles.segmentedControl}>
+              <TouchableOpacity
+                style={[
+                  styles.segmentBtn,
+                  activeTab === 'workout' && styles.segmentBtnActive,
+                ]}
+                onPress={() => setActiveTab('workout')}
+                activeOpacity={0.8}
+              >
+                <DumbbellTabIcon
+                  size={14}
+                  color={activeTab === 'workout' ? '#FFFFFF' : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.segmentBtnText,
+                    activeTab === 'workout' && styles.segmentBtnTextActive,
+                  ]}
+                >
+                  Antrenman Geçmişi
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.segmentBtn,
+                  activeTab === 'nutrition' && styles.segmentBtnActive,
+                ]}
+                onPress={() => router.push('/(app)/(tabs)/nutrition')}
+                activeOpacity={0.8}
+              >
+                <NutritionTabIcon
+                  size={14}
+                  color={activeTab === 'nutrition' ? '#FFFFFF' : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.segmentBtnText,
+                    activeTab === 'nutrition' && styles.segmentBtnTextActive,
+                  ]}
+                >
+                  Beslenme Geçmişi
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Sağ: Toplam Seans Sayacı Rozeti (Görsel 1: Antrenman Kaydı: 55 Seans) */}
+            <View style={styles.totalSessionsBadge}>
+              <View style={styles.totalBadgeDot} />
+              <Text style={styles.totalBadgeText}>
+                {workouts.length} Seans
               </Text>
             </View>
+          </View>
 
-            <View style={styles.headerRightActions}>
-              <TouchableOpacity
-                style={styles.calendarTriggerBtn}
-                onPress={() => setShowCalendarModal(true)}
-                activeOpacity={0.7}
-                hitSlop={8}
-              >
-                <CalendarHeaderIcon size={20} color={colors.orange} />
-              </TouchableOpacity>
+          {/* ─── 2. Hızlı Filtre / Arama ve Takvim Butonu ─── */}
+          <View style={styles.filterBar}>
+            <View style={styles.searchInputBox}>
+              <Text style={styles.searchIconText}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Seans veya hareket ara..."
+                placeholderTextColor={colors.textDim}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={6}>
+                  <Text style={{ color: colors.textDim, fontSize: 13 }}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-              <TouchableOpacity
-                style={styles.moreOptionsBtn}
-                onPress={() => {
-                  Alert.alert('Seçenekler', 'Geçmiş İşlemleri', [
-                    { text: 'Bugüne Git', onPress: () => setSelectedDate(todayIso) },
-                    { text: 'Yenile', onPress: () => refetch() },
-                    { text: 'Yeni Antrenman Başlat', onPress: () => router.push('/(app)/(tabs)/workout') },
-                    { text: 'Kapat', style: 'cancel' },
-                  ]);
-                }}
-                activeOpacity={0.7}
-                hitSlop={8}
+            {/* Takvim Açıcı Buton */}
+            <TouchableOpacity
+              style={[
+                styles.calTriggerBtn,
+                selectedDate !== null && styles.calTriggerBtnActive,
+              ]}
+              onPress={() => setShowCalendarModal(true)}
+              activeOpacity={0.7}
+              hitSlop={6}
+            >
+              <CalendarIcon
+                size={16}
+                color={selectedDate ? '#FFFFFF' : colors.purple}
+              />
+              <Text
+                style={[
+                  styles.calTriggerBtnText,
+                  selectedDate !== null && styles.calTriggerBtnTextActive,
+                ]}
               >
-                <ThreeDotsIcon size={18} color={colors.textMuted} />
+                {selectedDate ? formatDateTR(selectedDate) : 'Tarih'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Aktif Tarih Filtresi Varsa Bilgilendirme Çipi */}
+          {selectedDate && (
+            <View style={styles.activeFilterPillRow}>
+              <Text style={styles.activeFilterPillLabel}>Filtrelendi:</Text>
+              <View style={styles.activeFilterPill}>
+                <Text style={styles.activeFilterPillText}>{formatDateTR(selectedDate)}</Text>
+                <TouchableOpacity onPress={() => setSelectedDate(null)} hitSlop={6}>
+                  <Text style={styles.activeFilterPillClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedDate(null)}>
+                <Text style={styles.showAllText}>Tümünü Göster</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          )}
 
-          {/* ─── 2. Haftalık Tarih Şeridi (Mon - Sun / Referans Fotoğraftaki Turuncu Seçim) ─── */}
-          <View style={styles.weekSectionContainer}>
-            <View style={styles.weekHeaderControls}>
-              <TouchableOpacity
-                style={styles.weekNavArrow}
-                onPress={() => handleShiftWeek(-1)}
-                hitSlop={8}
-              >
-                <Text style={styles.weekNavArrowText}>‹</Text>
-              </TouchableOpacity>
-
-              <View style={styles.weekStripRow}>
-                {weekDays.map((item) => {
-                  if (item.isSelected) {
-                    return (
-                      <View key={item.dateIso} style={styles.activeDayPill}>
-                        <Text style={styles.activeDayNameText}>{item.dayName}</Text>
-                        <Text style={styles.activeDayNumText}>{item.dayNum}</Text>
-                      </View>
-                    );
-                  }
-
-                  return (
-                    <TouchableOpacity
-                      key={item.dateIso}
-                      style={styles.normalDayCol}
-                      onPress={() => setSelectedDate(item.dateIso)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.normalDayNameText}>{item.dayName}</Text>
-                      <Text style={styles.normalDayNumText}>{item.dayNum}</Text>
-                      {item.hasWorkout && <View style={styles.workoutIndicatorDot} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity
-                style={styles.weekNavArrow}
-                onPress={() => handleShiftWeek(1)}
-                hitSlop={8}
-              >
-                <Text style={styles.weekNavArrowText}>›</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* ─── 3. Bölüm Başlığı: Antrenman Geçmişi (Workout History) ─── */}
-          <View style={styles.historySectionHeader}>
-            <Text style={styles.sectionTitle}>Antrenman Geçmişi</Text>
-            {dayWorkouts.length > 0 && (
-              <View style={styles.sessionCountBadge}>
-                <Text style={styles.sessionCountBadgeText}>
-                  {dayWorkouts[0].session_type || 'Kayıtlı Seans'}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* ─── 4. Egzersiz Kartları Listesi (Görsel 1: Özet / Görsel 2: Açılan Panel & RIR Girdisi) ─── */}
+          {/* ─── 3. Seans Kartları Listesi (Web Platformuna Birebir Uyumlu) ─── */}
           {loading ? (
-            <View style={styles.loadingBox}>
+            <View style={styles.skeletonContainer}>
               {[0, 1, 2].map((i) => (
-                <Skeleton key={i} height={110} radius={18} style={styles.skeletonItem} />
+                <Skeleton key={i} height={180} radius={16} style={styles.skeletonItem} />
               ))}
             </View>
-          ) : dayWorkouts.length === 0 ? (
-            /* Seçili Günde Kayıt Yok */
+          ) : filteredWorkouts.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconBox}>
-                <ExerciseIcon name="Barbell" />
-              </View>
-              <Text style={styles.emptyTitle}>Bu Tarihte Antrenman Yok</Text>
+              <Text style={styles.emptyIcon}>🏋️</Text>
+              <Text style={styles.emptyTitle}>Kayıtlı Seans Bulunamadı</Text>
               <Text style={styles.emptySubtitle}>
-                {selectedDate} tarihinde henüz tamamlanmış bir antrenman kaydedilmemiş.
+                {selectedDate
+                  ? `${formatDateTR(selectedDate)} tarihinde kayıtlı antrenman seansı yok.`
+                  : 'Henüz kaydedilmiş antrenman bulunmuyor.'}
               </Text>
-
-              <TouchableOpacity
-                style={styles.startWorkoutBtn}
-                onPress={() => router.push('/(app)/(tabs)/workout')}
-              >
-                <Text style={styles.startWorkoutBtnText}>Yeni Antrenman Başlat</Text>
-              </TouchableOpacity>
-
-              {/* Hızlı Son Antrenman Günleri */}
-              {workoutDatesSet.size > 0 && (
-                <View style={styles.recentWorkoutsCard}>
-                  <Text style={styles.recentWorkoutsTitle}>Kayıtlı Son Antrenman Günleri:</Text>
-                  <View style={styles.recentChipsWrap}>
-                    {Array.from(workoutDatesSet)
-                      .sort()
-                      .reverse()
-                      .slice(0, 4)
-                      .map((dIso) => (
-                        <TouchableOpacity
-                          key={dIso}
-                          style={styles.recentDateChip}
-                          onPress={() => setSelectedDate(dIso)}
-                        >
-                          <Text style={styles.recentDateChipText}>{dIso}</Text>
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-                </View>
+              {selectedDate && (
+                <TouchableOpacity
+                  style={styles.clearFilterBtn}
+                  onPress={() => setSelectedDate(null)}
+                >
+                  <Text style={styles.clearFilterBtnText}>Tüm Seansları Göster</Text>
+                </TouchableOpacity>
               )}
             </View>
           ) : (
-            /* Kayıtlı Antrenman Seansları ve Hareket Kartları */
-            dayWorkouts.map((workout) => {
-              const exercises = workout.exercises || [];
+            filteredWorkouts.map((w, index) => {
+              const exercises = w.exercises || [];
+              const isSummaryOpen = openSummaries[w.id] !== false; // Varsayılan açık
+              const isFullOpen = !!openFullDetails[w.id];
+              const isEditing = !!editModes[w.id];
+              const isSaving = !!savingWorkoutIds[w.id];
+              const currentExercises = isEditing && editingData[w.id] ? editingData[w.id] : exercises;
 
               return (
-                <View key={workout.id} style={styles.workoutSessionBlock}>
-                  {/* Seans Üst Barı (Notlar veya Silme) */}
-                  <View style={styles.workoutMetaBar}>
-                    <Text style={styles.workoutVolumeText}>
-                      Toplam Hacim: {workout.total_volume ? `${workout.total_volume.toLocaleString('tr-TR')} kg` : '—'}
-                    </Text>
-                    <View style={styles.workoutMetaActions}>
+                <View key={w.id} style={styles.sessionCard}>
+                  {/* ─── Seans Kartı Üst Barı (Header) ─── */}
+                  <TouchableOpacity
+                    style={styles.cardHeader}
+                    activeOpacity={0.8}
+                    onPress={() => toggleSummary(w.id)}
+                  >
+                    {/* Sol Kısım: Başlık, Hareket Sayısı Rozeti, Tarih & Mekan */}
+                    <View style={styles.cardHeaderLeft}>
+                      <View style={styles.titleRow}>
+                        <Text style={styles.sessionTitle}>
+                          {w.session_type || 'Antrenman'}
+                        </Text>
+                        <View style={styles.movementBadge}>
+                          <Text style={styles.movementBadgeText}>
+                            {exercises.length} Hareket
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.subtitleRow}>
+                        <CalendarIcon size={12} color={colors.textMuted} />
+                        <Text style={styles.subtitleDateText}>
+                          {formatDateTR(w.date)}
+                        </Text>
+                        {w.gym_name ? (
+                          <Text style={styles.subtitleGymText}>
+                            • 📍 {w.gym_name}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    {/* Sağ Kısım: Toplam Hacim Rozeti & Aksiyon Butonları (Düzenle, Ayarlar, Sil) */}
+                    <View style={styles.cardHeaderRight}>
+                      {/* Toplam Hacim Rozeti (Görsel 1: 🟣 3.080 kg) */}
+                      <View style={styles.volumeBadge}>
+                        <View style={styles.volumeDot} />
+                        <Text style={styles.volumeBadgeText}>
+                          {Math.round(w.total_volume || 0).toLocaleString('tr-TR')} kg
+                        </Text>
+                      </View>
+
+                      {/* Setleri Düzenle Butonu (Kalem) */}
                       <TouchableOpacity
-                        onPress={() => handleEditInWorkoutTab(workout)}
-                        style={styles.metaActionBtn}
+                        style={[styles.headerActionBtn, styles.editActionBtn]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          toggleEdit(w);
+                        }}
+                        hitSlop={6}
                       >
-                        <Text style={styles.metaActionEditText}>Düzenle</Text>
+                        <PencilEditIcon size={14} color={colors.purple} />
                       </TouchableOpacity>
+
+                      {/* Genel Düzenle / Seansı Aç Butonu (Sliders) */}
                       <TouchableOpacity
-                        onPress={() => handleDeleteWorkout(workout.id)}
-                        style={styles.metaActionBtn}
+                        style={[styles.headerActionBtn, styles.tuneActionBtn]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleLoadToDraft(w);
+                        }}
+                        hitSlop={6}
                       >
-                        <Text style={styles.metaActionDeleteText}>Sil</Text>
+                        <TuneSlidersIcon size={14} color={colors.cyanAction} />
+                      </TouchableOpacity>
+
+                      {/* Sil Butonu (Çöp Kutusu) */}
+                      <TouchableOpacity
+                        style={[styles.headerActionBtn, styles.deleteActionBtn]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDelete(w.id);
+                        }}
+                        hitSlop={6}
+                      >
+                        <TrashIcon size={14} color={colors.danger} />
                       </TouchableOpacity>
                     </View>
-                  </View>
+                  </TouchableOpacity>
 
-                  {/* Egzersiz Kartları */}
-                  {exercises.map((exercise, exIdx) => {
-                    const cardKey = `w_${workout.id}_ex_${exIdx}`;
-                    const isExpanded = !!expandedCards[cardKey];
-                    const sets = exercise.sets_data || [];
-                    const activeSets = editingSets[cardKey] || sets;
-                    const isSaving = !!savingKeys[cardKey];
+                  {/* Kapat / Aç İpucu */}
+                  <TouchableOpacity
+                    onPress={() => toggleSummary(w.id)}
+                    style={styles.hintBar}
+                  >
+                    <Text style={styles.hintBarText}>
+                      {isSummaryOpen ? 'Özeti kapatmak için tıkla' : 'Antrenman özetini görmek için tıkla'}
+                    </Text>
+                  </TouchableOpacity>
 
-                    // Ortalama tekrar hesabı
-                    const totalReps = sets.reduce((s, st) => s + (st.reps || 0), 0);
-                    const avgReps = sets.length > 0 ? Math.round(totalReps / sets.length) : 0;
-                    const totalExVol = sets.reduce(
-                      (s, st) => s + (st.weight_kg || 0) * (st.reps || 0),
-                      0
-                    );
+                  {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (Görsel 1 ile Birebir) ─── */}
+                  {isSummaryOpen && (
+                    <View style={styles.summaryContainer}>
+                      {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti */}
+                      {exercises.map((ex, exIdx) => (
+                        <View key={exIdx} style={styles.summaryExerciseRow}>
+                          <Text style={styles.summaryExerciseName}>
+                            {ex.exercise_name}
+                          </Text>
+                          <View style={styles.summarySetBadge}>
+                            <Text style={styles.summarySetBadgeText}>
+                              {ex.sets_data?.length || 0} Set
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
 
-                    return (
-                      <View
-                        key={cardKey}
+                      {/* Not Bölümü (Görsel 1: 📝 NOT) */}
+                      {w.notes && w.notes.trim() !== '' ? (
+                        <View style={styles.notesBox}>
+                          <Text style={styles.notesBoxTitle}>📝 NOT</Text>
+                          <Text style={styles.notesBoxContent}>{w.notes}</Text>
+                        </View>
+                      ) : null}
+
+                      {/* Daha Fazla (Set & Ağırlık Detayları) Butonu (Görsel 1) */}
+                      <TouchableOpacity
                         style={[
-                          styles.exerciseCard,
-                          isExpanded && styles.exerciseCardExpanded,
+                          styles.btnMore,
+                          isFullOpen && styles.btnMoreActive,
                         ]}
+                        onPress={() => toggleFull(w.id)}
+                        activeOpacity={0.8}
                       >
-                        {/* ─── Kart Başlığı (Tıklanınca Açılır / Kapanır) ─── */}
-                        <TouchableOpacity
-                          style={styles.cardHeader}
-                          activeOpacity={0.7}
-                          onPress={() => toggleExpand(cardKey, sets)}
-                        >
-                          <View style={styles.cardIconCircle}>
-                            <ExerciseIcon
-                              name={exercise.exercise_name}
-                              muscle={exercise.muscle_group}
-                            />
-                          </View>
+                        <Text style={styles.btnMoreText}>
+                          {isFullOpen
+                            ? 'Daha Az Göster'
+                            : 'Daha Fazla (Set & Ağırlık Detayları)'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
 
-                          <View style={styles.cardTitleBox}>
-                            <Text style={styles.exerciseNameText}>
-                              {exercise.exercise_name}
-                            </Text>
-                            <Text style={styles.exerciseSubText}>
-                              {isExpanded
-                                ? `${sets.length} SET • Toplam ${totalExVol.toLocaleString('tr-TR')} kg`
-                                : `${sets.length} SETS X ${avgReps} REPS`}
-                            </Text>
-                          </View>
-
-                          <View style={styles.cardHeaderRight}>
-                            {isExpanded ? (
-                              <ChevronUpIcon size={20} color={colors.textMuted} />
+                  {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (Görsel 2 ile Birebir) ─── */}
+                  {isFullOpen && (
+                    <View style={styles.fullDetailsContainer}>
+                      {/* Detay Başlığı: ⚡ DETAYLI SET & TEKRAR VERİLERİ */}
+                      <View style={styles.fullDetailsHeaderRow}>
+                        <Text style={styles.fullDetailsTitle}>
+                          ⚡ DETAYLI SET & TEKRAR VERİLERİ
+                        </Text>
+                        {isEditing && (
+                          <TouchableOpacity
+                            style={[styles.saveInlineBtn, isSaving && { opacity: 0.6 }]}
+                            onPress={() => handleSaveEdit(w.id)}
+                            disabled={isSaving}
+                          >
+                            {isSaving ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
                             ) : (
-                              <ChevronDownIcon size={20} color={colors.textMuted} />
+                              <Text style={styles.saveInlineBtnText}>Kaydet</Text>
                             )}
-                          </View>
-                        </TouchableOpacity>
-
-                        {/* ─── 1. DURUM: KAPALI ÖZET GÖRÜNÜMÜ (Görsel 1 ile Birebir) ─── */}
-                        {!isExpanded && (
-                          <View style={styles.collapsedSummaryList}>
-                            {sets.map((set, sIdx) => (
-                              <View key={sIdx} style={styles.collapsedSummaryRow}>
-                                <Text style={styles.collapsedIndexText}>{sIdx + 1}</Text>
-                                <Text style={styles.collapsedWeightText}>
-                                  {set.weight_kg} kg
-                                </Text>
-                                <Text style={styles.collapsedRepsText}>
-                                  {set.reps} reps
-                                </Text>
-                              </View>
-                            ))}
-                          </View>
-                        )}
-
-                        {/* ─── 2. DURUM: GENİŞLETİLMİŞ DÜZENLEME PANELİ (Görsel 2 + RIR Girdisi) ─── */}
-                        {isExpanded && (
-                          <View style={styles.expandedPanel}>
-                            {/* Tablo Sütun Başlıkları: SET | KİLO (KG) | TEKRAR | RIR (Done yerine RIR) */}
-                            <View style={styles.tableHeaderRow}>
-                              <Text style={[styles.colHeader, styles.colSet]}>SET</Text>
-                              <Text style={[styles.colHeader, styles.colFlex]}>
-                                WEIGHT(KG)
-                              </Text>
-                              <Text style={[styles.colHeader, styles.colFlex]}>
-                                REPS
-                              </Text>
-                              <Text style={[styles.colHeader, styles.colFlex]}>
-                                RIR
-                              </Text>
-                              <View style={styles.colDeleteSpacer} />
-                            </View>
-
-                            {/* Set Satırları */}
-                            {activeSets.map((set, sIdx) => (
-                              <View key={sIdx} style={styles.tableRow}>
-                                {/* Set Numarası Rozeti */}
-                                <View style={styles.setNumBox}>
-                                  <Text style={styles.setNumText}>{sIdx + 1}</Text>
-                                </View>
-
-                                {/* Kilo (kg) Girişi */}
-                                <View style={styles.inputWrapper}>
-                                  <TextInput
-                                    style={styles.numInput}
-                                    value={set.weight_kg !== undefined ? String(set.weight_kg) : ''}
-                                    onChangeText={(txt) =>
-                                      handleSetChange(cardKey, sIdx, 'weight_kg', txt)
-                                    }
-                                    keyboardType="numeric"
-                                    placeholder="0"
-                                    placeholderTextColor={colors.textDim}
-                                  />
-                                </View>
-
-                                {/* Tekrar (Reps) Girişi */}
-                                <View style={styles.inputWrapper}>
-                                  <TextInput
-                                    style={styles.numInput}
-                                    value={set.reps !== undefined ? String(set.reps) : ''}
-                                    onChangeText={(txt) =>
-                                      handleSetChange(cardKey, sIdx, 'reps', txt)
-                                    }
-                                    keyboardType="numeric"
-                                    placeholder="0"
-                                    placeholderTextColor={colors.textDim}
-                                  />
-                                </View>
-
-                                {/* RIR Girişi (Görsel 2'deki Done checkbox'ı yerine RIR kutusu) */}
-                                <View style={[styles.inputWrapper, styles.rirInputWrapper]}>
-                                  <TextInput
-                                    style={[styles.numInput, styles.rirInputText]}
-                                    value={
-                                      set.rir !== undefined && set.rir !== null
-                                        ? String(set.rir)
-                                        : ''
-                                    }
-                                    onChangeText={(txt) =>
-                                      handleSetChange(cardKey, sIdx, 'rir', txt)
-                                    }
-                                    keyboardType="numeric"
-                                    placeholder="RIR"
-                                    placeholderTextColor={colors.textDim}
-                                  />
-                                </View>
-
-                                {/* Set Silme Butonu */}
-                                <View style={styles.deleteActionBox}>
-                                  {activeSets.length > 1 ? (
-                                    <TouchableOpacity
-                                      style={styles.deleteRowBtn}
-                                      onPress={() => handleDeleteSet(cardKey, sIdx)}
-                                      hitSlop={6}
-                                    >
-                                      <TrashIcon size={14} color={colors.danger} />
-                                    </TouchableOpacity>
-                                  ) : (
-                                    <View style={{ width: 14 }} />
-                                  )}
-                                </View>
-                              </View>
-                            ))}
-
-                            {/* Panel Alt Eylemleri (+ Set Ekle & Kaydet) */}
-                            <View style={styles.panelFooterActions}>
-                              <TouchableOpacity
-                                style={styles.addSetBtn}
-                                onPress={() => handleAddSet(cardKey)}
-                                activeOpacity={0.7}
-                              >
-                                <Text style={styles.addSetBtnText}>+ Set Ekle</Text>
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                style={[styles.saveBtn, isSaving && { opacity: 0.6 }]}
-                                onPress={() => handleSaveExercise(workout, exIdx, cardKey)}
-                                disabled={isSaving}
-                                activeOpacity={0.7}
-                              >
-                                {isSaving ? (
-                                  <ActivityIndicator size="small" color="#FFFFFF" />
-                                ) : (
-                                  <Text style={styles.saveBtnText}>Kaydet</Text>
-                                )}
-                              </TouchableOpacity>
-                            </View>
-                          </View>
+                          </TouchableOpacity>
                         )}
                       </View>
-                    );
-                  })}
+
+                      {/* Her Egzersiz İçin Tablo Kartı (Görsel 2: 1. Bulgarian Split Squat vb.) */}
+                      {currentExercises.map((ex, exIdx) => {
+                        const sets = ex.sets_data || [];
+
+                        return (
+                          <View key={exIdx} style={styles.exerciseSetsCard}>
+                            {/* Egzersiz Başlığı: 1. Bulgarian Split Squat */}
+                            <Text style={styles.exerciseSetsCardTitle}>
+                              {exIdx + 1}. {ex.exercise_name}
+                            </Text>
+
+                            {/* Tablo Başlıkları: SET | AĞIRLIK | TEKRAR | RIR */}
+                            <View style={styles.tableHeaderRow}>
+                              <Text style={[styles.thText, styles.colSet]}>SET</Text>
+                              <Text style={[styles.thText, styles.colWeight]}>AĞIRLIK</Text>
+                              <Text style={[styles.thText, styles.colReps]}>TEKRAR</Text>
+                              <Text style={[styles.thText, styles.colRir]}>RIR</Text>
+                            </View>
+
+                            {/* Tablo Satırları (Görsel 2'deki Yeşil, Mavi ve Sarı Rozetler) */}
+                            {sets.map((set, sIdx) => {
+                              const wKg = parseFloat(String(set.weight_kg)) || 0;
+                              const isBw = !!ex.is_bodyweight;
+
+                              return (
+                                <View key={sIdx} style={styles.tableRow}>
+                                  {/* Sütun 1: SET (1. Set) */}
+                                  <Text style={styles.colSetText}>{sIdx + 1}. Set</Text>
+
+                                  {/* Sütun 2: AĞIRLIK (Görsel 2: [ 40 kg ] Yeşil Rozet) */}
+                                  <View style={styles.colWeightContainer}>
+                                    {isEditing ? (
+                                      <View style={styles.editInputBox}>
+                                        <TextInput
+                                          style={styles.editTextInput}
+                                          value={set.weight_kg !== undefined ? String(set.weight_kg) : ''}
+                                          onChangeText={(txt) =>
+                                            handleSetChange(w.id, exIdx, sIdx, 'weight_kg', txt)
+                                          }
+                                          keyboardType="numeric"
+                                          placeholder="0"
+                                          placeholderTextColor={colors.textDim}
+                                        />
+                                        <Text style={styles.editUnitLabel}>kg</Text>
+                                      </View>
+                                    ) : (
+                                      <View style={styles.weightBadge}>
+                                        <Text style={styles.weightBadgeText}>
+                                          {isBw ? 'V. Ağ.' : `${wKg} kg`}
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+
+                                  {/* Sütun 3: TEKRAR (Görsel 2: [ 6 Tekrar ] Mavi Rozet) */}
+                                  <View style={styles.colRepsContainer}>
+                                    {isEditing ? (
+                                      <View style={styles.editInputBox}>
+                                        <TextInput
+                                          style={styles.editTextInput}
+                                          value={set.reps !== undefined ? String(set.reps) : ''}
+                                          onChangeText={(txt) =>
+                                            handleSetChange(w.id, exIdx, sIdx, 'reps', txt)
+                                          }
+                                          keyboardType="numeric"
+                                          placeholder="0"
+                                          placeholderTextColor={colors.textDim}
+                                        />
+                                        <Text style={styles.editUnitLabel}>Tkr</Text>
+                                      </View>
+                                    ) : (
+                                      <View style={styles.repsBadge}>
+                                        <Text style={styles.repsBadgeText}>
+                                          {set.reps || 0} Tekrar
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+
+                                  {/* Sütun 4: RIR (Görsel 2: [ 0 RIR ] Sarı Rozet) */}
+                                  <View style={styles.colRirContainer}>
+                                    {isEditing ? (
+                                      <View style={[styles.editInputBox, styles.editRirInputBox]}>
+                                        <TextInput
+                                          style={[styles.editTextInput, styles.editRirTextInput]}
+                                          value={
+                                            set.rir !== undefined && set.rir !== null
+                                              ? String(set.rir)
+                                              : ''
+                                          }
+                                          onChangeText={(txt) =>
+                                            handleSetChange(w.id, exIdx, sIdx, 'rir', txt)
+                                          }
+                                          keyboardType="numeric"
+                                          placeholder="—"
+                                          placeholderTextColor={colors.textDim}
+                                        />
+                                        <Text style={styles.editRirUnitLabel}>RIR</Text>
+                                      </View>
+                                    ) : (
+                                      <View style={styles.rirBadge}>
+                                        <Text style={styles.rirBadgeText}>
+                                          {set.rir === 0 || set.rir ? `${set.rir} RIR` : '—'}
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               );
             })
@@ -978,19 +985,20 @@ export default function HistoryScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ─── 5. Web Tarzı Tarih Seçim Panosu Modal ─── */}
+      {/* ─── 4. Web Tarzı Tarih Seçim Panosu Modalı ─── */}
       <WorkoutCalendarModal
         visible={showCalendarModal}
         selectedDate={selectedDate}
         workoutDatesSet={workoutDatesSet}
         onSelect={(newDate) => setSelectedDate(newDate)}
+        onClear={() => setSelectedDate(null)}
         onClose={() => setShowCalendarModal(false)}
       />
     </SafeAreaView>
   );
 }
 
-// ─── Stiller ───
+// ─── Stiller (Görsel 1 ve Görsel 2 Tasarımı) ───
 
 const styles = StyleSheet.create({
   safe: {
@@ -998,498 +1006,634 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 40,
   },
 
-  /* ─── 1. Header ─── */
-  topHeader: {
+  /* ─── 1. Üst Sekmeler & Seans Sayacı Rozeti ─── */
+  topTabsBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingTop: 4,
+    marginBottom: 12,
+    gap: 8,
   },
-  titleColumn: {
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     flex: 1,
   },
-  mainTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: -0.5,
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+    gap: 6,
   },
-  subtitleText: {
-    fontSize: 13,
-    fontWeight: '600',
+  segmentBtnActive: {
+    backgroundColor: '#7C3AED',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  segmentBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
     color: colors.textMuted,
-    marginTop: 2,
   },
-  headerRightActions: {
+  segmentBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  totalSessionsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 6,
+  },
+  totalBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.purple,
+    shadowColor: colors.purple,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  totalBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: colors.purple,
+  },
+
+  /* ─── 2. Hızlı Arama & Takvim Butonu ─── */
+  filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  calendarTriggerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 87, 34, 0.12)',
-    borderWidth: 1,
-    borderColor: colors.orangeBadgeBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moreOptionsBtn: {
-    width: 36,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  /* ─── 2. Haftalık Tarih Şeridi ─── */
-  weekSectionContainer: {
-    marginBottom: 18,
-  },
-  weekHeaderControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  weekNavArrow: {
-    width: 24,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weekNavArrowText: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.textDim,
-  },
-  weekStripRow: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  normalDayCol: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    minWidth: 38,
-  },
-  normalDayNameText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: colors.textMuted,
-    marginBottom: 6,
-  },
-  normalDayNumText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  workoutIndicatorDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.orange,
-    marginTop: 4,
-  },
-
-  /* Aktif Seçili Gün Hapı (Görsel 1 Turuncu Kutu) */
-  activeDayPill: {
-    backgroundColor: colors.orange,
-    borderRadius: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    minWidth: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.orange,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  activeDayNameText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  activeDayNumText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-
-  /* ─── 3. Bölüm Başlığı ─── */
-  historySectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  sessionCountBadge: {
-    backgroundColor: 'rgba(255, 87, 34, 0.12)',
+  searchInputBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.orangeBadgeBorder,
+    height: 38,
   },
-  sessionCountBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.orangeLight,
-  },
-
-  /* ─── 4. Egzersiz Kartları ─── */
-  workoutSessionBlock: {
-    marginBottom: 16,
-  },
-  workoutMetaBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  workoutVolumeText: {
+  searchIconText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
+    marginRight: 6,
   },
-  workoutMetaActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  metaActionBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  metaActionEditText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.cyan,
-  },
-  metaActionDeleteText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.danger,
-  },
-
-  exerciseCard: {
-    backgroundColor: colors.surfaceCard,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-    padding: 16,
-    marginBottom: 12,
-  },
-  exerciseCardExpanded: {
-    backgroundColor: colors.surfaceCardExpanded,
-    borderColor: 'rgba(255, 87, 34, 0.3)',
-  },
-
-  /* Kart Üst Başlık */
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.orangeBadge,
-    borderWidth: 1,
-    borderColor: colors.orangeBadgeBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  cardTitleBox: {
+  searchInput: {
     flex: 1,
-  },
-  exerciseNameText: {
-    fontSize: 16,
-    fontWeight: '800',
     color: colors.text,
-    letterSpacing: -0.2,
+    fontSize: 12.5,
+    paddingVertical: 0,
   },
-  exerciseSubText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginTop: 3,
-  },
-  cardHeaderRight: {
-    width: 30,
-    height: 30,
+  calTriggerBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  /* ─── Kapalı Özet Görünüm (Görsel 1) ─── */
-  collapsedSummaryList: {
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 38,
     gap: 6,
   },
-  collapsedSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 3,
+  calTriggerBtnActive: {
+    backgroundColor: '#7C3AED',
+    borderColor: '#7C3AED',
   },
-  collapsedIndexText: {
-    width: 32,
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textDim,
-  },
-  collapsedWeightText: {
-    flex: 1,
-    fontSize: 14,
+  calTriggerBtnText: {
+    fontSize: 11.5,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.purple,
   },
-  collapsedRepsText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textAlign: 'right',
-  },
-
-  /* ─── Açılan Düzenleme Paneli (Görsel 2) ─── */
-  expandedPanel: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  tableHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 2,
-  },
-  colHeader: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.6,
-    textAlign: 'center',
-  },
-  colSet: {
-    width: 38,
-    textAlign: 'center',
-  },
-  colFlex: {
-    flex: 1,
-    textAlign: 'center',
-  },
-  colDeleteSpacer: {
-    width: 24,
-  },
-
-  /* Set Satırı */
-  tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  setNumBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: '#192033',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
-  },
-  setNumText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  inputWrapper: {
-    flex: 1,
-    marginHorizontal: 3,
-  },
-  numInput: {
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: colors.inputBg,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-    paddingHorizontal: 4,
-  },
-  rirInputWrapper: {
-    borderColor: colors.orangeBadgeBorder,
-  },
-  rirInputText: {
-    borderColor: 'rgba(255, 87, 34, 0.4)',
-    color: colors.orangeLight,
-    fontWeight: '800',
-  },
-  deleteActionBox: {
-    width: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 2,
-  },
-  deleteRowBtn: {
-    padding: 4,
-  },
-
-  /* Panel Alt Butonları */
-  panelFooterActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 8,
-  },
-  addSetBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  addSetBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  saveBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-    backgroundColor: colors.orange,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 78,
-  },
-  saveBtnText: {
-    fontSize: 12.5,
-    fontWeight: '800',
+  calTriggerBtnTextActive: {
     color: '#FFFFFF',
   },
 
-  /* ─── Boş Durum ─── */
-  loadingBox: {
-    gap: 12,
-    marginTop: 8,
-  },
-  skeletonItem: {
-    marginBottom: 4,
-  },
-  emptyContainer: {
-    backgroundColor: colors.surfaceCard,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-    padding: 24,
+  /* Aktif Filtre Çipi */
+  activeFilterPillRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    gap: 8,
+    marginBottom: 12,
   },
-  emptyIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.orangeBadge,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 12.5,
+  activeFilterPillLabel: {
+    fontSize: 11,
     color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 18,
-    paddingHorizontal: 12,
   },
-  startWorkoutBtn: {
-    backgroundColor: colors.orange,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    shadowColor: colors.orange,
+  activeFilterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 6,
+  },
+  activeFilterPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.purple,
+  },
+  activeFilterPillClose: {
+    fontSize: 11,
+    color: colors.purple,
+    fontWeight: '800',
+  },
+  showAllText: {
+    fontSize: 11,
+    color: colors.repsBlue,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+
+  /* ─── 3. Seans Kartı (Görsel 1 & Görsel 2) ─── */
+  sessionCard: {
+    backgroundColor: colors.cardBg,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 3,
   },
-  startWorkoutBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  recentWorkoutsCard: {
-    width: '100%',
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
-    alignItems: 'center',
-  },
-  recentWorkoutsTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-    marginBottom: 10,
-  },
-  recentChipsWrap: {
+
+  /* Kart Üst Barı */
+  cardHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    justifyContent: 'center',
+    flexWrap: 'wrap',
   },
-  recentDateChip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  sessionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  movementBadge: {
+    backgroundColor: colors.purpleBg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    borderColor: colors.purpleBorder,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
-  recentDateChipText: {
+  movementBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.purple,
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  subtitleDateText: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.textMuted,
+  },
+  subtitleGymText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
 
-  /* ─── Takvim Modalı Stilleri ─── */
+  /* Kart Üst Sağ (Hacim ve Aksiyon Butonları) */
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  volumeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.purpleBg,
+    borderWidth: 1,
+    borderColor: colors.purpleBorder,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 5,
+  },
+  volumeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.purple,
+  },
+  volumeBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.purple,
+  },
+  headerActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editActionBtn: {
+    backgroundColor: colors.purpleBg,
+    borderWidth: 1,
+    borderColor: colors.purpleBorder,
+  },
+  tuneActionBtn: {
+    backgroundColor: colors.cyanActionBg,
+    borderWidth: 1,
+    borderColor: colors.cyanActionBorder,
+  },
+  deleteActionBtn: {
+    backgroundColor: colors.dangerBg,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+  },
+
+  /* İpucu Barı */
+  hintBar: {
+    paddingVertical: 4,
+    marginTop: 6,
+  },
+  hintBarText: {
+    fontSize: 10.5,
+    color: colors.textDim,
+    textAlign: 'center',
+  },
+
+  /* ─── 1. Aşama: Özet Görünüm (Görsel 1) ─── */
+  summaryContainer: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  summaryExerciseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 6,
+  },
+  summaryExerciseName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+    marginRight: 8,
+  },
+  summarySetBadge: {
+    backgroundColor: colors.repsBlueBg,
+    borderWidth: 1,
+    borderColor: colors.repsBlueBorder,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+  },
+  summarySetBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.repsBlue,
+  },
+
+  /* Not Kutusu */
+  notesBox: {
+    marginTop: 6,
+    marginBottom: 6,
+    padding: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#8B5CF6',
+    borderRadius: 8,
+  },
+  notesBoxTitle: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: colors.purple,
+    marginBottom: 3,
+  },
+  notesBoxContent: {
+    fontSize: 12,
+    color: '#CBD5E1',
+    lineHeight: 16,
+  },
+
+  /* Daha Fazla (Set & Ağırlık Detayları) Butonu (Görsel 1) */
+  btnMore: {
+    width: '100%',
+    paddingVertical: 9,
+    backgroundColor: colors.purpleButtonBg,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  btnMoreActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.22)',
+    borderColor: 'rgba(139, 92, 246, 0.6)',
+  },
+  btnMoreText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.purple,
+    letterSpacing: 0.3,
+  },
+
+  /* ─── 2. Aşama: Detaylı Set & Tekrar Verileri (Görsel 2) ─── */
+  fullDetailsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(139, 92, 246, 0.25)',
+  },
+  fullDetailsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  fullDetailsTitle: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: colors.purple,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  saveInlineBtn: {
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  saveInlineBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  /* Egzersiz Set Tablosu Kartı (Görsel 2) */
+  exerciseSetsCard: {
+    backgroundColor: 'rgba(10, 15, 26, 0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  exerciseSetsCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.purple,
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+
+  /* Tablo Başlıkları */
+  tableHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 6,
+  },
+  thText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+  },
+  colSet: {
+    width: 60,
+  },
+  colWeight: {
+    flex: 1.1,
+    textAlign: 'center',
+  },
+  colReps: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  colRir: {
+    flex: 0.9,
+    textAlign: 'center',
+  },
+
+  /* Tablo Satırı */
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  colSetText: {
+    width: 60,
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  colWeightContainer: {
+    flex: 1.1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colRepsContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colRirContainer: {
+    flex: 0.9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* Rozetler (View Mode) */
+  weightBadge: {
+    backgroundColor: colors.weightGreenBg,
+    borderWidth: 1,
+    borderColor: colors.weightGreenBorder,
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    minWidth: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weightBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: colors.weightGreen,
+  },
+
+  repsBadge: {
+    backgroundColor: colors.repsBlueBg,
+    borderWidth: 1,
+    borderColor: colors.repsBlueBorder,
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    minWidth: 62,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  repsBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.repsBlue,
+  },
+
+  rirBadge: {
+    backgroundColor: colors.rirAmberBg,
+    borderWidth: 1,
+    borderColor: colors.rirAmberBorder,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    minWidth: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rirBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.rirAmber,
+  },
+
+  /* Düzenleme Giriş Kutuları (Edit Mode) */
+  editInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.inputBg,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    borderRadius: 7,
+    paddingHorizontal: 5,
+    height: 30,
+  },
+  editTextInput: {
+    color: colors.text,
+    fontSize: 11.5,
+    fontWeight: '700',
+    paddingVertical: 0,
+    textAlign: 'center',
+    minWidth: 28,
+  },
+  editUnitLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: colors.textDim,
+    marginLeft: 2,
+  },
+  editRirInputBox: {
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  editRirTextInput: {
+    color: colors.rirAmber,
+  },
+  editRirUnitLabel: {
+    fontSize: 9,
+    color: colors.rirAmber,
+    fontWeight: '800',
+    marginLeft: 2,
+  },
+
+  /* ─── Boş Durum & İskelet ─── */
+  skeletonContainer: {
+    gap: 12,
+  },
+  skeletonItem: {
+    marginBottom: 4,
+  },
+  emptyContainer: {
+    backgroundColor: colors.cardBg,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 24,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  emptyIcon: {
+    fontSize: 36,
+    marginBottom: 10,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  clearFilterBtn: {
+    backgroundColor: '#7C3AED',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  clearFilterBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  /* ─── Takvim Modalı ─── */
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.78)',
@@ -1500,11 +1644,11 @@ const styles = StyleSheet.create({
   calendarCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: colors.surface,
-    borderRadius: 22,
+    backgroundColor: colors.cardBg,
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: 18,
+    borderColor: colors.purpleBorder,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -1515,10 +1659,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
-    paddingBottom: 12,
+    marginBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderSoft,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   calHeaderTitleBox: {
     flexDirection: 'row',
@@ -1526,28 +1670,28 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   calIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: colors.orangeBadge,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.purpleBg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.orangeBadgeBorder,
+    borderColor: colors.purpleBorder,
   },
   calTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.text,
   },
   calSubtitle: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: colors.textMuted,
     marginTop: 1,
   },
   calCloseBtn: {
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     alignItems: 'center',
@@ -1557,36 +1701,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 10,
-    marginBottom: 12,
+    borderRadius: 8,
+    marginBottom: 10,
   },
   calNavBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   calNavArrow: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.text,
   },
   calMonthLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.text,
   },
   calWeekdaysRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 6,
     paddingHorizontal: 4,
   },
   calWeekdayName: {
-    width: 38,
+    width: 36,
     textAlign: 'center',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     color: colors.textMuted,
   },
@@ -1594,23 +1738,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 8,
+    rowGap: 6,
     paddingHorizontal: 4,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   calCell: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   calCellSelected: {
-    backgroundColor: colors.orange,
+    backgroundColor: '#7C3AED',
   },
   calCellText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: colors.text,
   },
@@ -1620,57 +1764,49 @@ const styles = StyleSheet.create({
   },
   calCellTextToday: {
     fontWeight: '800',
-    color: colors.mint,
+    color: colors.weightGreen,
   },
   calWorkoutDot: {
     position: 'absolute',
-    bottom: 4,
+    bottom: 3,
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.orange,
+    backgroundColor: colors.purple,
   },
   calTodayDot: {
     position: 'absolute',
-    bottom: 4,
+    bottom: 3,
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.mint,
+    backgroundColor: colors.weightGreen,
   },
   calFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: colors.borderSoft,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
   },
-  calQuickRow: {
-    flexDirection: 'row',
-    gap: 8,
+  calClearBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  calQuickBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-  },
-  calQuickBtnText: {
-    fontSize: 12,
+  calClearBtnText: {
+    fontSize: 11.5,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.repsBlue,
   },
   calConfirmBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   calConfirmBtnText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '800',
     color: colors.text,
   },
