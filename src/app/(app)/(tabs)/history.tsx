@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated as RNAnimated,
   KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
@@ -11,10 +12,14 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   UIManager,
   View,
 } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Rect } from 'react-native-svg';
@@ -29,23 +34,27 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// 60fps - 90fps yüksek akıcılıkta natif yay (spring) ve yumuşak geçiş konfigürasyonu
-const triggerSmoothAnimation = () => {
-  LayoutAnimation.configureNext({
-    duration: 300,
-    create: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-    update: {
-      type: LayoutAnimation.Types.spring,
-      springDamping: 0.82,
-    },
-    delete: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-  });
+// 60-90-120fps natif yay (spring) tetikleyicisi
+const triggerLayoutSpring = () => {
+  try {
+    LayoutAnimation.configureNext({
+      duration: 280,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.spring,
+        springDamping: 0.82,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+  } catch {
+    // LayoutAnimation hata verirse sessizce devam et
+  }
 };
 
 // ─── Web Tema Renkleri (Web Platformuna Birebir Uyumlu Cyber Dark) ───
@@ -59,7 +68,7 @@ const colors = {
   textMuted: '#94A3B8',
   textDim: '#64748B',
 
-  // Mor / Vurgu (Web'deki hist-badge-purple, hist-badge-volume)
+  // Mor / Vurgu (Web'deki hist-badge-purple)
   purple: '#C084FC',
   purpleBg: 'rgba(139, 92, 246, 0.14)',
   purpleBorder: 'rgba(139, 92, 246, 0.4)',
@@ -92,6 +101,76 @@ const colors = {
   inputBg: '#161E33',
   inputBorder: '#283554',
 };
+
+// ─── 60-90-120fps Dokunmatik Yay (Spring) Buton Bileşeni ───
+
+type PressableScaleProps = {
+  children: React.ReactNode;
+  onPress?: () => void;
+  style?: any;
+  activeScale?: number;
+  hitSlop?: any;
+  disabled?: boolean;
+};
+
+function PressableScale({
+  children,
+  onPress,
+  style,
+  activeScale = 0.95,
+  hitSlop,
+  disabled,
+}: PressableScaleProps) {
+  const [scale] = useState(() => new RNAnimated.Value(1));
+  const [opacity] = useState(() => new RNAnimated.Value(1));
+
+  const handlePressIn = () => {
+    if (disabled) return;
+    RNAnimated.parallel([
+      RNAnimated.timing(scale, {
+        toValue: activeScale,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      RNAnimated.timing(opacity, {
+        toValue: 0.82,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    if (disabled) return;
+    RNAnimated.parallel([
+      RNAnimated.spring(scale, {
+        toValue: 1,
+        friction: 4,
+        tension: 140,
+        useNativeDriver: true,
+      }),
+      RNAnimated.timing(opacity, {
+        toValue: 1,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      hitSlop={hitSlop}
+      disabled={disabled}
+    >
+      <RNAnimated.View style={[style, { transform: [{ scale }], opacity }]}>
+        {children}
+      </RNAnimated.View>
+    </Pressable>
+  );
+}
 
 // ─── SVG İkonları ───
 
@@ -150,7 +229,7 @@ function TuneSlidersIcon({ size = 14, color = colors.cyanAction }: { size?: numb
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+        d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"
         stroke={color}
         strokeWidth={2}
         strokeLinecap="round"
@@ -177,21 +256,27 @@ function TrashIcon({ size = 14, color = colors.danger }: { size?: number; color?
 function CloseIcon({ size = 16, color = colors.textMuted }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M18 6L6 18M6 6l12 12" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+      <Path
+        d="M18 6L6 18M6 6l12 12"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
 
-// ─── Tarih Formatlama ───
+// ─── Tarih Formatlama Yardımcıları ───
 
-function formatDateTR(dateIso?: string): string {
-  if (!dateIso) return '—';
-  const clean = dateIso.slice(0, 10);
-  const parts = clean.split('-');
-  if (parts.length === 3) {
-    return `${parts[2]}.${parts[1]}.${parts[0]}`;
-  }
-  return clean;
+function formatDateTR(dateString: string): string {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return dateString;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}.${month}.${year}`;
 }
 
 function formatMonthTR(yearMonth: string): string {
@@ -305,20 +390,20 @@ function WorkoutCalendarModal({
                 <Text style={styles.calSubtitle}>Seans geçmişinde tarih seç</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.calCloseBtn} onPress={onClose} hitSlop={8}>
+            <PressableScale style={styles.calCloseBtn} onPress={onClose} activeScale={0.88} hitSlop={8}>
               <CloseIcon size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+            </PressableScale>
           </View>
 
           {/* Ay Gezintisi */}
           <View style={styles.calNav}>
-            <TouchableOpacity style={styles.calNavBtn} onPress={handlePrev} hitSlop={8}>
+            <PressableScale style={styles.calNavBtn} onPress={handlePrev} activeScale={0.85} hitSlop={8}>
               <Text style={styles.calNavArrow}>‹</Text>
-            </TouchableOpacity>
+            </PressableScale>
             <Text style={styles.calMonthLabel}>{formatMonthTR(viewMonth)}</Text>
-            <TouchableOpacity style={styles.calNavBtn} onPress={handleNext} hitSlop={8}>
+            <PressableScale style={styles.calNavBtn} onPress={handleNext} activeScale={0.85} hitSlop={8}>
               <Text style={styles.calNavArrow}>›</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
 
           {/* Hafta Günleri */}
@@ -340,12 +425,13 @@ function WorkoutCalendarModal({
               const isSelected = cell.dateIso === selectedDate;
 
               return (
-                <TouchableOpacity
+                <PressableScale
                   key={cell.dateIso}
                   style={[
                     styles.calCell,
                     isSelected && styles.calCellSelected,
                   ]}
+                  activeScale={0.88}
                   onPress={() => {
                     onSelect(cell.dateIso);
                     onClose();
@@ -366,25 +452,26 @@ function WorkoutCalendarModal({
                   {cell.isToday && !isSelected && !cell.hasWorkout && (
                     <View style={styles.calTodayDot} />
                   )}
-                </TouchableOpacity>
+                </PressableScale>
               );
             })}
           </View>
 
           {/* Alt Butonlar */}
           <View style={styles.calFooter}>
-            <TouchableOpacity
+            <PressableScale
               style={styles.calClearBtn}
+              activeScale={0.95}
               onPress={() => {
                 onClear();
                 onClose();
               }}
             >
               <Text style={styles.calClearBtnText}>Filtreyi Temizle (Tümü)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.calConfirmBtn} onPress={onClose}>
+            </PressableScale>
+            <PressableScale style={styles.calConfirmBtn} activeScale={0.95} onPress={onClose}>
               <Text style={styles.calConfirmBtnText}>Kapat</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         </Pressable>
       </Pressable>
@@ -392,7 +479,7 @@ function WorkoutCalendarModal({
   );
 }
 
-// ─── Ana Ekran Bileşeni (Seans Kartları - Web Tasarımı) ───
+// ─── Ana Ekran Bileşeni (HistoryScreen) ───
 
 export default function HistoryScreen() {
   const router = useRouter();
@@ -406,11 +493,8 @@ export default function HistoryScreen() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
 
-  // Kart Genişletme Durumları
-  // 1. Özet Görünümü Açık/Kapalı: Record<workoutId, boolean> (Görseldeki gibi varsayılan olarak hepsi KAPALI özet çubuğu)
+  // Kart Genişletme Durumları (Görseldeki gibi varsayılan olarak hepsi KAPALI özet çubuğu)
   const [openSummaries, setOpenSummaries] = useState<Record<number, boolean>>({});
-
-  // 2. Detaylı Set & Tekrar Verileri Açık/Kapalı: Record<workoutId, boolean>
   const [openFullDetails, setOpenFullDetails] = useState<Record<number, boolean>>({});
 
   // Düzenleme Modu Durumları: Record<workoutId, boolean>
@@ -452,9 +536,9 @@ export default function HistoryScreen() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [workouts, selectedDate, searchQuery]);
 
-  // Özet Açma / Kapama (Karta basıldığında 60-90fps akıcı yay animasyonuyla açılır/kapanır)
+  // Özet Açma / Kapama (Karta basıldığında akıcı 60-90-120fps animasyonla açılır/kapanır)
   const toggleSummary = (workoutId: number) => {
-    triggerSmoothAnimation();
+    triggerLayoutSpring();
     setOpenSummaries((prev) => ({
       ...prev,
       [workoutId]: !prev[workoutId],
@@ -463,11 +547,10 @@ export default function HistoryScreen() {
 
   // Detaylı Set & Tekrar Görünümünü Açma / Kapama ("Daha Fazla" Butonu)
   const toggleFull = (workoutId: number) => {
-    triggerSmoothAnimation();
+    triggerLayoutSpring();
     setOpenFullDetails((prev) => {
       const next = !prev[workoutId];
       if (next) {
-        // Detaylar açıldığında özet de açık kalmalı
         setOpenSummaries((sPrev) => ({ ...sPrev, [workoutId]: true }));
       }
       return { ...prev, [workoutId]: next };
@@ -476,15 +559,13 @@ export default function HistoryScreen() {
 
   // Düzenleme Modunu Açma / Kapatma (Kalem İkonu)
   const toggleEdit = (workout: Workout) => {
-    triggerSmoothAnimation();
     const wId = workout.id;
+    triggerLayoutSpring();
     setEditModes((prev) => {
       const next = !prev[wId];
       if (next) {
-        // Düzenleme açılınca her iki panel de açılsın
         setOpenSummaries((sPrev) => ({ ...sPrev, [wId]: true }));
         setOpenFullDetails((fPrev) => ({ ...fPrev, [wId]: true }));
-        // Egzersiz verilerinin derin kopyasını hazırla
         setEditingData((dPrev) => ({
           ...dPrev,
           [wId]: JSON.parse(JSON.stringify(workout.exercises || [])),
@@ -551,6 +632,7 @@ export default function HistoryScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              triggerLayoutSpring();
               await deleteWorkout(workoutId);
               Alert.alert('Silindi', 'Antrenman seansı silindi.');
             } catch (err: any) {
@@ -583,13 +665,13 @@ export default function HistoryScreen() {
           <View style={styles.topTabsBar}>
             {/* Sol: Sekme Butonları (Antrenman Geçmişi | Beslenme Geçmişi) */}
             <View style={styles.segmentedControl}>
-              <TouchableOpacity
+              <PressableScale
                 style={[
                   styles.segmentBtn,
                   activeTab === 'workout' && styles.segmentBtnActive,
                 ]}
                 onPress={() => setActiveTab('workout')}
-                activeOpacity={0.8}
+                activeScale={0.96}
               >
                 <DumbbellTabIcon
                   size={14}
@@ -603,15 +685,15 @@ export default function HistoryScreen() {
                 >
                   Antrenman Geçmişi
                 </Text>
-              </TouchableOpacity>
+              </PressableScale>
 
-              <TouchableOpacity
+              <PressableScale
                 style={[
                   styles.segmentBtn,
                   activeTab === 'nutrition' && styles.segmentBtnActive,
                 ]}
                 onPress={() => router.push('/(app)/(tabs)/nutrition')}
-                activeOpacity={0.8}
+                activeScale={0.96}
               >
                 <NutritionTabIcon
                   size={14}
@@ -625,7 +707,7 @@ export default function HistoryScreen() {
                 >
                   Beslenme Geçmişi
                 </Text>
-              </TouchableOpacity>
+              </PressableScale>
             </View>
 
             {/* Sağ: Toplam Seans Sayacı Rozeti (Görsel 1: Antrenman Kaydı: 55 Seans) */}
@@ -649,20 +731,20 @@ export default function HistoryScreen() {
                 placeholderTextColor={colors.textDim}
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={6}>
+                <PressableScale onPress={() => setSearchQuery('')} activeScale={0.85} hitSlop={6}>
                   <Text style={{ color: colors.textDim, fontSize: 13 }}>✕</Text>
-                </TouchableOpacity>
+                </PressableScale>
               )}
             </View>
 
             {/* Takvim Açıcı Buton */}
-            <TouchableOpacity
+            <PressableScale
               style={[
                 styles.calTriggerBtn,
                 selectedDate !== null && styles.calTriggerBtnActive,
               ]}
               onPress={() => setShowCalendarModal(true)}
-              activeOpacity={0.7}
+              activeScale={0.94}
               hitSlop={6}
             >
               <CalendarIcon
@@ -677,7 +759,7 @@ export default function HistoryScreen() {
               >
                 {selectedDate ? formatDateTR(selectedDate) : 'Tarih'}
               </Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
 
           {/* Aktif Tarih Filtresi Varsa Bilgilendirme Çipi */}
@@ -686,21 +768,21 @@ export default function HistoryScreen() {
               <Text style={styles.activeFilterPillLabel}>Filtrelendi:</Text>
               <View style={styles.activeFilterPill}>
                 <Text style={styles.activeFilterPillText}>{formatDateTR(selectedDate)}</Text>
-                <TouchableOpacity onPress={() => setSelectedDate(null)} hitSlop={6}>
+                <PressableScale onPress={() => setSelectedDate(null)} activeScale={0.85} hitSlop={6}>
                   <Text style={styles.activeFilterPillClose}>✕</Text>
-                </TouchableOpacity>
+                </PressableScale>
               </View>
-              <TouchableOpacity onPress={() => setSelectedDate(null)}>
+              <PressableScale onPress={() => setSelectedDate(null)} activeScale={0.92}>
                 <Text style={styles.showAllText}>Tümünü Göster</Text>
-              </TouchableOpacity>
+              </PressableScale>
             </View>
           )}
 
-          {/* ─── 3. Seans Kartları Listesi (Web Platformuna Birebir Uyumlu) ─── */}
+          {/* ─── 3. Seans Kartları Listesi (Görseldeki Kapalı Kompakt Şerit Tasarımı) ─── */}
           {loading ? (
             <View style={styles.skeletonContainer}>
               {[0, 1, 2].map((i) => (
-                <Skeleton key={i} height={180} radius={16} style={styles.skeletonItem} />
+                <Skeleton key={i} height={84} radius={16} style={styles.skeletonItem} />
               ))}
             </View>
           ) : filteredWorkouts.length === 0 ? (
@@ -713,33 +795,38 @@ export default function HistoryScreen() {
                   : 'Henüz kaydedilmiş antrenman bulunmuyor.'}
               </Text>
               {selectedDate && (
-                <TouchableOpacity
+                <PressableScale
                   style={styles.clearFilterBtn}
+                  activeScale={0.95}
                   onPress={() => setSelectedDate(null)}
                 >
                   <Text style={styles.clearFilterBtnText}>Tüm Seansları Göster</Text>
-                </TouchableOpacity>
+                </PressableScale>
               )}
             </View>
           ) : (
-            filteredWorkouts.map((w, index) => {
+            filteredWorkouts.map((w) => {
               const exercises = w.exercises || [];
-              const isSummaryOpen = !!openSummaries[w.id]; // Varsayılan kapalı özet çubuğu (Görseldeki gibi)
+              const isSummaryOpen = !!openSummaries[w.id]; // Varsayılan kapalı (Görseldeki gibi)
               const isFullOpen = !!openFullDetails[w.id];
               const isEditing = !!editModes[w.id];
               const isSaving = !!savingWorkoutIds[w.id];
               const currentExercises = isEditing && editingData[w.id] ? editingData[w.id] : exercises;
 
               return (
-                <View key={w.id} style={styles.sessionCard}>
+                <Animated.View
+                  key={w.id}
+                  layout={LinearTransition.springify().damping(18).stiffness(160)}
+                  style={styles.sessionCard}
+                >
                   {/* ─── Seans Kartı Üst Barı (Header) ─── */}
-                  <TouchableOpacity
-                    style={styles.cardHeader}
-                    activeOpacity={0.8}
-                    onPress={() => toggleSummary(w.id)}
-                  >
-                    {/* Sol Kısım: Başlık, Hareket Sayısı Rozeti, Tarih & Mekan */}
-                    <View style={styles.cardHeaderLeft}>
+                  <View style={styles.cardHeader}>
+                    {/* Sol Kısım: Başlık, Hareket Sayısı Rozeti, Tarih & Mekan (Yay Animasyonlu Dokunmatik) */}
+                    <PressableScale
+                      style={styles.cardHeaderLeft}
+                      activeScale={0.98}
+                      onPress={() => toggleSummary(w.id)}
+                    >
                       <View style={styles.titleRow}>
                         <Text style={styles.sessionTitle}>
                           {w.session_type || 'Antrenman'}
@@ -762,248 +849,247 @@ export default function HistoryScreen() {
                           </Text>
                         ) : null}
                       </View>
-                    </View>
+                    </PressableScale>
 
-                    {/* Sağ Kısım: Toplam Hacim Rozeti & Aksiyon Butonları (Düzenle, Ayarlar, Sil) */}
+                    {/* Sağ Kısım: Sadece 3 Aksiyon Butonu (Hacim Göstergesi Kullanıcı İsteğiyle Kaldırıldı!) */}
                     <View style={styles.cardHeaderRight}>
-                      {/* Toplam Hacim Rozeti (Görsel 1: 🟣 3.080 kg) */}
-                      <View style={styles.volumeBadge}>
-                        <View style={styles.volumeDot} />
-                        <Text style={styles.volumeBadgeText}>
-                          {Math.round(w.total_volume || 0).toLocaleString('tr-TR')} kg
-                        </Text>
-                      </View>
-
-                      {/* Setleri Düzenle Butonu (Kalem) */}
-                      <TouchableOpacity
+                      {/* Setleri Düzenle Butonu (Kalem - Yay Animasyonlu) */}
+                      <PressableScale
                         style={[styles.headerActionBtn, styles.editActionBtn]}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          toggleEdit(w);
-                        }}
+                        activeScale={0.88}
+                        onPress={() => toggleEdit(w)}
                         hitSlop={6}
                       >
                         <PencilEditIcon size={14} color={colors.purple} />
-                      </TouchableOpacity>
+                      </PressableScale>
 
-                      {/* Genel Düzenle / Seansı Aç Butonu (Sliders) */}
-                      <TouchableOpacity
+                      {/* Genel Düzenle / Seansı Aç Butonu (Sliders - Yay Animasyonlu) */}
+                      <PressableScale
                         style={[styles.headerActionBtn, styles.tuneActionBtn]}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleLoadToDraft(w);
-                        }}
+                        activeScale={0.88}
+                        onPress={() => handleLoadToDraft(w)}
                         hitSlop={6}
                       >
                         <TuneSlidersIcon size={14} color={colors.cyanAction} />
-                      </TouchableOpacity>
+                      </PressableScale>
 
-                      {/* Sil Butonu (Çöp Kutusu) */}
-                      <TouchableOpacity
+                      {/* Sil Butonu (Çöp Kutusu - Yay Animasyonlu) */}
+                      <PressableScale
                         style={[styles.headerActionBtn, styles.deleteActionBtn]}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDelete(w.id);
-                        }}
+                        activeScale={0.88}
+                        onPress={() => handleDelete(w.id)}
                         hitSlop={6}
                       >
                         <TrashIcon size={14} color={colors.danger} />
-                      </TouchableOpacity>
+                      </PressableScale>
                     </View>
-                  </TouchableOpacity>
+                  </View>
 
-                  {/* Kapat / Aç İpucu */}
-                  <TouchableOpacity
+                  {/* Kapat / Aç İpucu Çubuğu (Görseldeki gibi ortalanmış ve animasyonlu) */}
+                  <PressableScale
                     onPress={() => toggleSummary(w.id)}
                     style={styles.hintBar}
+                    activeScale={0.98}
                   >
                     <Text style={styles.hintBarText}>
-                      {isSummaryOpen ? 'Özeti kapatmak için tıkla' : 'Antrenman özetini görmek için tıkla'}
+                      {isSummaryOpen ? 'Özeti kapatmak için tıkla ▴' : 'Antrenman özetini görmek için tıkla ▾'}
                     </Text>
-                  </TouchableOpacity>
+                  </PressableScale>
 
-                  {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (Görsel 1 ile Birebir) ─── */}
+                  {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (LinearTransition + FadeIn/Out ile 60-90fps Açılır) ─── */}
                   {isSummaryOpen && (
-                    <View style={styles.summaryContainer}>
-                      {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti */}
-                      {exercises.map((ex, exIdx) => (
-                        <View key={exIdx} style={styles.summaryExerciseRow}>
-                          <Text style={styles.summaryExerciseName}>
-                            {ex.exercise_name}
-                          </Text>
-                          <View style={styles.summarySetBadge}>
-                            <Text style={styles.summarySetBadgeText}>
-                              {ex.sets_data?.length || 0} Set
+                    <Animated.View
+                      entering={FadeIn.duration(220)}
+                      exiting={FadeOut.duration(160)}
+                      layout={LinearTransition.springify().damping(18).stiffness(160)}
+                    >
+                      <View style={styles.summaryContainer}>
+                        {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti */}
+                        {exercises.map((ex, exIdx) => (
+                          <View key={exIdx} style={styles.summaryExerciseRow}>
+                            <Text style={styles.summaryExerciseName}>
+                              {ex.exercise_name}
                             </Text>
+                            <View style={styles.summarySetBadge}>
+                              <Text style={styles.summarySetBadgeText}>
+                                {ex.sets_data?.length || 0} Set
+                              </Text>
+                            </View>
                           </View>
-                        </View>
-                      ))}
+                        ))}
 
-                      {/* Not Bölümü (Görsel 1: 📝 NOT) */}
-                      {w.notes && w.notes.trim() !== '' ? (
-                        <View style={styles.notesBox}>
-                          <Text style={styles.notesBoxTitle}>📝 NOT</Text>
-                          <Text style={styles.notesBoxContent}>{w.notes}</Text>
-                        </View>
-                      ) : null}
+                        {/* Not Bölümü (Görsel 1: 📝 NOT) */}
+                        {w.notes && w.notes.trim() !== '' ? (
+                          <View style={styles.notesBox}>
+                            <Text style={styles.notesBoxTitle}>📝 NOT</Text>
+                            <Text style={styles.notesBoxContent}>{w.notes}</Text>
+                          </View>
+                        ) : null}
 
-                      {/* Daha Fazla (Set & Ağırlık Detayları) Butonu (Görsel 1) */}
-                      <TouchableOpacity
-                        style={[
-                          styles.btnMore,
-                          isFullOpen && styles.btnMoreActive,
-                        ]}
-                        onPress={() => toggleFull(w.id)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.btnMoreText}>
-                          {isFullOpen
-                            ? 'Daha Az Göster'
-                            : 'Daha Fazla (Set & Ağırlık Detayları)'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (Görsel 2 ile Birebir) ─── */}
-                  {isFullOpen && (
-                    <View style={styles.fullDetailsContainer}>
-                      {/* Detay Başlığı: ⚡ DETAYLI SET & TEKRAR VERİLERİ */}
-                      <View style={styles.fullDetailsHeaderRow}>
-                        <Text style={styles.fullDetailsTitle}>
-                          ⚡ DETAYLI SET & TEKRAR VERİLERİ
-                        </Text>
-                        {isEditing && (
-                          <TouchableOpacity
-                            style={[styles.saveInlineBtn, isSaving && { opacity: 0.6 }]}
-                            onPress={() => handleSaveEdit(w.id)}
-                            disabled={isSaving}
-                          >
-                            {isSaving ? (
-                              <ActivityIndicator size="small" color="#FFFFFF" />
-                            ) : (
-                              <Text style={styles.saveInlineBtnText}>Kaydet</Text>
-                            )}
-                          </TouchableOpacity>
-                        )}
+                        {/* Daha Fazla (Set & Ağırlık Detayları) Butonu (Yay Animasyonlu) */}
+                        <PressableScale
+                          style={[
+                            styles.btnMore,
+                            isFullOpen && styles.btnMoreActive,
+                          ]}
+                          onPress={() => toggleFull(w.id)}
+                          activeScale={0.97}
+                        >
+                          <Text style={styles.btnMoreText}>
+                            {isFullOpen
+                              ? 'Daha Az Göster ▴'
+                              : 'Daha Fazla (Set & Ağırlık Detayları) ▾'}
+                          </Text>
+                        </PressableScale>
                       </View>
 
-                      {/* Her Egzersiz İçin Tablo Kartı (Görsel 2: 1. Bulgarian Split Squat vb.) */}
-                      {currentExercises.map((ex, exIdx) => {
-                        const sets = ex.sets_data || [];
-
-                        return (
-                          <View key={exIdx} style={styles.exerciseSetsCard}>
-                            {/* Egzersiz Başlığı: 1. Bulgarian Split Squat */}
-                            <Text style={styles.exerciseSetsCardTitle}>
-                              {exIdx + 1}. {ex.exercise_name}
+                      {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (LinearTransition + FadeIn/Out ile 60-90fps Açılır) ─── */}
+                      {isFullOpen && (
+                        <Animated.View
+                          entering={FadeIn.duration(240)}
+                          exiting={FadeOut.duration(180)}
+                          layout={LinearTransition.springify().damping(18).stiffness(160)}
+                          style={styles.fullDetailsContainer}
+                        >
+                          {/* Detay Başlığı: ⚡ DETAYLI SET & TEKRAR VERİLERİ */}
+                          <View style={styles.fullDetailsHeaderRow}>
+                            <Text style={styles.fullDetailsTitle}>
+                              ⚡ DETAYLI SET & TEKRAR VERİLERİ
                             </Text>
-
-                            {/* Tablo Başlıkları: SET | AĞIRLIK | TEKRAR | RIR */}
-                            <View style={styles.tableHeaderRow}>
-                              <Text style={[styles.thText, styles.colSet]}>SET</Text>
-                              <Text style={[styles.thText, styles.colWeight]}>AĞIRLIK</Text>
-                              <Text style={[styles.thText, styles.colReps]}>TEKRAR</Text>
-                              <Text style={[styles.thText, styles.colRir]}>RIR</Text>
-                            </View>
-
-                            {/* Tablo Satırları (Görsel 2'deki Yeşil, Mavi ve Sarı Rozetler) */}
-                            {sets.map((set, sIdx) => {
-                              const wKg = parseFloat(String(set.weight_kg)) || 0;
-                              const isBw = !!ex.is_bodyweight;
-
-                              return (
-                                <View key={sIdx} style={styles.tableRow}>
-                                  {/* Sütun 1: SET (1. Set) */}
-                                  <Text style={styles.colSetText}>{sIdx + 1}. Set</Text>
-
-                                  {/* Sütun 2: AĞIRLIK (Görsel 2: [ 40 kg ] Yeşil Rozet) */}
-                                  <View style={styles.colWeightContainer}>
-                                    {isEditing ? (
-                                      <View style={styles.editInputBox}>
-                                        <TextInput
-                                          style={styles.editTextInput}
-                                          value={set.weight_kg !== undefined ? String(set.weight_kg) : ''}
-                                          onChangeText={(txt) =>
-                                            handleSetChange(w.id, exIdx, sIdx, 'weight_kg', txt)
-                                          }
-                                          keyboardType="numeric"
-                                          placeholder="0"
-                                          placeholderTextColor={colors.textDim}
-                                        />
-                                        <Text style={styles.editUnitLabel}>kg</Text>
-                                      </View>
-                                    ) : (
-                                      <View style={styles.weightBadge}>
-                                        <Text style={styles.weightBadgeText}>
-                                          {isBw ? 'V. Ağ.' : `${wKg} kg`}
-                                        </Text>
-                                      </View>
-                                    )}
-                                  </View>
-
-                                  {/* Sütun 3: TEKRAR (Görsel 2: [ 6 Tekrar ] Mavi Rozet) */}
-                                  <View style={styles.colRepsContainer}>
-                                    {isEditing ? (
-                                      <View style={styles.editInputBox}>
-                                        <TextInput
-                                          style={styles.editTextInput}
-                                          value={set.reps !== undefined ? String(set.reps) : ''}
-                                          onChangeText={(txt) =>
-                                            handleSetChange(w.id, exIdx, sIdx, 'reps', txt)
-                                          }
-                                          keyboardType="numeric"
-                                          placeholder="0"
-                                          placeholderTextColor={colors.textDim}
-                                        />
-                                        <Text style={styles.editUnitLabel}>Tkr</Text>
-                                      </View>
-                                    ) : (
-                                      <View style={styles.repsBadge}>
-                                        <Text style={styles.repsBadgeText}>
-                                          {set.reps || 0} Tekrar
-                                        </Text>
-                                      </View>
-                                    )}
-                                  </View>
-
-                                  {/* Sütun 4: RIR (Görsel 2: [ 0 RIR ] Sarı Rozet) */}
-                                  <View style={styles.colRirContainer}>
-                                    {isEditing ? (
-                                      <View style={[styles.editInputBox, styles.editRirInputBox]}>
-                                        <TextInput
-                                          style={[styles.editTextInput, styles.editRirTextInput]}
-                                          value={
-                                            set.rir !== undefined && set.rir !== null
-                                              ? String(set.rir)
-                                              : ''
-                                          }
-                                          onChangeText={(txt) =>
-                                            handleSetChange(w.id, exIdx, sIdx, 'rir', txt)
-                                          }
-                                          keyboardType="numeric"
-                                          placeholder="—"
-                                          placeholderTextColor={colors.textDim}
-                                        />
-                                        <Text style={styles.editRirUnitLabel}>RIR</Text>
-                                      </View>
-                                    ) : (
-                                      <View style={styles.rirBadge}>
-                                        <Text style={styles.rirBadgeText}>
-                                          {set.rir === 0 || set.rir ? `${set.rir} RIR` : '—'}
-                                        </Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                </View>
-                              );
-                            })}
+                            {isEditing && (
+                              <PressableScale
+                                style={[styles.saveInlineBtn, isSaving && { opacity: 0.6 }]}
+                                onPress={() => handleSaveEdit(w.id)}
+                                disabled={isSaving}
+                                activeScale={0.92}
+                              >
+                                {isSaving ? (
+                                  <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                  <Text style={styles.saveInlineBtnText}>Kaydet</Text>
+                                )}
+                              </PressableScale>
+                            )}
                           </View>
-                        );
-                      })}
-                    </View>
+
+                          {/* Her Egzersiz İçin Tablo Kartı (1. Bulgarian Split Squat vb.) */}
+                          {currentExercises.map((ex, exIdx) => {
+                            const sets = ex.sets_data || [];
+
+                            return (
+                              <View key={exIdx} style={styles.exerciseSetsCard}>
+                                {/* Egzersiz Başlığı: 1. Bulgarian Split Squat */}
+                                <Text style={styles.exerciseSetsCardTitle}>
+                                  {exIdx + 1}. {ex.exercise_name}
+                                </Text>
+
+                                {/* Tablo Başlıkları: SET | AĞIRLIK | TEKRAR | RIR */}
+                                <View style={styles.tableHeaderRow}>
+                                  <Text style={[styles.thText, styles.colSet]}>SET</Text>
+                                  <Text style={[styles.thText, styles.colWeight]}>AĞIRLIK</Text>
+                                  <Text style={[styles.thText, styles.colReps]}>TEKRAR</Text>
+                                  <Text style={[styles.thText, styles.colRir]}>RIR</Text>
+                                </View>
+
+                                {/* Tablo Satırları (Yeşil, Mavi ve Sarı Rozetler) */}
+                                {sets.map((set, sIdx) => {
+                                  const wKg = parseFloat(String(set.weight_kg)) || 0;
+                                  const isBw = !!ex.is_bodyweight;
+
+                                  return (
+                                    <View key={sIdx} style={styles.tableRow}>
+                                      {/* Sütun 1: SET (1. Set) */}
+                                      <Text style={styles.colSetText}>{sIdx + 1}. Set</Text>
+
+                                      {/* Sütun 2: AĞIRLIK (Yeşil Rozet) */}
+                                      <View style={styles.colWeightContainer}>
+                                        {isEditing ? (
+                                          <View style={styles.editInputBox}>
+                                            <TextInput
+                                              style={styles.editTextInput}
+                                              value={set.weight_kg !== undefined ? String(set.weight_kg) : ''}
+                                              onChangeText={(txt) =>
+                                                handleSetChange(w.id, exIdx, sIdx, 'weight_kg', txt)
+                                              }
+                                              keyboardType="numeric"
+                                              placeholder="0"
+                                              placeholderTextColor={colors.textDim}
+                                            />
+                                            <Text style={styles.editUnitLabel}>kg</Text>
+                                          </View>
+                                        ) : (
+                                          <View style={styles.weightBadge}>
+                                            <Text style={styles.weightBadgeText}>
+                                              {isBw ? 'V. Ağ.' : `${wKg} kg`}
+                                            </Text>
+                                          </View>
+                                        )}
+                                      </View>
+
+                                      {/* Sütun 3: TEKRAR (Mavi Rozet) */}
+                                      <View style={styles.colRepsContainer}>
+                                        {isEditing ? (
+                                          <View style={styles.editInputBox}>
+                                            <TextInput
+                                              style={styles.editTextInput}
+                                              value={set.reps !== undefined ? String(set.reps) : ''}
+                                              onChangeText={(txt) =>
+                                                handleSetChange(w.id, exIdx, sIdx, 'reps', txt)
+                                              }
+                                              keyboardType="numeric"
+                                              placeholder="0"
+                                              placeholderTextColor={colors.textDim}
+                                            />
+                                            <Text style={styles.editUnitLabel}>Tkr</Text>
+                                          </View>
+                                        ) : (
+                                          <View style={styles.repsBadge}>
+                                            <Text style={styles.repsBadgeText}>
+                                              {set.reps || 0} Tekrar
+                                            </Text>
+                                          </View>
+                                        )}
+                                      </View>
+
+                                      {/* Sütun 4: RIR (Sarı Rozet) */}
+                                      <View style={styles.colRirContainer}>
+                                        {isEditing ? (
+                                          <View style={[styles.editInputBox, styles.editRirInputBox]}>
+                                            <TextInput
+                                              style={[styles.editTextInput, styles.editRirTextInput]}
+                                              value={
+                                                set.rir !== undefined && set.rir !== null
+                                                  ? String(set.rir)
+                                                  : ''
+                                              }
+                                              onChangeText={(txt) =>
+                                                handleSetChange(w.id, exIdx, sIdx, 'rir', txt)
+                                              }
+                                              keyboardType="numeric"
+                                              placeholder="—"
+                                              placeholderTextColor={colors.textDim}
+                                            />
+                                            <Text style={styles.editRirUnitLabel}>RIR</Text>
+                                          </View>
+                                        ) : (
+                                          <View style={styles.rirBadge}>
+                                            <Text style={styles.rirBadgeText}>
+                                              {set.rir === 0 || set.rir ? `${set.rir} RIR` : '—'}
+                                            </Text>
+                                          </View>
+                                        )}
+                                      </View>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            );
+                          })}
+                        </Animated.View>
+                      )}
+                    </Animated.View>
                   )}
-                </View>
+                </Animated.View>
               );
             })
           )}
@@ -1039,190 +1125,185 @@ const styles = StyleSheet.create({
   /* ─── 1. Üst Sekmeler & Seans Sayacı Rozeti ─── */
   topTabsBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: 14,
     gap: 8,
   },
   segmentedControl: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: '#0F1526',
     borderRadius: 12,
     padding: 3,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    flex: 1,
+    borderColor: colors.cardBorder,
   },
   segmentBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     borderRadius: 9,
     gap: 6,
   },
   segmentBtnActive: {
-    backgroundColor: '#7C3AED',
-    shadowColor: '#7C3AED',
+    backgroundColor: '#6D28D9',
+    shadowColor: '#6D28D9',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
     elevation: 3,
   },
   segmentBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
+    fontSize: 12.5,
+    fontWeight: '600',
     color: colors.textMuted,
   },
   segmentBtnTextActive: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontWeight: '700',
   },
   totalSessionsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
-    borderRadius: 10,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderRadius: 20,
     paddingHorizontal: 10,
-    paddingVertical: 7,
-    gap: 6,
+    paddingVertical: 5,
+    gap: 5,
   },
   totalBadgeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: colors.purple,
-    shadowColor: colors.purple,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
   },
   totalBadgeText: {
-    fontSize: 11.5,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
     color: colors.purple,
   },
 
-  /* ─── 2. Hızlı Arama & Takvim Butonu ─── */
+  /* ─── 2. Filtre ve Takvim Barı ─── */
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   searchInputBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 10,
+    borderColor: colors.cardBorder,
     paddingHorizontal: 10,
     height: 38,
+    gap: 6,
   },
   searchIconText: {
-    fontSize: 12,
-    marginRight: 6,
+    fontSize: 13,
   },
   searchInput: {
     flex: 1,
     color: colors.text,
-    fontSize: 12.5,
+    fontSize: 13,
     paddingVertical: 0,
   },
   calTriggerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    backgroundColor: colors.cardBg,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    borderColor: colors.purpleBorder,
+    paddingHorizontal: 12,
     height: 38,
     gap: 6,
   },
   calTriggerBtnActive: {
-    backgroundColor: '#7C3AED',
-    borderColor: '#7C3AED',
+    backgroundColor: colors.purple,
+    borderColor: colors.purple,
   },
   calTriggerBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.purple,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: colors.text,
   },
   calTriggerBtnTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
   },
 
   /* Aktif Filtre Çipi */
   activeFilterPillRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     marginBottom: 12,
+    gap: 8,
   },
   activeFilterPillLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textMuted,
   },
   activeFilterPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.18)',
+    backgroundColor: colors.purpleBg,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
+    borderColor: colors.purpleBorder,
+    borderRadius: 14,
+    paddingHorizontal: 10,
     paddingVertical: 3,
     gap: 6,
   },
   activeFilterPillText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.purple,
   },
   activeFilterPillClose: {
     fontSize: 11,
     color: colors.purple,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   showAllText: {
-    fontSize: 11,
-    color: colors.repsBlue,
-    fontWeight: '700',
+    fontSize: 12,
+    color: colors.cyanAction,
     textDecorationLine: 'underline',
   },
 
-  /* ─── 3. Seans Kartı (Görsel 1 & Görsel 2) ─── */
+  /* ─── 3. Seans Kartları (Kompakt Şerit Tasarımı) ─── */
   sessionCard: {
     backgroundColor: colors.cardBg,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    padding: 14,
-    marginBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 6,
+    elevation: 4,
+    overflow: 'hidden',
   },
 
-  /* Kart Üst Barı */
+  /* Kart Üst Başlık & Sağ Aksiyon Barı */
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   cardHeaderLeft: {
     flex: 1,
-    minWidth: 0,
-    marginRight: 8,
+    paddingRight: 8,
   },
   titleRow: {
     flexDirection: 'row',
@@ -1231,69 +1312,47 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   sessionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: colors.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   movementBadge: {
     backgroundColor: colors.purpleBg,
     borderWidth: 1,
     borderColor: colors.purpleBorder,
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
   movementBadgeText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.purple,
   },
   subtitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     marginTop: 4,
+    gap: 5,
+    flexWrap: 'wrap',
   },
   subtitleDateText: {
-    fontSize: 11.5,
-    fontWeight: '600',
+    fontSize: 12,
     color: colors.textMuted,
+    fontWeight: '500',
   },
   subtitleGymText: {
-    fontSize: 11.5,
-    fontWeight: '600',
+    fontSize: 12,
     color: colors.textMuted,
   },
 
-  /* Kart Üst Sağ (Hacim ve Aksiyon Butonları) */
+  /* Kart Üst Sağ (Sadece 3 Aksiyon Butonu) */
   cardHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     flexShrink: 0,
-  },
-  volumeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.purpleBg,
-    borderWidth: 1,
-    borderColor: colors.purpleBorder,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    gap: 5,
-  },
-  volumeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.purple,
-  },
-  volumeBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.purple,
   },
   headerActionBtn: {
     width: 32,
@@ -1301,32 +1360,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
   editActionBtn: {
-    backgroundColor: colors.purpleBg,
-    borderWidth: 1,
-    borderColor: colors.purpleBorder,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
   tuneActionBtn: {
     backgroundColor: colors.cyanActionBg,
-    borderWidth: 1,
     borderColor: colors.cyanActionBorder,
   },
   deleteActionBtn: {
     backgroundColor: colors.dangerBg,
-    borderWidth: 1,
     borderColor: colors.dangerBorder,
   },
 
   /* İpucu Barı */
   hintBar: {
-    paddingVertical: 4,
-    marginTop: 6,
+    paddingTop: 10,
+    paddingBottom: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hintBarText: {
-    fontSize: 10.5,
-    color: colors.textDim,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#7E8DAA',
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
 
   /* ─── 1. Aşama: Özet Görünüm (Görsel 1) ─── */
@@ -1338,12 +1399,12 @@ const styles = StyleSheet.create({
   },
   summaryExerciseRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.025)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
+    justifyContent: 'space-between',
+    backgroundColor: '#0B0F1C',
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
     paddingHorizontal: 12,
     paddingVertical: 9,
     marginBottom: 6,
@@ -1353,105 +1414,101 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     flex: 1,
-    marginRight: 8,
+    paddingRight: 8,
   },
   summarySetBadge: {
-    backgroundColor: colors.repsBlueBg,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
     borderWidth: 1,
-    borderColor: colors.repsBlueBorder,
-    borderRadius: 6,
+    borderColor: 'rgba(56, 189, 248, 0.35)',
+    borderRadius: 7,
     paddingHorizontal: 8,
-    paddingVertical: 2.5,
+    paddingVertical: 3,
   },
   summarySetBadgeText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     color: colors.repsBlue,
   },
-
-  /* Not Kutusu */
   notesBox: {
-    marginTop: 6,
-    marginBottom: 6,
-    padding: 10,
     backgroundColor: 'rgba(139, 92, 246, 0.08)',
     borderLeftWidth: 3,
-    borderLeftColor: '#8B5CF6',
+    borderLeftColor: colors.purple,
     borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 6,
+    marginBottom: 8,
   },
   notesBoxTitle: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '800',
     color: colors.purple,
-    marginBottom: 3,
+    marginBottom: 2,
+    letterSpacing: 0.5,
   },
   notesBoxContent: {
     fontSize: 12,
-    color: '#CBD5E1',
+    color: colors.textMuted,
     lineHeight: 16,
   },
-
-  /* Daha Fazla (Set & Ağırlık Detayları) Butonu (Görsel 1) */
   btnMore: {
-    width: '100%',
-    paddingVertical: 9,
-    backgroundColor: colors.purpleButtonBg,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.35)',
-    borderRadius: 8,
+    borderRadius: 10,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
+    marginBottom: 2,
   },
   btnMoreActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.22)',
-    borderColor: 'rgba(139, 92, 246, 0.6)',
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    borderColor: colors.purple,
   },
   btnMoreText: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 12.5,
+    fontWeight: '700',
     color: colors.purple,
-    letterSpacing: 0.3,
   },
 
   /* ─── 2. Aşama: Detaylı Set & Tekrar Verileri (Görsel 2) ─── */
   fullDetailsContainer: {
-    marginTop: 12,
+    marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 92, 246, 0.25)',
+    borderTopColor: 'rgba(139, 92, 246, 0.2)',
   },
   fullDetailsHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
   },
   fullDetailsTitle: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '800',
     color: colors.purple,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   saveInlineBtn: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#059669',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   saveInlineBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 11.5,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
 
-  /* Egzersiz Set Tablosu Kartı (Görsel 2) */
+  /* Egzersiz Tablosu Kartı */
   exerciseSetsCard: {
-    backgroundColor: 'rgba(10, 15, 26, 0.5)',
+    backgroundColor: '#0B0F1C',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 12,
     padding: 10,
     marginBottom: 10,
   },
@@ -1460,10 +1517,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.purple,
     marginBottom: 8,
-    letterSpacing: 0.2,
   },
-
-  /* Tablo Başlıkları */
   tableHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1473,110 +1527,99 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   thText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.textMuted,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.textDim,
     letterSpacing: 0.5,
   },
-  colSet: {
-    width: 60,
-  },
-  colWeight: {
-    flex: 1.1,
-    textAlign: 'center',
-  },
-  colReps: {
-    flex: 1,
-    textAlign: 'center',
-  },
-  colRir: {
-    flex: 0.9,
-    textAlign: 'center',
-  },
-
-  /* Tablo Satırı */
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  colSet: {
+    width: 58,
   },
   colSetText: {
-    width: 60,
-    fontSize: 11.5,
-    fontWeight: '700',
+    width: 58,
+    fontSize: 12,
     color: colors.textMuted,
+    fontWeight: '600',
+  },
+  colWeight: {
+    flex: 1,
+    textAlign: 'center',
   },
   colWeightContainer: {
-    flex: 1.1,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  weightBadge: {
+    backgroundColor: colors.weightGreenBg,
+    borderWidth: 1,
+    borderColor: colors.weightGreenBorder,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    minWidth: 54,
+    alignItems: 'center',
+  },
+  weightBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.weightGreen,
+  },
+  colReps: {
+    flex: 1,
+    textAlign: 'center',
   },
   colRepsContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  colRirContainer: {
-    flex: 0.9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  /* Rozetler (View Mode) */
-  weightBadge: {
-    backgroundColor: colors.weightGreenBg,
-    borderWidth: 1,
-    borderColor: colors.weightGreenBorder,
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    minWidth: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weightBadgeText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: colors.weightGreen,
-  },
-
   repsBadge: {
     backgroundColor: colors.repsBlueBg,
     borderWidth: 1,
     borderColor: colors.repsBlueBorder,
-    borderRadius: 7,
+    borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    minWidth: 62,
+    minWidth: 58,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   repsBadgeText: {
     fontSize: 11.5,
     fontWeight: '700',
     color: colors.repsBlue,
   },
-
+  colRir: {
+    width: 54,
+    textAlign: 'center',
+  },
+  colRirContainer: {
+    width: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rirBadge: {
     backgroundColor: colors.rirAmberBg,
     borderWidth: 1,
     borderColor: colors.rirAmberBorder,
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 7,
     paddingVertical: 3,
     minWidth: 46,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   rirBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 11.5,
+    fontWeight: '700',
     color: colors.rirAmber,
   },
 
-  /* Düzenleme Giriş Kutuları (Edit Mode) */
+  /* Düzenleme Modu Girdileri */
   editInputBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1584,37 +1627,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.inputBorder,
     borderRadius: 7,
-    paddingHorizontal: 5,
-    height: 30,
+    paddingHorizontal: 6,
+    height: 28,
+  },
+  editRirInputBox: {
+    width: 46,
   },
   editTextInput: {
     color: colors.text,
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '700',
     paddingVertical: 0,
+    minWidth: 24,
     textAlign: 'center',
-    minWidth: 28,
+  },
+  editRirTextInput: {
+    minWidth: 20,
   },
   editUnitLabel: {
-    fontSize: 9.5,
-    fontWeight: '700',
+    fontSize: 10,
     color: colors.textDim,
     marginLeft: 2,
   },
-  editRirInputBox: {
-    borderColor: 'rgba(245, 158, 11, 0.4)',
-  },
-  editRirTextInput: {
-    color: colors.rirAmber,
-  },
   editRirUnitLabel: {
     fontSize: 9,
-    color: colors.rirAmber,
-    fontWeight: '800',
-    marginLeft: 2,
+    color: colors.textDim,
+    marginLeft: 1,
   },
 
-  /* ─── Boş Durum & İskelet ─── */
+  /* İskelet ve Boş Durum */
   skeletonContainer: {
     gap: 12,
   },
@@ -1622,72 +1663,68 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptyContainer: {
-    backgroundColor: colors.cardBg,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: 24,
     alignItems: 'center',
-    marginTop: 10,
+    paddingVertical: 50,
+    paddingHorizontal: 20,
   },
   emptyIcon: {
-    fontSize: 36,
-    marginBottom: 10,
+    fontSize: 48,
+    marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   emptySubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textMuted,
     textAlign: 'center',
-    marginBottom: 14,
+    lineHeight: 18,
+    marginBottom: 16,
   },
   clearFilterBtn: {
-    backgroundColor: '#7C3AED',
-    paddingVertical: 8,
+    backgroundColor: colors.purpleBg,
+    borderWidth: 1,
+    borderColor: colors.purpleBorder,
+    borderRadius: 10,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 9,
   },
   clearFilterBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.purple,
   },
 
-  /* ─── Takvim Modalı ─── */
+  /* ─── 4. Web Tarzı Tarih Seçim Modal Stilleri ─── */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    padding: 16,
   },
   calendarCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: colors.cardBg,
+    backgroundColor: '#0F1528',
     borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: colors.purpleBorder,
-    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
     elevation: 10,
   },
   calHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
   calHeaderTitleBox: {
     flexDirection: 'row',
@@ -1695,14 +1732,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   calIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: colors.purpleBg,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.purpleBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calTitle: {
     fontSize: 15,
@@ -1710,36 +1747,39 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   calSubtitle: {
-    fontSize: 10.5,
+    fontSize: 11,
     color: colors.textMuted,
-    marginTop: 1,
   },
   calCloseBtn: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   calNav: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 8,
+    justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 8,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     marginBottom: 10,
   },
   calNavBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   calNavArrow: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
     color: colors.text,
+    fontWeight: '800',
   },
   calMonthLabel: {
     fontSize: 13,
@@ -1753,30 +1793,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   calWeekdayName: {
-    width: 36,
+    width: 38,
     textAlign: 'center',
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textDim,
   },
   calGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 6,
-    paddingHorizontal: 4,
-    marginBottom: 12,
   },
   calCell: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
+    marginVertical: 2,
     position: 'relative',
   },
   calCellSelected: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: colors.purple,
+    shadowColor: colors.purple,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 3,
   },
   calCellText: {
     fontSize: 12.5,
@@ -1784,16 +1827,16 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   calCellTextSelected: {
-    fontWeight: '800',
     color: '#FFFFFF',
+    fontWeight: '800',
   },
   calCellTextToday: {
+    color: colors.purple,
     fontWeight: '800',
-    color: colors.weightGreen,
   },
   calWorkoutDot: {
     position: 'absolute',
-    bottom: 3,
+    bottom: 4,
     width: 4,
     height: 4,
     borderRadius: 2,
@@ -1801,38 +1844,45 @@ const styles = StyleSheet.create({
   },
   calTodayDot: {
     position: 'absolute',
-    bottom: 3,
+    bottom: 4,
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.weightGreen,
+    backgroundColor: '#38BDF8',
   },
   calFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
+    gap: 8,
+    marginTop: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
   },
   calClearBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calClearBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.repsBlue,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
   calConfirmBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    flex: 1,
+    backgroundColor: colors.purple,
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calConfirmBtnText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
