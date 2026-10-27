@@ -22,6 +22,7 @@ import Animated, {
   LinearTransition,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Rect } from 'react-native-svg';
 
@@ -259,6 +260,20 @@ function CloseIcon({ size = 16, color = colors.textMuted }: { size?: number; col
         d="M18 6L6 18M6 6l12 12"
         stroke={color}
         strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function CautionTriangleIcon({ size = 18, color = '#F87171' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+        stroke={color}
+        strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -651,6 +666,107 @@ function WorkoutCalendarModal({
   );
 }
 
+// ─── Web Tarzı Bulanık Arka Planlı Antrenman Silme Onay Panosu ───
+
+type DeleteWorkoutModalProps = {
+  workout: Workout | null;
+  isDeleting: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+};
+
+function DeleteWorkoutConfirmModal({
+  workout,
+  isDeleting,
+  onConfirm,
+  onCancel,
+}: DeleteWorkoutModalProps) {
+  if (!workout) return null;
+
+  const exercisesCount = workout.exercises?.length || 0;
+  const dateFormatted = formatDateTR(workout.date);
+  const sessionName = workout.session_type || 'Antrenman';
+
+  return (
+    <Modal
+      visible={!!workout}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
+      <View style={styles.delModalBackdrop}>
+        {/* Arka Planı Bulanıklaştıran Katman (BlurView) */}
+        <BlurView
+          intensity={Platform.OS === 'ios' ? 35 : 25}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.delModalBackdropTint} />
+
+        {/* Ortadaki Onay Panosu Kartı (Fotoğraftaki Tasarım) */}
+        <Pressable style={styles.delModalCard} onPress={(e) => e.stopPropagation()}>
+          {/* Üst Kısım: Kırmızı Kutu İçi Çöp Kutusu İkonu + Başlık & Alt Başlık */}
+          <View style={styles.delModalHeader}>
+            <View style={styles.delModalIconBox}>
+              <TrashIcon size={22} color="#EF4444" />
+            </View>
+            <View style={styles.delModalHeaderTextBox}>
+              <Text style={styles.delModalTitle}>Antrenmanı Silmeyi Onayla</Text>
+              <Text style={styles.delModalSubtitle}>
+                Antrenman seansı ve tüm set kayıtları kaldırılacak
+              </Text>
+            </View>
+          </View>
+
+          {/* Ayırıcı İnce Çizgi */}
+          <View style={styles.delModalDivider} />
+
+          {/* Seans Detay Metni */}
+          <Text style={styles.delModalDesc}>
+            <Text style={styles.delModalHighlight}>
+              {`${dateFormatted} tarihli "${sessionName}" (${exercisesCount} Hareket)`}
+            </Text>{' '}
+            ve bu kayda ait tüm veriler veritabanından kalıcı olarak silinecektir.
+          </Text>
+
+          {/* Kesikli Çizgili Uyarı Kutusu */}
+          <View style={styles.delModalWarningBox}>
+            <CautionTriangleIcon size={18} color="#F87171" />
+            <Text style={styles.delModalWarningText}>
+              Bu işlem geri alınamaz. Kaydı silmek istediğinize emin misiniz?
+            </Text>
+          </View>
+
+          {/* Butonlar: Sol - Platform Moru "Vazgeç", Sağ - Normal Kırmızı "Evet, Kaydı Sil" (İkonsuz) */}
+          <View style={styles.delModalButtonsRow}>
+            <PressableScale
+              style={styles.delCancelBtn}
+              onPress={onCancel}
+              disabled={isDeleting}
+              activeScale={0.96}
+            >
+              <Text style={styles.delCancelBtnText}>Vazgeç</Text>
+            </PressableScale>
+
+            <PressableScale
+              style={styles.delConfirmBtn}
+              onPress={onConfirm}
+              disabled={isDeleting}
+              activeScale={0.96}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.delConfirmBtnText}>Evet, Kaydı Sil</Text>
+              )}
+            </PressableScale>
+          </View>
+        </Pressable>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Ana Ekran Bileşeni (HistoryScreen) ───
 
 export default function HistoryScreen() {
@@ -792,28 +908,27 @@ export default function HistoryScreen() {
     }
   };
 
-  // Seansı Komple Sil
-  const handleDelete = (workoutId: number) => {
-    Alert.alert(
-      'Antrenmanı Sil',
-      'Bu antrenman seansı tamamen silinecek. Emin misiniz?',
-      [
-        { text: 'Vazgeç', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              triggerSmoothTransition();
-              await deleteWorkout(workoutId);
-              Alert.alert('Silindi', 'Antrenman seansı silindi.');
-            } catch (err: any) {
-              Alert.alert('Hata', err?.message || 'Antrenman silinemedi.');
-            }
-          },
-        },
-      ]
-    );
+  // Silme Onay Panosu Durumu
+  const [workoutToDelete, setWorkoutToDelete] = useState<Workout | null>(null);
+  const [isDeletingWorkout, setIsDeletingWorkout] = useState<boolean>(false);
+
+  // Silme Onaylama İşlemi
+  const handleConfirmDelete = async () => {
+    if (!workoutToDelete) return;
+    setIsDeletingWorkout(true);
+    try {
+      triggerSmoothTransition();
+      await deleteWorkout(workoutToDelete.id);
+      setWorkoutToDelete(null);
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'Antrenman silinemedi.');
+    } finally {
+      setIsDeletingWorkout(false);
+    }
+  };
+
+  const handleDelete = (workout: Workout) => {
+    setWorkoutToDelete(workout);
   };
 
   // Antrenman Sekmesine Yükle (Tune İkonu)
@@ -1045,11 +1160,11 @@ export default function HistoryScreen() {
                         <TuneSlidersIcon size={14} color={colors.cyanAction} />
                       </PressableScale>
 
-                      {/* Sil Butonu (Çöp Kutusu) */}
+                      {/* Sil Butonu (Çöp Kutusu - Bulanık Arka Planlı Panoyu Açar) */}
                       <PressableScale
                         style={[styles.headerActionBtn, styles.deleteActionBtn]}
                         activeScale={0.88}
-                        onPress={() => handleDelete(w.id)}
+                        onPress={() => handleDelete(w)}
                         hitSlop={6}
                       >
                         <TrashIcon size={14} color={colors.danger} />
@@ -1284,6 +1399,14 @@ export default function HistoryScreen() {
         onSelect={(newDate) => setSelectedDate(newDate)}
         onClear={() => setSelectedDate(null)}
         onClose={() => setShowCalendarModal(false)}
+      />
+
+      {/* ─── 5. Web Tarzı Bulanık Arka Planlı Antrenman Silme Onay Panosu ─── */}
+      <DeleteWorkoutConfirmModal
+        workout={workoutToDelete}
+        isDeleting={isDeletingWorkout}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setWorkoutToDelete(null)}
       />
     </SafeAreaView>
   );
@@ -2070,6 +2193,134 @@ const styles = StyleSheet.create({
   },
   calConfirmBtnText: {
     fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  /* ─── 5. Antrenman Silme Onay Panosu Stilleri (Bulanık Arka Plan) ─── */
+  delModalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  delModalBackdropTint: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(5, 8, 20, 0.72)',
+  },
+  delModalCard: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: '#0F1528',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    padding: 22,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  delModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  delModalIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.32)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  delModalHeaderTextBox: {
+    flex: 1,
+  },
+  delModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  delModalSubtitle: {
+    fontSize: 11.5,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  delModalDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    marginBottom: 14,
+  },
+  delModalDesc: {
+    fontSize: 13,
+    color: '#CBD5E1',
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+  delModalHighlight: {
+    color: '#F87171',
+    fontWeight: '700',
+  },
+  delModalWarningBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderStyle: 'dashed',
+    borderRadius: 11,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 18,
+  },
+  delModalWarningText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FCA5A5',
+    lineHeight: 16,
+  },
+  delModalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+  },
+  delCancelBtn: {
+    backgroundColor: '#6D28D9', // Platform mor rengi
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+    borderRadius: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 85,
+  },
+  delCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  delConfirmBtn: {
+    backgroundColor: '#DC2626', // Normal kırmızı renk (parlak/neon değil)
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 125,
+  },
+  delConfirmBtnText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
   },
