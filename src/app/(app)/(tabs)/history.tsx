@@ -36,11 +36,11 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Düzgün, yumuşatılmış tek süzülme ile aşağı genişleme animasyon tetikleyicisi (Yay/salınım olmadan)
+// Seri ve akıcı tek süzülme ile aşağı genişleme animasyon tetikleyicisi (Gecikmesiz ~180ms)
 const triggerSmoothTransition = () => {
   try {
     LayoutAnimation.configureNext({
-      duration: 340,
+      duration: 180,
       create: {
         type: LayoutAnimation.Types.easeInEaseOut,
         property: LayoutAnimation.Properties.opacity,
@@ -130,12 +130,12 @@ function PressableScale({
     RNAnimated.parallel([
       RNAnimated.timing(scale, {
         toValue: activeScale,
-        duration: 80,
+        duration: 25,
         useNativeDriver: true,
       }),
       RNAnimated.timing(opacity, {
-        toValue: 0.82,
-        duration: 80,
+        toValue: 0.85,
+        duration: 25,
         useNativeDriver: true,
       }),
     ]).start();
@@ -146,12 +146,12 @@ function PressableScale({
     RNAnimated.parallel([
       RNAnimated.timing(scale, {
         toValue: 1,
-        duration: 90,
+        duration: 40,
         useNativeDriver: true,
       }),
       RNAnimated.timing(opacity, {
         toValue: 1,
-        duration: 90,
+        duration: 40,
         useNativeDriver: true,
       }),
     ]).start();
@@ -188,19 +188,6 @@ function DumbbellTabIcon({ size = 15, color = '#FFFFFF' }: { size?: number; colo
   );
 }
 
-function NutritionTabIcon({ size = 15, color = colors.textMuted }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
 
 function CalendarIcon({ size = 14, color = colors.textMuted }: { size?: number; color?: string }) {
   return (
@@ -773,8 +760,6 @@ export default function HistoryScreen() {
   const router = useRouter();
   const { workouts, loading, updateWorkout, deleteWorkout } = useWorkouts();
 
-  // Aktif Sekme (Web'deki gibi: Antrenman Geçmişi | Beslenme Geçmişi)
-  const [activeTab, setActiveTab] = useState<'workout' | 'nutrition'>('workout');
 
   // Filtreler
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -948,56 +933,14 @@ export default function HistoryScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ─── 1. Web Tarzı Üst Sekmeler & Seans Sayacı Rozeti (Görsel 1) ─── */}
-          <View style={styles.topTabsBar}>
-            {/* Sol: Sekme Butonları (Antrenman Geçmişi | Beslenme Geçmişi) */}
-            <View style={styles.segmentedControl}>
-              <PressableScale
-                style={[
-                  styles.segmentBtn,
-                  activeTab === 'workout' && styles.segmentBtnActive,
-                ]}
-                onPress={() => setActiveTab('workout')}
-                activeScale={0.96}
-              >
-                <DumbbellTabIcon
-                  size={14}
-                  color={activeTab === 'workout' ? '#FFFFFF' : colors.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.segmentBtnText,
-                    activeTab === 'workout' && styles.segmentBtnTextActive,
-                  ]}
-                >
-                  Antrenman Geçmişi
-                </Text>
-              </PressableScale>
-
-              <PressableScale
-                style={[
-                  styles.segmentBtn,
-                  activeTab === 'nutrition' && styles.segmentBtnActive,
-                ]}
-                onPress={() => router.push('/(app)/(tabs)/nutrition')}
-                activeScale={0.96}
-              >
-                <NutritionTabIcon
-                  size={14}
-                  color={activeTab === 'nutrition' ? '#FFFFFF' : colors.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.segmentBtnText,
-                    activeTab === 'nutrition' && styles.segmentBtnTextActive,
-                  ]}
-                >
-                  Beslenme Geçmişi
-                </Text>
-              </PressableScale>
+          {/* ─── 1. Ekran Başlığı & Seans Sayacı Rozeti ─── */}
+          <View style={styles.topHeaderBar}>
+            <View style={styles.titleWithIcon}>
+              <DumbbellTabIcon size={20} color={colors.purple} />
+              <Text style={styles.screenTitle}>Antrenman Geçmişi</Text>
             </View>
 
-            {/* Sağ: Toplam Seans Sayacı Rozeti (Görsel 1: Antrenman Kaydı: 55 Seans) */}
+            {/* Sağ: Toplam Seans Sayacı Rozeti (Taşma yapmayan, sola kaydırılmış ve net görünür) */}
             <View style={styles.totalSessionsBadge}>
               <View style={styles.totalBadgeDot} />
               <Text style={styles.totalBadgeText}>
@@ -1103,7 +1046,7 @@ export default function HistoryScreen() {
               return (
                 <Animated.View
                   key={w.id}
-                  layout={LinearTransition.duration(340)}
+                  layout={LinearTransition.duration(180)}
                   style={styles.sessionCard}
                 >
                   {/* ─── Seans Kartı Üst Barı (Header) ─── */}
@@ -1186,19 +1129,17 @@ export default function HistoryScreen() {
                   {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (Açıkken herhangi yerine basılarak kapatılabilir) ─── */}
                   {isSummaryOpen && (
                     <Animated.View
-                      entering={FadeIn.duration(260)}
-                      exiting={FadeOut.duration(180)}
+                      entering={FadeIn.duration(140)}
+                      exiting={FadeOut.duration(90)}
                     >
-                      <Pressable
-                        style={styles.summaryContainer}
-                        onPress={() => toggleSummary(w.id)}
-                      >
+                      <View style={styles.summaryContainer}>
                         {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti (Dokunulduğunda özeti kapatır) */}
                         {exercises.map((ex, exIdx) => (
-                          <Pressable
+                          <PressableScale
                             key={exIdx}
                             style={styles.summaryExerciseRow}
                             onPress={() => toggleSummary(w.id)}
+                            activeScale={0.98}
                           >
                             <Text style={styles.summaryExerciseName}>
                               {ex.exercise_name}
@@ -1208,18 +1149,19 @@ export default function HistoryScreen() {
                                 {ex.sets_data?.length || 0} Set
                               </Text>
                             </View>
-                          </Pressable>
+                          </PressableScale>
                         ))}
 
                         {/* Not Bölümü (Dokunulduğunda özeti kapatır) */}
                         {w.notes && w.notes.trim() !== '' ? (
-                          <Pressable
+                          <PressableScale
                             style={styles.notesBox}
                             onPress={() => toggleSummary(w.id)}
+                            activeScale={0.98}
                           >
                             <Text style={styles.notesBoxTitle}>📝 NOT</Text>
                             <Text style={styles.notesBoxContent}>{w.notes}</Text>
-                          </Pressable>
+                          </PressableScale>
                         ) : null}
 
                         {/* Daha Fazla (Set & Ağırlık Detayları) Butonu */}
@@ -1237,13 +1179,13 @@ export default function HistoryScreen() {
                               : 'Daha Fazla (Set & Ağırlık Detayları) ▾'}
                           </Text>
                         </PressableScale>
-                      </Pressable>
+                      </View>
 
                       {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (Tek süzülme ile aşağı açılır) ─── */}
                       {isFullOpen && (
                         <Animated.View
-                          entering={FadeIn.duration(260)}
-                          exiting={FadeOut.duration(180)}
+                          entering={FadeIn.duration(140)}
+                          exiting={FadeOut.duration(90)}
                           style={styles.fullDetailsContainer}
                         >
                           {/* Detay Başlığı: ⚡ DETAYLI SET & TEKRAR VERİLERİ */}
@@ -1425,66 +1367,46 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  /* ─── 1. Üst Sekmeler & Seans Sayacı Rozeti ─── */
-  topTabsBar: {
+  /* ─── 1. Ekran Başlığı & Seans Sayacı Rozeti ─── */
+  topHeaderBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
-    gap: 8,
+    marginBottom: 16,
+    paddingHorizontal: 2,
   },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: '#0F1526',
-    borderRadius: 12,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  segmentBtn: {
+  titleWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 9,
-    gap: 6,
+    gap: 10,
+    flexShrink: 1,
   },
-  segmentBtnActive: {
-    backgroundColor: '#6D28D9',
-    shadowColor: '#6D28D9',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  segmentBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  segmentBtnTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+  screenTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
   totalSessionsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: 'rgba(139, 92, 246, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderColor: 'rgba(139, 92, 246, 0.4)',
     borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+    flexShrink: 0,
   },
   totalBadgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
     backgroundColor: colors.purple,
   },
   totalBadgeText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: colors.purple,
   },
