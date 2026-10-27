@@ -34,24 +34,10 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// 60-90-120fps natif yay (spring) tetikleyicisi
-const triggerLayoutSpring = () => {
+// Düzgün, tek süzülme ile aşağı genişleme animasyon tetikleyicisi (Yay/salınım olmadan)
+const triggerSmoothTransition = () => {
   try {
-    LayoutAnimation.configureNext({
-      duration: 280,
-      create: {
-        type: LayoutAnimation.Types.easeInEaseOut,
-        property: LayoutAnimation.Properties.opacity,
-      },
-      update: {
-        type: LayoutAnimation.Types.spring,
-        springDamping: 0.82,
-      },
-      delete: {
-        type: LayoutAnimation.Types.easeInEaseOut,
-        property: LayoutAnimation.Properties.opacity,
-      },
-    });
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   } catch {
     // LayoutAnimation hata verirse sessizce devam et
   }
@@ -143,15 +129,14 @@ function PressableScale({
   const handlePressOut = () => {
     if (disabled) return;
     RNAnimated.parallel([
-      RNAnimated.spring(scale, {
+      RNAnimated.timing(scale, {
         toValue: 1,
-        friction: 4,
-        tension: 140,
+        duration: 90,
         useNativeDriver: true,
       }),
       RNAnimated.timing(opacity, {
         toValue: 1,
-        duration: 140,
+        duration: 90,
         useNativeDriver: true,
       }),
     ]).start();
@@ -536,9 +521,9 @@ export default function HistoryScreen() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [workouts, selectedDate, searchQuery]);
 
-  // Özet Açma / Kapama (Karta basıldığında akıcı 60-90-120fps animasyonla açılır/kapanır)
+  // Özet Açma / Kapama (Karta basıldığında düzgün tek süzülme ile açılır/kapanır)
   const toggleSummary = (workoutId: number) => {
-    triggerLayoutSpring();
+    triggerSmoothTransition();
     setOpenSummaries((prev) => ({
       ...prev,
       [workoutId]: !prev[workoutId],
@@ -547,7 +532,7 @@ export default function HistoryScreen() {
 
   // Detaylı Set & Tekrar Görünümünü Açma / Kapama ("Daha Fazla" Butonu)
   const toggleFull = (workoutId: number) => {
-    triggerLayoutSpring();
+    triggerSmoothTransition();
     setOpenFullDetails((prev) => {
       const next = !prev[workoutId];
       if (next) {
@@ -560,7 +545,7 @@ export default function HistoryScreen() {
   // Düzenleme Modunu Açma / Kapatma (Kalem İkonu)
   const toggleEdit = (workout: Workout) => {
     const wId = workout.id;
-    triggerLayoutSpring();
+    triggerSmoothTransition();
     setEditModes((prev) => {
       const next = !prev[wId];
       if (next) {
@@ -632,7 +617,7 @@ export default function HistoryScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              triggerLayoutSpring();
+              triggerSmoothTransition();
               await deleteWorkout(workoutId);
               Alert.alert('Silindi', 'Antrenman seansı silindi.');
             } catch (err: any) {
@@ -816,7 +801,7 @@ export default function HistoryScreen() {
               return (
                 <Animated.View
                   key={w.id}
-                  layout={LinearTransition.springify().damping(18).stiffness(160)}
+                  layout={LinearTransition.duration(240)}
                   style={styles.sessionCard}
                 >
                   {/* ─── Seans Kartı Üst Barı (Header) ─── */}
@@ -896,12 +881,11 @@ export default function HistoryScreen() {
                     </Text>
                   </PressableScale>
 
-                  {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (LinearTransition + FadeIn/Out ile 60-90fps Açılır) ─── */}
+                  {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (Tek süzülme ile aşağı açılır) ─── */}
                   {isSummaryOpen && (
                     <Animated.View
-                      entering={FadeIn.duration(220)}
-                      exiting={FadeOut.duration(160)}
-                      layout={LinearTransition.springify().damping(18).stiffness(160)}
+                      entering={FadeIn.duration(200)}
+                      exiting={FadeOut.duration(150)}
                     >
                       <View style={styles.summaryContainer}>
                         {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti */}
@@ -943,12 +927,11 @@ export default function HistoryScreen() {
                         </PressableScale>
                       </View>
 
-                      {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (LinearTransition + FadeIn/Out ile 60-90fps Açılır) ─── */}
+                      {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (Tek süzülme ile aşağı açılır) ─── */}
                       {isFullOpen && (
                         <Animated.View
-                          entering={FadeIn.duration(240)}
-                          exiting={FadeOut.duration(180)}
-                          layout={LinearTransition.springify().damping(18).stiffness(160)}
+                          entering={FadeIn.duration(200)}
+                          exiting={FadeOut.duration(150)}
                           style={styles.fullDetailsContainer}
                         >
                           {/* Detay Başlığı: ⚡ DETAYLI SET & TEKRAR VERİLERİ */}

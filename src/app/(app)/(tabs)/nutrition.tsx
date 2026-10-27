@@ -28,23 +28,13 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// 60fps - 90fps yüksek akıcılıkta natif yay (spring) ve yumuşak geçiş konfigürasyonu
+// Yumuşak, düzgün geçiş konfigürasyonu (Yay/salınım olmadan tek süzülme)
 const smoothTransition = () => {
-  LayoutAnimation.configureNext({
-    duration: 300,
-    create: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-    update: {
-      type: LayoutAnimation.Types.spring,
-      springDamping: 0.82,
-    },
-    delete: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-  });
+  try {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  } catch {
+    // LayoutAnimation hata verirse sessizce devam et
+  }
 };
 
 // ─── Renk Token'ları (Cyber Dark Theme) ───
