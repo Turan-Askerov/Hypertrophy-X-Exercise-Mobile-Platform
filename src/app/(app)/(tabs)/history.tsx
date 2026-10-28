@@ -312,6 +312,7 @@ function formatMonthTR(yearMonth: string): string {
 type CalendarModalProps = {
   visible: boolean;
   selectedDate: string | null;
+  searchQuery?: string;
   workoutDatesSet: Set<string>;
   onSelect: (dateIso: string) => void;
   onClear: () => void;
@@ -324,6 +325,7 @@ let isCalendarMonthAnimating = false;
 function WorkoutCalendarModal({
   visible,
   selectedDate,
+  searchQuery,
   workoutDatesSet,
   onSelect,
   onClear,
@@ -344,6 +346,24 @@ function WorkoutCalendarModal({
   // Ay geçişinde yumuşak kayma (slide) ve opasite animasyonları
   const [slideAnim] = useState(() => new RNAnimated.Value(0));
   const [opacityAnim] = useState(() => new RNAnimated.Value(1));
+
+  // Modal her açıldığında ilgili aya odaklan ve animasyon değerlerini sıfırla
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible) {
+      let targetMonth = todayIso.slice(0, 7);
+      if (selectedDate) {
+        targetMonth = selectedDate.slice(0, 7);
+      } else if (workoutDatesSet.size > 0) {
+        const dates = Array.from(workoutDatesSet).sort();
+        targetMonth = dates[dates.length - 1].slice(0, 7);
+      }
+      setViewMonth(targetMonth);
+      slideAnim.setValue(0);
+      opacityAnim.setValue(1);
+    }
+  }
 
   // Ay değiştirme fonksiyonu (direction: 1 = sonraki, -1 = önceki)
   const changeMonth = (direction: 1 | -1) => {
@@ -562,9 +582,13 @@ function WorkoutCalendarModal({
               <View style={styles.calIconBox}>
                 <CalendarIcon size={18} color={colors.purple} />
               </View>
-              <View>
+              <View style={{ flex: 1, paddingRight: 6 }}>
                 <Text style={styles.calTitle}>Tarihe Göre Filtrele</Text>
-                <Text style={styles.calSubtitle}>Seans geçmişinde tarih seç</Text>
+                <Text style={styles.calSubtitle} numberOfLines={1}>
+                  {searchQuery && searchQuery.trim()
+                    ? `"${searchQuery.trim()}" için ${workoutDatesSet.size} gün işaretlendi`
+                    : 'Seans geçmişinde tarih seç'}
+                </Text>
               </View>
             </View>
             <PressableScale style={styles.calCloseBtn} onPress={onClose} activeScale={0.88} hitSlop={8}>
@@ -1125,16 +1149,24 @@ export default function HistoryScreen() {
   const [editingData, setEditingData] = useState<Record<number, ExerciseEntry[]>>({});
   const [savingWorkoutIds, setSavingWorkoutIds] = useState<Record<number, boolean>>({});
 
-  // Tüm antrenman tarihlerinin Set'i
+  // Antrenman tarihlerinin Set'i (Arama filtresi varsa sadece aranan seans/hareket günlerini yeşil noktayla işaretler)
   const workoutDatesSet = useMemo(() => {
     const set = new Set<string>();
+    const q = searchQuery.trim().toLowerCase();
     for (const w of workouts) {
-      if (w.date) {
-        set.add(w.date.slice(0, 10));
+      if (!w.date) continue;
+      if (q) {
+        const matchSession = (w.session_type || '').toLowerCase().includes(q);
+        const matchGym = (w.gym_name || '').toLowerCase().includes(q);
+        const matchEx = (w.exercises || []).some((e) =>
+          e.exercise_name.toLowerCase().includes(q)
+        );
+        if (!matchSession && !matchGym && !matchEx) continue;
       }
+      set.add(w.date.slice(0, 10));
     }
     return set;
-  }, [workouts]);
+  }, [workouts, searchQuery]);
 
   // Filtrelenmiş ve Sıralanmış Seanslar
   const filteredWorkouts = useMemo(() => {
@@ -1412,9 +1444,13 @@ export default function HistoryScreen() {
       <WorkoutCalendarModal
         visible={showCalendarModal}
         selectedDate={selectedDate}
+        searchQuery={searchQuery}
         workoutDatesSet={workoutDatesSet}
         onSelect={(newDate) => setSelectedDate(newDate)}
-        onClear={() => setSelectedDate(null)}
+        onClear={() => {
+          setSelectedDate(null);
+          setSearchQuery('');
+        }}
         onClose={() => setShowCalendarModal(false)}
       />
 
