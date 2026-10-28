@@ -17,8 +17,10 @@ import {
   View,
 } from 'react-native';
 import Animated, {
+  Easing,
   FadeIn,
   FadeOut,
+  Keyframe,
   LinearTransition,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,11 +38,11 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Düzgün, yumuşatılmış tek süzülme ile aşağı genişleme animasyon tetikleyicisi (Yay/salınım olmadan 340ms)
+// Web platformundaki css animasyonlarıyla birebir uyumlu 400ms süzülme tetikleyicisi
 const triggerSmoothTransition = () => {
   try {
     LayoutAnimation.configureNext({
-      duration: 340,
+      duration: 400,
       create: {
         type: LayoutAnimation.Types.easeInEaseOut,
         property: LayoutAnimation.Properties.opacity,
@@ -57,6 +59,19 @@ const triggerSmoothTransition = () => {
     // LayoutAnimation hata verirse sessizce devam et
   }
 };
+
+// Web platformundaki @keyframes slideDownHistoryCard ve .history-card-animated ile birebir aynı keyframe
+const slideDownHistoryCard = new Keyframe({
+  0: {
+    opacity: 0,
+    transform: [{ translateY: -20 }],
+  },
+  100: {
+    opacity: 1,
+    transform: [{ translateY: 0 }],
+    easing: Easing.bezier(0.25, 1, 0.5, 1),
+  },
+});
 
 // ─── Web Tema Renkleri (Web Platformuna Birebir Uyumlu Cyber Dark) ───
 const colors = {
@@ -761,6 +776,7 @@ function DeleteWorkoutConfirmModal({
 
 type SessionCardItemProps = {
   workout: Workout;
+  index: number;
   isSummaryOpen: boolean;
   isFullOpen: boolean;
   isEditing: boolean;
@@ -783,6 +799,7 @@ type SessionCardItemProps = {
 
 const SessionCardItem = React.memo(function SessionCardItem({
   workout,
+  index,
   isSummaryOpen,
   isFullOpen,
   isEditing,
@@ -801,7 +818,10 @@ const SessionCardItem = React.memo(function SessionCardItem({
 
   return (
     <Animated.View
-      layout={LinearTransition.duration(340)}
+      entering={slideDownHistoryCard
+        .duration(400)
+        .delay(Math.min(index, 12) * 90)}
+      layout={LinearTransition.duration(400).easing(Easing.bezier(0.25, 1, 0.5, 1))}
       style={styles.sessionCard}
     >
       {/* ─── Seans Kartı Üst Barı (Header) ─── */}
@@ -1142,8 +1162,9 @@ export default function HistoryScreen() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [workouts, selectedDate, searchQuery]);
 
-  // Özet Açma / Kapama (Karta basıldığında anında tetiklenir ve Reanimated ile 340ms süzülür)
+  // Özet Açma / Kapama (Karta basıldığında hem açık kart hem diğer kartlar 400ms yumuşakça süzülür)
   const toggleSummary = useCallback((workoutId: number) => {
+    triggerSmoothTransition();
     setOpenSummaries((prev) => ({
       ...prev,
       [workoutId]: !prev[workoutId],
@@ -1152,6 +1173,7 @@ export default function HistoryScreen() {
 
   // Detaylı Set & Tekrar Görünümünü Açma / Kapama ("Daha Fazla" Butonu)
   const toggleFull = useCallback((workoutId: number) => {
+    triggerSmoothTransition();
     setOpenFullDetails((prev) => {
       const next = !prev[workoutId];
       if (next) {
@@ -1164,6 +1186,7 @@ export default function HistoryScreen() {
   // Düzenleme Modunu Açma / Kapatma (Kalem İkonu)
   const toggleEdit = useCallback((workout: Workout) => {
     const wId = workout.id;
+    triggerSmoothTransition();
     setEditModes((prev) => {
       const next = !prev[wId];
       if (next) {
@@ -1365,10 +1388,11 @@ export default function HistoryScreen() {
               )}
             </View>
           ) : (
-            filteredWorkouts.map((w) => (
+            filteredWorkouts.map((w, index) => (
               <SessionCardItem
                 key={w.id}
                 workout={w}
+                index={index}
                 isSummaryOpen={!!openSummaries[w.id]}
                 isFullOpen={!!openFullDetails[w.id]}
                 isEditing={!!editModes[w.id]}
