@@ -568,7 +568,7 @@ function WorkoutCalendarModal({
               </View>
             </View>
             <PressableScale style={styles.calCloseBtn} onPress={onClose} activeScale={0.88} hitSlop={8}>
-              <CloseIcon size={16} color={colors.textMuted} />
+              <CloseIcon size={14} color={colors.danger} />
             </PressableScale>
           </View>
 
@@ -649,20 +649,17 @@ function WorkoutCalendarModal({
             </RNAnimated.View>
           </View>
 
-          {/* Alt Butonlar */}
+          {/* Alt Buton: Filtreleri Temizle */}
           <View style={styles.calFooter}>
             <PressableScale
               style={styles.calClearBtn}
-              activeScale={0.95}
+              activeScale={0.96}
               onPress={() => {
                 onClear();
                 onClose();
               }}
             >
-              <Text style={styles.calClearBtnText}>Filtreyi Temizle (Tümü)</Text>
-            </PressableScale>
-            <PressableScale style={styles.calConfirmBtn} activeScale={0.95} onPress={onClose}>
-              <Text style={styles.calConfirmBtnText}>Kapat</Text>
+              <Text style={styles.calClearBtnText}>Filtreleri Temizle</Text>
             </PressableScale>
           </View>
         </Pressable>
@@ -2054,10 +2051,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   calCloseBtn: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    backgroundColor: colors.dangerBg,
+    borderColor: colors.dangerBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2162,39 +2161,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.purple, // Mor (Bugün)
   },
   calFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
   },
   calClearBtn: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 10,
-    paddingVertical: 9,
+    width: '100%',
+    backgroundColor: 'rgba(139, 92, 246, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   calClearBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  calConfirmBtn: {
-    flex: 1,
-    backgroundColor: colors.purple,
-    borderRadius: 10,
-    paddingVertical: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calConfirmBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.purple,
+    letterSpacing: 0.2,
   },
 
   /* ─── 5. Antrenman Silme Onay Panosu Stilleri (Bulanık Arka Plan) ─── */
