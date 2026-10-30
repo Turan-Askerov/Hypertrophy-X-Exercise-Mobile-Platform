@@ -1389,7 +1389,7 @@ type DailyInputFormProps = {
   isSaving: boolean;
 };
 
-function DailyInputForm({
+const DailyInputForm = React.memo(function DailyInputForm({
   initialLog,
   targets,
   onDraftChange,
@@ -1684,7 +1684,7 @@ function DailyInputForm({
       </View>
     </View>
   );
-}
+});
 
 export default function NutritionScreen() {
   const { user } = useUser();
@@ -1782,6 +1782,7 @@ export default function NutritionScreen() {
   const [barAnim] = useState(() => new Animated.Value(0));
   const [tooltipAnim] = useState(() => new Animated.Value(1));
   const [selectedBarAnim] = useState(() => new Animated.Value(1));
+  const [selectCounter, setSelectCounter] = useState(0);
   const [weekSlideAnim] = useState(() => new Animated.Value(0));
   const [weekOpacityAnim] = useState(() => new Animated.Value(1));
 
@@ -2080,26 +2081,34 @@ export default function NutritionScreen() {
     return chartDays.length - 1;
   }, [activeBarIndex, chartDays, selectedDate, statPeriod]);
 
-  // Seçili Bar & Tooltip Yumuşak Geçiş Animasyonu (Süresi artırılmış, yumuşak bezier geçişi)
-  useEffect(() => {
+  // Seçili Bar & Tooltip Yumuşak Süzülme ve Yaylanma Animasyonu
+  const playBarSelectAnimation = useCallback(() => {
+    selectedBarAnim.stopAnimation();
+    tooltipAnim.stopAnimation();
+
     selectedBarAnim.setValue(0);
     tooltipAnim.setValue(0);
 
     Animated.parallel([
       Animated.timing(selectedBarAnim, {
         toValue: 1,
-        duration: 680,
+        duration: 720,
         easing: Easing.bezier(0.16, 1, 0.3, 1),
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(tooltipAnim, {
         toValue: 1,
-        duration: 680,
+        duration: 720,
         easing: Easing.bezier(0.16, 1, 0.3, 1),
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
-  }, [resolvedActiveIndex, selectedMetric, selectedBarAnim, tooltipAnim]);
+  }, [selectedBarAnim, tooltipAnim]);
+
+  // Metrik veya Dönem Değiştiğinde Animasyonu Yumuşakça Başlat
+  useEffect(() => {
+    playBarSelectAnimation();
+  }, [selectedMetric, statPeriod, activeWeekOffset, activeMonth, activeYear, playBarSelectAnimation]);
 
   const inspectedDay = chartDays[resolvedActiveIndex] || null;
 
@@ -2384,47 +2393,55 @@ export default function NutritionScreen() {
   );
 
   // Grafikte Bir Bara Dokunulduğunda
-  // Çubuk seçilir ve o günün bilgileri üst kartlara aktarılır (Haftalık & Aylık modlarında)
-  const handleBarPress = (index: number, dateStr: string) => {
-    setActiveBarIndex(index);
-    if (statPeriod === 'weekly' || statPeriod === 'monthly') {
-      setDraftLog(null);
-      setSelectedDate(dateStr);
-    }
-  };
+  // Çubuk seçilir, yumuşak animasyon anında (0ms) tetiklenir ve o günün bilgileri üst kartlara aktarılır
+  const handleBarPress = useCallback(
+    (index: number, dateStr: string) => {
+      setSelectCounter((c) => c + 1);
+      playBarSelectAnimation();
+      setActiveBarIndex(index);
+      if (statPeriod === 'weekly' || statPeriod === 'monthly') {
+        setDraftLog(null);
+        setSelectedDate(dateStr);
+      }
+    },
+    [statPeriod, playBarSelectAnimation]
+  );
 
   // Kaydetme Eylemi (Kaydet Butonu)
-  const handleSavePress = async (formData: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    notes: string;
-  }) => {
-    // Kaydet butonuna basıldığında üstteki dairelerin dolum animasyonunu sıfırdan tekrar çizdir
-    setSaveTrigger((prev) => prev + 1);
+  const handleSavePress = useCallback(
+    async (formData: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+      notes: string;
+    }) => {
+      // Kaydet butonuna basıldığında üstteki dairelerin dolum animasyonunu sıfırdan tekrar çizdir
+      setSaveTrigger((prev) => prev + 1);
 
-    const safeCalories = Math.min(MAX_MACRO_LIMITS.calories, Math.max(0, formData.calories));
-    const safeProtein = Math.min(MAX_MACRO_LIMITS.protein, Math.max(0, formData.protein));
-    const safeCarbs = Math.min(MAX_MACRO_LIMITS.carbs, Math.max(0, formData.carbs));
-    const safeFat = Math.min(MAX_MACRO_LIMITS.fat, Math.max(0, formData.fat));
+      const safeCalories = Math.min(MAX_MACRO_LIMITS.calories, Math.max(0, formData.calories));
+      const safeProtein = Math.min(MAX_MACRO_LIMITS.protein, Math.max(0, formData.protein));
+      const safeCarbs = Math.min(MAX_MACRO_LIMITS.carbs, Math.max(0, formData.carbs));
+      const safeFat = Math.min(MAX_MACRO_LIMITS.fat, Math.max(0, formData.fat));
 
-    try {
-      await saveLog({
-        username: user?.username || 'user',
-        log_date: selectedDate,
-        calories: safeCalories,
-        protein: safeProtein,
-        carbs: safeCarbs,
-        fat: safeFat,
-        notes: formData.notes,
-      });
-      setDraftLog(null);
-      Alert.alert('Başarılı', `${selectedDate} beslenme verileri kaydedildi.`);
-    } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Beslenme verisi kaydedilemedi.');
-    }
-  };
+      try {
+        await saveLog({
+          username: user?.username || 'user',
+          log_date: selectedDate,
+          calories: safeCalories,
+          protein: safeProtein,
+          carbs: safeCarbs,
+          fat: safeFat,
+          notes: formData.notes,
+        });
+        setDraftLog(null);
+        Alert.alert('Başarılı', `${selectedDate} beslenme verileri kaydedildi.`);
+      } catch (err: any) {
+        Alert.alert('Hata', err?.message || 'Beslenme verisi kaydedilemedi.');
+      }
+    },
+    [user, selectedDate, saveLog]
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -2619,7 +2636,6 @@ export default function NutritionScreen() {
 
           {/* ─── 5. "Bugün Ne Yedin?" Veri Giriş Formu (Modern Üst Kart Uyumu & Canlı Senkron) ─── */}
           <DailyInputForm
-            key={selectedDate}
             initialLog={activeLog}
             targets={targets}
             onDraftChange={setDraftLog}
@@ -2825,6 +2841,7 @@ export default function NutritionScreen() {
                 <View style={styles.tooltipCanvas} onLayout={handleCanvasLayout}>
                   {inspectedDay && (
                     <Animated.View
+                      key={`tooltip-${resolvedActiveIndex}-${selectCounter}`}
                       style={[
                         styles.tooltipWrapper,
                         isReadyWithPixels
@@ -2840,13 +2857,13 @@ export default function NutritionScreen() {
                             {
                               translateY: tooltipAnim.interpolate({
                                 inputRange: [0, 1],
-                                outputRange: [-8, 0],
+                                outputRange: [12, 0],
                               }),
                             },
                             {
                               scale: tooltipAnim.interpolate({
                                 inputRange: [0, 1],
-                                outputRange: [0.88, 1],
+                                outputRange: [0.93, 1],
                               }),
                             },
                           ],
@@ -2942,13 +2959,15 @@ export default function NutritionScreen() {
                         <Pressable
                           key={item.key}
                           style={styles.barSlot}
-                          onPress={() => handleBarPress(index, item.date)}
+                          unstable_pressDelay={0}
+                          android_disableSound={true}
                           hitSlop={{
-                            top: 20,
-                            bottom: 20,
-                            left: statPeriod === 'monthly' ? 2 : 4,
-                            right: statPeriod === 'monthly' ? 2 : 4,
+                            top: 25,
+                            bottom: 25,
+                            left: statPeriod === 'monthly' ? 3 : 6,
+                            right: statPeriod === 'monthly' ? 3 : 6,
                           }}
+                          onPress={() => handleBarPress(index, item.date)}
                         >
                           {/* Çubuğun Tepesine Ulaşan İnce Gösterge Çizgisi (Yumuşak Geçişli) */}
                           {isInspected && (
@@ -2959,14 +2978,14 @@ export default function NutritionScreen() {
                                   bottom: targetHeight,
                                   height: Math.max(0, CHART_HEIGHT - targetHeight),
                                   opacity: selectedBarAnim.interpolate({
-                                    inputRange: [0, 0.2, 1],
-                                    outputRange: [0, 0.4, 0.9],
+                                    inputRange: [0, 0.3, 1],
+                                    outputRange: [0, 0.5, 0.9],
                                   }),
                                   transform: [
                                     {
                                       scaleY: selectedBarAnim.interpolate({
                                         inputRange: [0, 1],
-                                        outputRange: [0.25, 1],
+                                        outputRange: [0.15, 1],
                                       }),
                                     },
                                   ],
@@ -3016,8 +3035,8 @@ export default function NutritionScreen() {
                                   {
                                     scale: isInspected
                                       ? selectedBarAnim.interpolate({
-                                          inputRange: [0, 0.35, 1],
-                                          outputRange: [0.94, 1.06, 1],
+                                          inputRange: [0, 0.4, 1],
+                                          outputRange: [0.96, 1.05, 1],
                                         })
                                       : 1,
                                   },
@@ -3052,7 +3071,7 @@ export default function NutritionScreen() {
                                   {
                                     scale: selectedBarAnim.interpolate({
                                       inputRange: [0, 1],
-                                      outputRange: [0.25, 1],
+                                      outputRange: [0.35, 1],
                                     }),
                                   },
                                 ],
