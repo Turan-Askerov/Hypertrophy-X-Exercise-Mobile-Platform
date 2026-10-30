@@ -37,7 +37,7 @@ export function FormScreen({ title, subtitle, children, headerElement }: Props) 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#090A0F',
+    backgroundColor: '#080B14',
   },
   flex: {
     flex: 1,
@@ -45,8 +45,9 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
   title: {
     fontSize: 28,

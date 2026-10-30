@@ -52,7 +52,7 @@ function BellIcon({ size = 20, color = '#FFFFFF' }: { size?: number; color?: str
   );
 }
 
-function BikeIcon({ size = 20, color = '#C6F432' }: { size?: number; color?: string }) {
+function BikeIcon({ size = 20, color = '#38BDF8' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="5.5" cy="17.5" r="3.5" stroke={color} strokeWidth={2} />
@@ -96,7 +96,7 @@ function DiagonalArrow({ size = 16, color = '#000000' }: { size?: number; color?
   );
 }
 
-function SparklesIcon({ size = 18, color = '#C6F432' }: { size?: number; color?: string }) {
+function SparklesIcon({ size = 18, color = '#C084FC' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -158,7 +158,7 @@ export default function AiStatusScreen() {
           <TouchableOpacity
             style={styles.bellBtn}
             activeOpacity={0.7}
-            onPress={() => router.push('/(app)/settings')}
+            onPress={() => router.push('/(app)/(tabs)/profile')}
           >
             <BellIcon size={20} color="#FFFFFF" />
             <View style={styles.notifDot} />
@@ -178,22 +178,22 @@ export default function AiStatusScreen() {
           <Svg width={280} height={175} viewBox="0 0 280 175" style={styles.gaugeSvg}>
             <Defs>
               <LinearGradient id="gaugeGradient" x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0%" stopColor="#1E3A1A" />
-                <Stop offset="50%" stopColor="#84CC16" />
-                <Stop offset="100%" stopColor="#C6F432" />
+                <Stop offset="0%" stopColor="#4C1D95" />
+                <Stop offset="50%" stopColor="#8B5CF6" />
+                <Stop offset="100%" stopColor="#C084FC" />
               </LinearGradient>
             </Defs>
 
             {/* Arka Plan Yay Yolu (Koyu ray) */}
             <Path
               d={arcPath}
-              stroke="#151A26"
+              stroke="#161E33"
               strokeWidth={strokeWidth}
               fill="none"
               strokeLinecap="round"
             />
 
-            {/* Aktif Skor Yay Yolu (Neon Lime Gradyan) */}
+            {/* Aktif Skor Yay Yolu (Cyber Mor Gradyan) */}
             <Path
               d={arcPath}
               stroke="url(#gaugeGradient)"
@@ -209,8 +209,8 @@ export default function AiStatusScreen() {
               cx={cx + gaugeRadius * Math.cos(Math.PI * (1 - gaugeScore / 100))}
               cy={cy - gaugeRadius * Math.sin(Math.PI * (1 - gaugeScore / 100))}
               r={7}
-              fill="#C6F432"
-              stroke="#090A0F"
+              fill="#C084FC"
+              stroke="#080B14"
               strokeWidth={2.5}
             />
           </Svg>
@@ -221,7 +221,7 @@ export default function AiStatusScreen() {
             <Text style={styles.tickText}>25</Text>
             <Text style={styles.tickText}>50</Text>
             <Text style={styles.tickText}>70</Text>
-            <Text style={[styles.tickText, { color: '#C6F432', fontWeight: '800' }]}>80</Text>
+            <Text style={[styles.tickText, { color: '#C084FC', fontWeight: '800' }]}>80</Text>
             <Text style={styles.tickText}>100</Text>
           </View>
 
@@ -237,8 +237,8 @@ export default function AiStatusScreen() {
           {/* Sol Kart: Kardiyo & Isınma */}
           <View style={styles.twinCard}>
             <View style={styles.twinCardTop}>
-              <View style={[styles.twinIconBox, { backgroundColor: 'rgba(198, 244, 50, 0.12)' }]}>
-                <BikeIcon size={20} color="#C6F432" />
+              <View style={[styles.twinIconBox, { backgroundColor: 'rgba(56, 189, 248, 0.14)' }]}>
+                <BikeIcon size={20} color="#38BDF8" />
               </View>
               <Text style={styles.twinCategory}>Kardiyo & Isınma</Text>
             </View>
@@ -307,15 +307,15 @@ export default function AiStatusScreen() {
             <Svg width={SCREEN_WIDTH - 64} height={130} viewBox="0 0 320 130">
               <Defs>
                 <LinearGradient id="waveGradient" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor="#C6F432" stopOpacity={0.35} />
-                  <Stop offset="100%" stopColor="#C6F432" stopOpacity={0.0} />
+                  <Stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.35} />
+                  <Stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.0} />
                 </LinearGradient>
               </Defs>
 
               {/* Hedef Eksen Çizgisi (Dashed target line) */}
               <Path
                 d="M 10 50 L 310 50"
-                stroke="#252D3F"
+                stroke="rgba(255, 255, 255, 0.08)"
                 strokeWidth={1.5}
                 strokeDasharray="4,4"
               />
@@ -323,7 +323,7 @@ export default function AiStatusScreen() {
               {/* Kesişim Dikey Çizgisi */}
               <Path
                 d="M 230 10 L 230 110"
-                stroke="#374523"
+                stroke="rgba(139, 92, 246, 0.3)"
                 strokeWidth={1.2}
                 strokeDasharray="3,3"
               />
@@ -334,18 +334,18 @@ export default function AiStatusScreen() {
                 fill="url(#waveGradient)"
               />
 
-              {/* Dalga Eğrisi (Neon Line) */}
+              {/* Dalga Eğrisi (Mor Çizgi) */}
               <Path
                 d="M 10 95 C 40 105, 60 75, 90 85 C 120 95, 140 60, 170 65 C 200 70, 210 55, 230 45 C 260 30, 280 25, 310 32"
-                stroke="#C6F432"
+                stroke="#C084FC"
                 strokeWidth={2.6}
                 fill="none"
                 strokeLinecap="round"
               />
 
               {/* Vurgulanan Kesişim Noktası */}
-              <Circle cx={230} cy={45} r={5} fill="#C6F432" stroke="#090A0F" strokeWidth={2} />
-              <Circle cx={230} cy={45} r={8} stroke="#C6F432" strokeWidth={1.5} fill="none" opacity={0.5} />
+              <Circle cx={230} cy={45} r={5} fill="#C084FC" stroke="#080B14" strokeWidth={2} />
+              <Circle cx={230} cy={45} r={8} stroke="#C084FC" strokeWidth={1.5} fill="none" opacity={0.5} />
             </Svg>
 
             {/* Ay Etiketleri */}
@@ -354,7 +354,7 @@ export default function AiStatusScreen() {
               <Text style={styles.monthLabel}>Şub</Text>
               <Text style={styles.monthLabel}>Mar</Text>
               <Text style={styles.monthLabel}>Nis</Text>
-              <Text style={[styles.monthLabel, { color: '#C6F432', fontWeight: '800' }]}>May</Text>
+              <Text style={[styles.monthLabel, { color: '#C084FC', fontWeight: '800' }]}>May</Text>
               <Text style={styles.monthLabel}>Haz</Text>
             </View>
           </View>
@@ -363,7 +363,7 @@ export default function AiStatusScreen() {
         {/* ─── 6. AI UZMAN KOÇLUK TAVSİYESİ KARTI ─── */}
         <View style={styles.aiAdviceCard}>
           <View style={styles.adviceHeader}>
-            <SparklesIcon size={18} color="#C6F432" />
+            <SparklesIcon size={18} color="#C084FC" />
             <Text style={styles.adviceTitle}>Uzman Sistem Analizi</Text>
           </View>
           <Text style={styles.adviceBody}>
@@ -379,14 +379,15 @@ export default function AiStatusScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#090A0F',
+    backgroundColor: '#080B14',
   },
   container: {
     flex: 1,
   },
   scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 1.5,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
     gap: Spacing.four,
   },
 
@@ -400,9 +401,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -413,9 +414,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#161A26',
+    backgroundColor: '#101524',
     borderWidth: 2,
-    borderColor: '#C6F432',
+    borderColor: '#C084FC',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -428,9 +429,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -442,9 +443,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#C6F432',
+    backgroundColor: '#C084FC',
     borderWidth: 1.5,
-    borderColor: '#13161F',
+    borderColor: '#101524',
   },
 
   /* 2. Başlık */
@@ -459,20 +460,20 @@ const styles = StyleSheet.create({
   },
   mainSubtitle: {
     fontSize: 13,
-    color: '#8E99AF',
+    color: '#94A3B8',
     marginTop: 4,
   },
 
   /* 3. Gösterge (Gauge) Kartı */
   gaugeCard: {
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.xl,
     paddingTop: 18,
     paddingBottom: 22,
     paddingHorizontal: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     position: 'relative',
   },
   gaugeSvg: {
@@ -502,7 +503,7 @@ const styles = StyleSheet.create({
   },
   gaugeStatusLabel: {
     fontSize: 13,
-    color: '#C6F432',
+    color: '#C084FC',
     fontWeight: '700',
     marginTop: 2,
   },
@@ -514,11 +515,11 @@ const styles = StyleSheet.create({
   },
   twinCard: {
     flex: 1,
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.xl,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     position: 'relative',
     minHeight: 140,
   },
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#C6F432',
+    backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -579,20 +580,20 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#1E2333',
+    backgroundColor: '#161E33',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#2B3245',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
 
   /* 5. Haftalık Tutarlılık */
   consistencyCard: {
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.xl,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   consistencyHeader: {
     flexDirection: 'row',
@@ -607,17 +608,17 @@ const styles = StyleSheet.create({
   },
   consistencyChange: {
     fontSize: 13,
-    color: '#C6F432',
+    color: '#C084FC',
     fontWeight: '700',
     marginTop: 2,
   },
   periodPill: {
-    backgroundColor: '#181C28',
+    backgroundColor: '#0F1528',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   periodPillText: {
     fontSize: 12,
@@ -642,11 +643,11 @@ const styles = StyleSheet.create({
 
   /* 6. AI Tavsiye Kartı */
   aiAdviceCard: {
-    backgroundColor: 'rgba(198, 244, 50, 0.05)',
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
     borderRadius: Radius.xl,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(198, 244, 50, 0.25)',
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   adviceHeader: {
     flexDirection: 'row',
@@ -657,7 +658,7 @@ const styles = StyleSheet.create({
   adviceTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#C6F432',
+    color: '#C084FC',
   },
   adviceBody: {
     fontSize: 13,

@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    paddingBottom: Spacing.six,
+    paddingBottom: 20,
   },
   itemCard: {
     flexDirection: 'row',
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Colors.dark.backgroundElement,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: AppColors.border,

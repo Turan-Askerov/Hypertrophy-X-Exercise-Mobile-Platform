@@ -21,14 +21,14 @@ function LockShieldIcon() {
     <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-        stroke="#C6F432"
+        stroke="#C084FC"
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <Path
         d="M9 11a3 3 0 016 0v2H9v-2z"
-        stroke="#C6F432"
+        stroke="#C084FC"
         strokeWidth={1.8}
       />
     </Svg>
@@ -217,12 +217,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   codeBoxFilled: {
-    borderColor: '#C6F432',
-    backgroundColor: '#161B26',
+    borderColor: '#C084FC',
+    backgroundColor: '#161E33',
   },
   codeBoxCurrent: {
-    borderColor: '#C6F432',
-    shadowColor: '#C6F432',
+    borderColor: '#C084FC',
+    shadowColor: '#C084FC',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 4,
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   resendAction: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#C6F432',
+    color: '#C084FC',
   },
   countdownText: {
     fontSize: 12,

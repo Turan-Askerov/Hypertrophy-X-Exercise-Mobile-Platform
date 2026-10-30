@@ -45,13 +45,13 @@ export function Button({
 
   const textColor =
     variant === 'primary'
-      ? '#000000'
+      ? '#FFFFFF'
       : variant === 'outline'
-      ? '#C6F432'
+      ? '#C084FC'
       : variant === 'secondary'
-      ? '#FFFFFF'
+      ? '#F8FAFC'
       : variant === 'danger'
-      ? '#FFFFFF'
+      ? '#FF7898'
       : '#FFFFFF';
 
   return (
@@ -94,24 +94,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primary: {
-    backgroundColor: '#C6F432',
+    backgroundColor: '#8B5CF6',
   },
   secondary: {
-    backgroundColor: '#181C28',
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   danger: {
-    backgroundColor: '#EF4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
   },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: '#C6F432',
+    borderColor: '#C084FC',
   },
   inactive: {
-    backgroundColor: '#1E2330',
-    borderColor: '#1E2330',
+    backgroundColor: '#161E33',
+    borderColor: '#161E33',
   },
   pressed: {
     opacity: 0.85,

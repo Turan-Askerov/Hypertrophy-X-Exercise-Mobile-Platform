@@ -67,7 +67,7 @@ export function Card({
 const styles = StyleSheet.create({
   base: {
     borderRadius: Radius.md,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Colors.dark.backgroundElement,
   },
   default: {
     borderWidth: 1,

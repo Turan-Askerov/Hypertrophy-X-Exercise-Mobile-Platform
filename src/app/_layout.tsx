@@ -53,10 +53,22 @@ function RootNavigator() {
   );
 }
 
+const CustomDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: '#080B14',
+    card: '#101524',
+    border: 'rgba(255, 255, 255, 0.08)',
+    primary: '#C084FC',
+    text: '#F8FAFC',
+  },
+};
+
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider value={DarkTheme}>
+      <ThemeProvider value={CustomDarkTheme}>
         <AppProviders>
           <StatusBar style="light" />
           <AnimatedSplashOverlay />

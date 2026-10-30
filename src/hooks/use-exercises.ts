@@ -17,6 +17,7 @@ export function useExercises() {
     muscleGroups: data?.muscle_groups ?? [],
     loading: isLoading,
     error: isError ? (error as Error) : null,
+    isError,
     refetch,
   };
 }

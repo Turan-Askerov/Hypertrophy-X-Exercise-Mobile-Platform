@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   DashboardIcon,
@@ -12,6 +13,12 @@ import {
 import { AppColors, Colors } from '@/constants/theme';
 
 export default function AppTabs() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom;
+  // Mobil tasarım kılavuzu: 56px sekme çubuğu içeriği + 34px alt safe area (home indicator) = 90px
+  const tabHeight = 56 + (bottomInset > 0 ? bottomInset : 8);
+  const paddingBottom = bottomInset > 0 ? bottomInset : 8;
+
   return (
     <Tabs
       screenOptions={{
@@ -22,8 +29,8 @@ export default function AppTabs() {
           backgroundColor: Colors.dark.background,
           borderTopColor: AppColors.border,
           borderTopWidth: 1,
-          height: 62,
-          paddingBottom: 8,
+          height: tabHeight,
+          paddingBottom: paddingBottom,
           paddingTop: 6,
         },
         tabBarLabelStyle: {

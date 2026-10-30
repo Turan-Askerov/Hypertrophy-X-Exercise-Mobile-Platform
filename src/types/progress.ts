@@ -28,6 +28,7 @@ export type PersonalRecordItem = {
   max_weight: number;
   max_reps: number;
   date: string;
+  is_bodyweight?: boolean;
 };
 
 export type ProgressChartDetail = {

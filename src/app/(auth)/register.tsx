@@ -37,14 +37,14 @@ function ShieldLogoSmall() {
       <Svg width={54} height={54} viewBox="0 0 72 72" fill="none">
         <Path
           d="M36 6L14 16v20c0 16 9.5 24 22 28 12.5-4 22-12 22-28V16L36 6z"
-          stroke="#C6F432"
+          stroke="#C084FC"
           strokeWidth={3}
           strokeLinejoin="round"
-          fill="rgba(198, 244, 50, 0.08)"
+          fill="rgba(139, 92, 246, 0.14)"
         />
         <Path
           d="M26 34h20M23 30v8M49 30v8M36 24v12"
-          stroke="#C6F432"
+          stroke="#C084FC"
           strokeWidth={2.5}
           strokeLinecap="round"
         />
@@ -231,7 +231,7 @@ export default function RegisterScreen() {
               <Text style={styles.limeTitle}>Doğrulama</Text>
             </View>
             <Text style={styles.codeSubtitle}>
-              <Text style={{ color: '#C6F432', fontWeight: '700' }}>{codeStep.maskedEmail}</Text> adresine 6 haneli güvenlik kodu gönderdik.
+              <Text style={{ color: '#C084FC', fontWeight: '700' }}>{codeStep.maskedEmail}</Text> adresine 6 haneli güvenlik kodu gönderdik.
             </Text>
           </View>
         }
@@ -421,9 +421,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   limeTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#C6F432',
+    color: '#C084FC',
   },
   whiteTitle: {
     fontSize: 22,
@@ -473,14 +473,14 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#232A3B',
-    backgroundColor: '#13161F',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#101524',
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxBoxChecked: {
-    backgroundColor: '#C6F432',
-    borderColor: '#C6F432',
+    backgroundColor: '#8B5CF6',
+    borderColor: '#8B5CF6',
   },
   termsText: {
     flex: 1,
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   termsLime: {
-    color: '#C6F432',
+    color: '#C084FC',
     fontWeight: '600',
   },
 
@@ -519,7 +519,7 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#1F2433',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   dividerText: {
     fontSize: 12,
@@ -536,9 +536,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     paddingVertical: 13,
     borderRadius: 12,
     gap: 10,
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
   },
   loginLinkLime: {
     fontSize: 13,
-    color: '#C6F432',
+    color: '#C084FC',
     fontWeight: '700',
   },
 });

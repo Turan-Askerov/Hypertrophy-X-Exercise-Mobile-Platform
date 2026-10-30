@@ -2,21 +2,21 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
-// Varsayılan geliştirme teması koyu mod
+// Varsayılan geliştirme teması koyu mod (Geçmiş Sayfası ile Birebir Cyber Dark)
 export const Colors = {
   light: {
-    text: '#ffffff',
-    background: '#121214',
-    backgroundElement: '#1a1b1e',
-    backgroundSelected: '#2c2e33',
-    textSecondary: '#909296',
+    text: '#F8FAFC',
+    background: '#080B14',
+    backgroundElement: '#101524',
+    backgroundSelected: '#161E33',
+    textSecondary: '#94A3B8',
   },
   dark: {
-    text: '#ffffff',
-    background: '#121214',
-    backgroundElement: '#1a1b1e',
-    backgroundSelected: '#2c2e33',
-    textSecondary: '#909296',
+    text: '#F8FAFC',
+    background: '#080B14',
+    backgroundElement: '#101524',
+    backgroundSelected: '#161E33',
+    textSecondary: '#94A3B8',
   },
 } as const;
 
@@ -69,28 +69,31 @@ export const Typography = {
 } as const;
 
 export const AppColors = {
-  primary: '#C6F432', // Neon Lime (Design System Primary Accent)
-  primaryDark: '#9BC71B',
-  primaryMuted: '#2D3A12',
-  accentLime: '#C6F432',
-  accentCyan: '#38BDF8',
-  accentPurple: '#A855F7',
-  accentOrange: '#FB923C',
-  bgDark: '#090A0F',
-  surface: '#13161F',
-  surfaceAlt: '#181C28',
-  surfaceCard: '#151923',
-  danger: '#ef4444',
-  dangerMuted: '#450a0a',
-  success: '#22c55e',
-  successMuted: '#052e16',
-  warning: '#f59e0b',
-  warningMuted: '#451a03',
-  border: '#232A3B',
-  borderDark: '#1A1E29',
-  borderSoft: 'rgba(255, 255, 255, 0.08)',
-  muted: '#8E99AF',
-  textSecondary: '#8E99AF',
+  primary: '#C084FC', // Mor / Vurgu (Geçmiş sayfası Cyber Dark moru)
+  primaryDark: '#8B5CF6',
+  primaryMuted: 'rgba(139, 92, 246, 0.14)',
+  primaryBorder: 'rgba(139, 92, 246, 0.4)',
+  accentLime: '#34D399', // Emerald Ağırlık Rozeti
+  accentCyan: '#38BDF8', // Tekrar Cyan Rozeti
+  accentPurple: '#C084FC', // Mor Rozet
+  accentOrange: '#FBBF24', // RIR Amber Rozeti
+  bgDark: '#080B14', // Geçmiş sayfası arka planı
+  surface: '#101524', // Geçmiş kartı arka planı
+  surfaceAlt: '#0F1528', // Geçmiş pano/modal iç arka planı
+  surfaceCard: '#101524',
+  danger: '#FF7898', // Geçmiş eylem kırmızısı
+  dangerMuted: 'rgba(239, 68, 68, 0.12)',
+  dangerBorder: 'rgba(239, 68, 68, 0.35)',
+  success: '#34D399',
+  successMuted: 'rgba(16, 185, 129, 0.14)',
+  warning: '#FBBF24',
+  warningMuted: 'rgba(245, 158, 11, 0.12)',
+  border: 'rgba(255, 255, 255, 0.08)',
+  borderDark: '#1E293B',
+  borderSoft: 'rgba(255, 255, 255, 0.06)',
+  borderHover: 'rgba(139, 92, 246, 0.35)',
+  muted: '#94A3B8',
+  textSecondary: '#94A3B8',
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;

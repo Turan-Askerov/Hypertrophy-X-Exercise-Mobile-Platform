@@ -13,7 +13,7 @@ export function ScreenContainer({
   children,
   style,
   edges = ['top', 'left', 'right'],
-  backgroundColor = '#070B18',
+  backgroundColor = '#080B14',
 }: ScreenContainerProps) {
   return (
     <SafeAreaView

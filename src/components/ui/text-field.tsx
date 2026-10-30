@@ -82,23 +82,23 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8E99AF',
+    color: '#94A3B8',
     marginBottom: 6,
   },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: '#283554',
     borderRadius: 12,
     paddingHorizontal: 14,
-    backgroundColor: '#13161F',
+    backgroundColor: '#161E33',
   },
   fieldFocused: {
-    borderColor: '#C6F432',
+    borderColor: 'rgba(139, 92, 246, 0.5)',
   },
   fieldError: {
-    borderColor: '#EF4444',
+    borderColor: '#FF7898',
   },
   leftIconContainer: {
     marginRight: 10,
@@ -107,19 +107,19 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     fontSize: 15,
-    color: '#FFFFFF',
+    color: '#F8FAFC',
   },
   toggleBtn: {
     paddingVertical: 4,
   },
   toggle: {
-    color: '#C6F432',
+    color: '#C084FC',
     fontWeight: '700',
     fontSize: 13,
     marginLeft: 8,
   },
   error: {
-    color: '#EF4444',
+    color: '#FF7898',
     fontSize: 12,
     marginTop: 6,
     fontWeight: '500',

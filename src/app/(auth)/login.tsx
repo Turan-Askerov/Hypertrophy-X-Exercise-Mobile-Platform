@@ -24,15 +24,15 @@ function ShieldLogo() {
         {/* Dış Kalkan Çizgisi */}
         <Path
           d="M36 6L14 16v20c0 16 9.5 24 22 28 12.5-4 22-12 22-28V16L36 6z"
-          stroke="#C6F432"
+          stroke="#C084FC"
           strokeWidth={3}
           strokeLinejoin="round"
-          fill="rgba(198, 244, 50, 0.08)"
+          fill="rgba(139, 92, 246, 0.14)"
         />
         {/* Kalkan İçi Kas / Halter Silüeti */}
         <Path
           d="M26 34h20M23 30v8M49 30v8M36 24v12"
-          stroke="#C6F432"
+          stroke="#C084FC"
           strokeWidth={2.5}
           strokeLinecap="round"
         />
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   brandTagline: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#C6F432',
+    color: '#C084FC',
     letterSpacing: 2,
     marginTop: 2,
   },
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   welcomeLime: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#C6F432',
+    color: '#C084FC',
   },
   welcomeDesc: {
     fontSize: 13,
@@ -293,9 +293,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     paddingVertical: 13,
     borderRadius: 12,
     gap: 12,
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#1F2433',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   dividerText: {
     fontSize: 12,
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   linkLime: {
-    color: '#C6F432',
+    color: '#C084FC',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   },
   guestTextLime: {
     fontSize: 13,
-    color: '#C6F432',
+    color: '#C084FC',
     fontWeight: '700',
   },
 });

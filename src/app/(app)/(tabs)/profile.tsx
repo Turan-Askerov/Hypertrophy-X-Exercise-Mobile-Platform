@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -11,37 +12,170 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
+import { useAuth } from '@/auth/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import { useUser } from '@/hooks/use-user';
 import { useWorkouts } from '@/hooks/use-workouts';
 import { formatTrDate } from '@/lib/rpe';
-import type { User } from '@/types/user';
 
 // ─── SVG İkonları ───
 
-function SettingsGearIcon({ color = '#ffffff', size = 22 }: { color?: string; size?: number }) {
+function BackIcon({ color = '#ffffff', size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="12" cy="12" r="3" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" />
+    </Svg>
+  );
+}
+
+function EditPencilIcon({ color = '#ffffff', size = 18 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="2"
-        d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"
+        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
       />
     </Svg>
   );
 }
 
-function ChevronDownIcon({ size = 18, color = '#9ca3af' }: { size?: number; color?: string }) {
+function ChevronRightIcon({ color = '#6b7280', size = 18 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M19 9l-7 7-7-7" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+    </Svg>
+  );
+}
+
+function UserIcon({ color = '#3b82f6', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+      />
+    </Svg>
+  );
+}
+
+function BellIcon({ color = '#8b5cf6', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+      />
+    </Svg>
+  );
+}
+
+function SoundIcon({ color = '#10b981', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z"
+      />
+    </Svg>
+  );
+}
+
+function TrophyIcon({ color = '#f59e0b', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 21h8m-4-4v4M5 4h14v4a7 7 0 01-14 0V4z" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 6H3a2 2 0 00-2 2v1a4 4 0 004 4h0m14-7h2a2 2 0 012 2v1a4 4 0 01-4 4h0" />
+    </Svg>
+  );
+}
+
+function TargetIcon({ color = '#ec4899', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Circle cx="12" cy="12" r="10" strokeWidth="2" />
+      <Circle cx="12" cy="12" r="6" strokeWidth="2" />
+      <Circle cx="12" cy="12" r="2" strokeWidth="2" />
+    </Svg>
+  );
+}
+
+function DumbbellIcon({ color = '#06b6d4', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 5v14M18 5v14M2 9v6M22 9v6M6 12h12" />
+    </Svg>
+  );
+}
+
+function ScaleIcon({ color = '#a855f7', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l9-4 9 4M12 2v20M5 18h14M6 18l-3-7h6l-3 7zm12 0l-3-7h6l-3 7z" />
+    </Svg>
+  );
+}
+
+function GlobeIcon({ color = '#3b82f6', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Circle cx="12" cy="12" r="10" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+    </Svg>
+  );
+}
+
+function MailIcon({ color = '#6366f1', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Rect x="3" y="5" width="18" height="14" rx="2" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7l9 6 9-6" />
+    </Svg>
+  );
+}
+
+function InfoIcon({ color = '#64748b', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Circle cx="12" cy="12" r="10" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 16v-4m0-4h.01" />
+    </Svg>
+  );
+}
+
+function ShieldIcon({ color = '#10b981', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </Svg>
+  );
+}
+
+function LogoutIcon({ color = '#f59e0b', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+    </Svg>
+  );
+}
+
+function TrashIcon({ color = '#ef4444', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
     </Svg>
   );
 }
@@ -63,6 +197,24 @@ function RadioUnchecked({ size = 20, color = '#374151' }: { size?: number; color
   );
 }
 
+function MaleIcon({ size = 18, color = '#3b82f6' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Circle cx="10" cy="14" r="5" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 5l-5.4 5.4M19 5h-5M19 5v5" />
+    </Svg>
+  );
+}
+
+function FemaleIcon({ size = 18, color = '#ec4899' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Circle cx="12" cy="9" r="5" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14v7M9 18h6" />
+    </Svg>
+  );
+}
+
 function SeedlingIcon({ size = 20, color = '#10b981' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
@@ -79,19 +231,10 @@ function LightningIcon({ size = 20, color = '#3b82f6' }: { size?: number; color?
   );
 }
 
-function TrophyIcon({ size = 20, color = '#f59e0b' }: { size?: number; color?: string }) {
+function MuscleIcon({ size = 20, color = '#8b5cf6' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 21h8m-4-4v4M5 4h14v4a7 7 0 01-14 0V4z" />
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 6H3a2 2 0 00-2 2v1a4 4 0 004 4h0m14-7h2a2 2 0 012 2v1a4 4 0 01-4 4h0" />
-    </Svg>
-  );
-}
-
-function DumbbellIcon({ size = 20, color = '#3b82f6' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 5v14M18 5v14M2 9v6M22 9v6M6 12h12" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 19v-2a4 4 0 014-4h8a4 4 0 014 4v2M12 3a4 4 0 100 8 4 4 0 000-8z" />
     </Svg>
   );
 }
@@ -105,92 +248,10 @@ function FlameIcon({ size = 20, color = '#ef4444' }: { size?: number; color?: st
   );
 }
 
-function StarIcon({ size = 20, color = '#C6F432' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-        stroke={color}
-        strokeWidth={2}
-        fill={color}
-        fillOpacity={0.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-function BadgeRibbonIcon({ size = 20, color = '#38BDF8' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="8" r="6" stroke={color} strokeWidth={2} />
-      <Path
-        d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-function MuscleIcon({ size = 20, color = '#8b5cf6' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 19v-2a4 4 0 014-4h8a4 4 0 014 4v2M12 3a4 4 0 100 8 4 4 0 000-8z" />
-    </Svg>
-  );
-}
-
-function ShieldIcon({ size = 20, color = '#10b981' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </Svg>
-  );
-}
-
 function BoltIcon({ size = 20, color = '#06b6d4' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </Svg>
-  );
-}
-
-function CalendarIcon({ size = 18, color = '#3b82f6' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </Svg>
-  );
-}
-
-function ClockIcon({ size = 18, color = '#f59e0b' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="12" cy="12" r="10" strokeWidth="2" />
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2" />
-    </Svg>
-  );
-}
-
-function MaleIcon({ size = 18, color = '#3b82f6' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="10" cy="14" r="5" strokeWidth="2" />
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 5l-5.4 5.4M19 5h-5M19 5v5" />
-    </Svg>
-  );
-}
-
-function FemaleIcon({ size = 18, color = '#ec4899' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="12" cy="9" r="5" strokeWidth="2" />
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14v7M9 18h6" />
     </Svg>
   );
 }
@@ -227,7 +288,7 @@ const FITNESS_LEVELS = [
 const GOAL_OPTIONS = [
   {
     key: 'hypertrophy',
-    title: 'Saf Hipertrofi (Kas Odaklı)',
+    title: 'Kas Odaklı (Hipertrofi)',
     badge: 'Lif Büyümesi',
     desc: 'Mekanik gerilim ve metabolik stres ile hedef kas lifi mikroyırtığı ve optimum büyüme.',
     icon: MuscleIcon,
@@ -267,10 +328,7 @@ const GOAL_OPTIONS = [
   },
 ] as const;
 
-const DAY_PRESETS = [2, 3, 4, 5, 6, 7];
-const SESSION_PRESETS = [45, 60, 75, 90, 120];
-
-// ─── RPG & XP Hesaplama Fonksiyonu (Web Platformuyla Birebir Uyumlu) ───
+// ─── RPG & XP Hesaplama Fonksiyonu ───
 
 const LEVEL_THRESHOLDS = [0, 500, 1000, 5000, 15000, 35000, 75000];
 const LEVEL_TITLES = [
@@ -298,54 +356,66 @@ function calculateRpgState(workouts: any[]) {
       } else if (Array.isArray(w.exercises)) {
         exercises = w.exercises;
       }
-    } catch {}
-
-    exercises.forEach((ex) => {
-      const sets = ex.sets_data || [];
-      const count =
-        Array.isArray(sets) && sets.length > 0 ? sets.length : parseInt(ex.sets, 10) || 1;
-      totalXP += count * 15;
-    });
-
-    if (totalXP === 0 && exercises.length > 0) {
-      totalXP += 50;
+    } catch {
+      exercises = [];
     }
+
+    const completedSets = exercises.reduce((acc: number, ex: any) => {
+      const sets = Array.isArray(ex.sets) ? ex.sets : [];
+      return acc + sets.filter((s: any) => s && (s.completed ?? true)).length;
+    }, 0);
+
+    totalXP += 50 + completedSets * 10;
   });
 
-  // Haftalık seri hesaplama
-  let streakWeeks = 0;
-  if (sorted.length > 0) {
-    const dates = sorted.map((w) => new Date(w.date).getTime());
-    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-    const latestWorkoutTime = Math.max(...dates);
-    if (now - latestWorkoutTime <= oneWeekMs * 2) {
-      streakWeeks = Math.max(1, Math.min(12, Math.ceil(sorted.length / 3)));
-    }
-  }
-
   let currentLevel = 1;
-  let prevTarget = 0;
-  let nextTarget = LEVEL_THRESHOLDS[1];
-
-  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
     if (totalXP >= LEVEL_THRESHOLDS[i]) {
       currentLevel = i + 1;
-      prevTarget = LEVEL_THRESHOLDS[i];
-      nextTarget = LEVEL_THRESHOLDS[i + 1] || LEVEL_THRESHOLDS[i] * 1.5;
-    } else {
       break;
     }
   }
 
-  const xpInCurrentLevel = Math.max(0, totalXP - prevTarget);
-  const levelSize = Math.max(1, nextTarget - prevTarget);
+  const levelTitle = LEVEL_TITLES[currentLevel - 1] || 'Efsane';
+  const currentThreshold = LEVEL_THRESHOLDS[currentLevel - 1] || 0;
+  const nextThreshold = LEVEL_THRESHOLDS[currentLevel] || currentThreshold * 2;
+  const levelSize = nextThreshold - currentThreshold;
+  const xpInCurrentLevel = Math.max(0, totalXP - currentThreshold);
   const progressPercent = Math.min(
     100,
-    Math.max(0, Math.round((xpInCurrentLevel / levelSize) * 100))
+    Math.max(0, Math.round((xpInCurrentLevel / (levelSize || 1)) * 100))
   );
-  const xpLeft = Math.max(0, nextTarget - totalXP);
-  const levelTitle = LEVEL_TITLES[currentLevel - 1] || 'Efsanevi Sporcu';
+  const xpLeft = Math.max(0, nextThreshold - totalXP);
+
+  // Seri Hesaplama
+  let streakWeeks = 0;
+  if (sorted.length > 0) {
+    const today = new Date();
+    const workoutWeeks = new Set<string>();
+    sorted.forEach((w) => {
+      const d = new Date(w.date);
+      const startOfYear = new Date(d.getFullYear(), 0, 1);
+      const weekNo = Math.ceil(
+        ((d.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7
+      );
+      workoutWeeks.add(`${d.getFullYear()}-W${weekNo}`);
+    });
+
+    const currStartOfYear = new Date(today.getFullYear(), 0, 1);
+    let checkWeek = Math.ceil(
+      ((today.getTime() - currStartOfYear.getTime()) / 86400000 + currStartOfYear.getDay() + 1) / 7
+    );
+    let checkYear = today.getFullYear();
+
+    while (workoutWeeks.has(`${checkYear}-W${checkWeek}`)) {
+      streakWeeks++;
+      checkWeek--;
+      if (checkWeek <= 0) {
+        checkYear--;
+        checkWeek = 52;
+      }
+    }
+  }
 
   return {
     totalXP,
@@ -368,7 +438,7 @@ function normalizeFitnessLevel(raw?: string | null): string {
   return 'Intermediate';
 }
 
-function normalizeGender(raw?: string | null): string {
+function normalizeGender(raw?: string | null): 'male' | 'female' {
   if (!raw) return 'male';
   const g = raw.toLowerCase();
   if (g.includes('fem') || g.includes('kadın') || g.includes('kadin')) return 'female';
@@ -386,509 +456,360 @@ function normalizeGoal(raw?: string | null): string {
   return g;
 }
 
-// ─── Modern Atletik Profil Formu (Kompakt ve Açılır Liste Seçimli) ───
+// ─── Ayar Satırı Bileşeni (Görseldeki Yuvarlatılmış Pill Tasarımı) ───
 
-function ProfileForm({
-  user,
-  onSave,
-  saving,
-}: {
-  user: User;
-  onSave: (data: {
-    age: number | null;
-    gender: string;
-    height: number | null;
-    weight: number | null;
-    fitness_level: string;
-    goal: string;
-    days_per_week: number;
-    session_time_mins: number;
-  }) => Promise<void>;
-  saving: boolean;
-}) {
-  const [age, setAge] = useState(user.age ? String(user.age) : '');
-  const [gender, setGender] = useState(normalizeGender(user.gender));
-  const [height, setHeight] = useState(user.height ? String(user.height) : '');
-  const [weight, setWeight] = useState(user.weight ? String(user.weight) : '');
-  const [fitnessLevel, setFitnessLevel] = useState(normalizeFitnessLevel(user.fitness_level));
-  const [goal, setGoal] = useState(normalizeGoal(user.goal));
-  const [daysPerWeek, setDaysPerWeek] = useState(
-    user.days_per_week ? String(user.days_per_week) : '4'
-  );
-  const [sessionTimeMins, setSessionTimeMins] = useState(
-    user.session_time_mins ? String(user.session_time_mins) : '60'
-  );
+type SettingItemProps = {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  valueBadge?: string;
+  onPress?: () => void;
+  destructive?: boolean;
+  rightElement?: React.ReactNode;
+};
 
-  // Açılır Liste Seçici Modalları (Dropdown Modals)
-  const [activePicker, setActivePicker] = useState<
-    'fitness' | 'goal' | 'frequency' | 'duration' | null
-  >(null);
-
-  const selectedFitnessObj = useMemo(
-    () => FITNESS_LEVELS.find((f) => f.key === fitnessLevel) || FITNESS_LEVELS[1],
-    [fitnessLevel]
-  );
-  const SelectedFitnessIcon = selectedFitnessObj.icon;
-
-  const selectedGoalObj = useMemo(
-    () => GOAL_OPTIONS.find((g) => g.key === goal) || GOAL_OPTIONS[0],
-    [goal]
-  );
-  const SelectedGoalIcon = selectedGoalObj.icon;
-
-  const handleSubmit = () => {
-    onSave({
-      age: age ? parseInt(age, 10) : null,
-      gender,
-      height: height ? parseFloat(height) : null,
-      weight: weight ? parseFloat(weight) : null,
-      fitness_level: fitnessLevel,
-      goal,
-      days_per_week: daysPerWeek ? parseInt(daysPerWeek, 10) : 4,
-      session_time_mins: sessionTimeMins ? parseInt(sessionTimeMins, 10) : 60,
-    });
-  };
-
+function SettingItem({
+  icon,
+  title,
+  subtitle,
+  valueBadge,
+  onPress,
+  destructive = false,
+  rightElement,
+}: SettingItemProps) {
   return (
-    <Card style={styles.formCard}>
-      {/* 1. Biyometrik Ölçümler */}
-      <View style={styles.groupHeader}>
-        <Text style={styles.groupTitle}>Biyometrik Ölçümler</Text>
-        <Text style={styles.groupSubtitle}>Kişisel kalori ve hacim motoru için temel değerler.</Text>
-      </View>
-
-      {/* Cinsiyet Seçimi */}
-      <View style={styles.genderContainer}>
-        <TouchableOpacity
-          style={[
-            styles.genderCard,
-            gender === 'male' && styles.genderCardActiveMale,
-          ]}
-          onPress={() => setGender('male')}
-          activeOpacity={0.7}
-        >
-          <MaleIcon size={18} color={gender === 'male' ? '#3b82f6' : Colors.dark.textSecondary} />
-          <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>
-            Erkek
-          </Text>
-          {gender === 'male' && <CheckCircleFill size={16} color="#3b82f6" />}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.genderCard,
-            gender === 'female' && styles.genderCardActiveFemale,
-          ]}
-          onPress={() => setGender('female')}
-          activeOpacity={0.7}
-        >
-          <FemaleIcon size={18} color={gender === 'female' ? '#ec4899' : Colors.dark.textSecondary} />
-          <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>
-            Kadın
-          </Text>
-          {gender === 'female' && <CheckCircleFill size={16} color="#ec4899" />}
-        </TouchableOpacity>
-      </View>
-
-      {/* Yaş, Boy, Kilo (Taşmayan, Temiz Metrik Düzeni) */}
-      <View style={styles.metricInputRow}>
-        <View style={styles.metricInputCol}>
-          <Text style={styles.label}>
-            Yaş <Text style={styles.labelUnit}>(yıl)</Text>
-          </Text>
-          <TextInput
-            style={styles.metricTextInput}
-            value={age}
-            onChangeText={setAge}
-            keyboardType="number-pad"
-            placeholder="24"
-            placeholderTextColor="#6b7280"
-            maxLength={3}
-          />
+    <TouchableOpacity
+      style={[styles.itemContainer, destructive && styles.destructiveItemContainer]}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+    >
+      <View style={styles.itemLeft}>
+        <View style={[styles.iconWrapper, destructive && styles.destructiveIconWrapper]}>
+          {icon}
         </View>
-
-        <View style={styles.metricInputCol}>
-          <Text style={styles.label}>
-            Boy <Text style={styles.labelUnit}>(cm)</Text>
+        <View style={styles.textWrapper}>
+          <Text style={[styles.itemTitle, destructive && styles.destructiveTitle]}>
+            {title}
           </Text>
-          <TextInput
-            style={styles.metricTextInput}
-            value={height}
-            onChangeText={setHeight}
-            keyboardType="decimal-pad"
-            placeholder="178"
-            placeholderTextColor="#6b7280"
-            maxLength={5}
-          />
-        </View>
-
-        <View style={styles.metricInputCol}>
-          <Text style={styles.label}>
-            Kilo <Text style={styles.labelUnit}>(kg)</Text>
-          </Text>
-          <TextInput
-            style={styles.metricTextInput}
-            value={weight}
-            onChangeText={setWeight}
-            keyboardType="decimal-pad"
-            placeholder="76.5"
-            placeholderTextColor="#6b7280"
-            maxLength={5}
-          />
+          {subtitle ? <Text style={styles.itemSubtitle}>{subtitle}</Text> : null}
         </View>
       </View>
 
-      {/* 2. Atletik Tercihler & Hedefler (Açılır Liste Seçicileri) */}
-      <View style={[styles.groupHeader, { marginTop: Spacing.two }]}>
-        <Text style={styles.groupTitle}>Atletik Tercihler & Hedefler</Text>
-        <Text style={styles.groupSubtitle}>
-          Dokunarak açılır listeden seviye, hedef ve antrenman sıklığını belirleyin.
-        </Text>
+      <View style={styles.itemRight}>
+        {rightElement ? (
+          rightElement
+        ) : (
+          <>
+            {valueBadge ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{valueBadge}</Text>
+              </View>
+            ) : null}
+            <ChevronRightIcon color={destructive ? '#ef4444' : '#64748b'} size={18} />
+          </>
+        )}
       </View>
-
-      <View style={styles.selectorsList}>
-        {/* Fitness Seviyesi Seçici */}
-        <TouchableOpacity
-          style={styles.selectorTrigger}
-          onPress={() => setActivePicker('fitness')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.selectorLeft}>
-            <View style={[styles.selectorIconBox, { backgroundColor: `${selectedFitnessObj.accent}20` }]}>
-              <SelectedFitnessIcon size={18} color={selectedFitnessObj.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.selectorLabel}>Fitness Seviyesi</Text>
-              <Text style={styles.selectorValue}>{selectedFitnessObj.title}</Text>
-            </View>
-          </View>
-          <View style={styles.selectorRight}>
-            <View style={[styles.selectorBadge, { backgroundColor: `${selectedFitnessObj.accent}25` }]}>
-              <Text style={[styles.selectorBadgeText, { color: selectedFitnessObj.accent }]}>
-                {selectedFitnessObj.badge}
-              </Text>
-            </View>
-            <ChevronDownIcon size={18} color="#9ca3af" />
-          </View>
-        </TouchableOpacity>
-
-        {/* Birincil Antrenman Hedefi Seçici */}
-        <TouchableOpacity
-          style={styles.selectorTrigger}
-          onPress={() => setActivePicker('goal')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.selectorLeft}>
-            <View style={[styles.selectorIconBox, { backgroundColor: `${selectedGoalObj.accent}20` }]}>
-              <SelectedGoalIcon size={18} color={selectedGoalObj.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.selectorLabel}>Birincil Antrenman Hedefi</Text>
-              <Text style={styles.selectorValue}>{selectedGoalObj.title}</Text>
-            </View>
-          </View>
-          <View style={styles.selectorRight}>
-            <View style={[styles.selectorBadge, { backgroundColor: `${selectedGoalObj.accent}25` }]}>
-              <Text style={[styles.selectorBadgeText, { color: selectedGoalObj.accent }]}>
-                {selectedGoalObj.badge}
-              </Text>
-            </View>
-            <ChevronDownIcon size={18} color="#9ca3af" />
-          </View>
-        </TouchableOpacity>
-
-        {/* Haftalık Antrenman Sıklığı */}
-        <TouchableOpacity
-          style={styles.selectorTrigger}
-          onPress={() => setActivePicker('frequency')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.selectorLeft}>
-            <View style={[styles.selectorIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
-              <CalendarIcon size={18} color="#3b82f6" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.selectorLabel}>Antrenman Sıklığı</Text>
-              <Text style={styles.selectorValue}>{daysPerWeek} Gün / Hafta</Text>
-            </View>
-          </View>
-          <View style={styles.selectorRight}>
-            <ChevronDownIcon size={18} color="#9ca3af" />
-          </View>
-        </TouchableOpacity>
-
-        {/* Hedef Seans Süresi */}
-        <TouchableOpacity
-          style={styles.selectorTrigger}
-          onPress={() => setActivePicker('duration')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.selectorLeft}>
-            <View style={[styles.selectorIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-              <ClockIcon size={18} color="#f59e0b" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.selectorLabel}>Hedef Seans Süresi</Text>
-              <Text style={styles.selectorValue}>{sessionTimeMins} Dakika</Text>
-            </View>
-          </View>
-          <View style={styles.selectorRight}>
-            <ChevronDownIcon size={18} color="#9ca3af" />
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Kaydet Butonu */}
-      <View style={{ marginTop: Spacing.two }}>
-        <Button onPress={handleSubmit} loading={saving} disabled={saving}>
-          Atletik Profili Güncelle
-        </Button>
-      </View>
-
-      {/* ─── Seçici Modalı (Picker Bottom Sheet Modal) ─── */}
-      <Modal visible={activePicker !== null} animationType="slide" transparent>
-        <View style={styles.pickerBackdrop}>
-          <View style={styles.pickerSheet}>
-            <View style={styles.pickerHandle} />
-
-            {/* Fitness Seviyesi Listesi */}
-            {activePicker === 'fitness' && (
-              <>
-                <Text style={styles.pickerTitle}>Fitness Seviyenizi Seçin</Text>
-                <Text style={styles.pickerDesc}>
-                  Haftalık set hacmini ve toparlanma periyotlarını belirler.
-                </Text>
-
-                <View style={styles.pickerOptionsList}>
-                  {FITNESS_LEVELS.map((item) => {
-                    const isSelected = fitnessLevel === item.key;
-                    const IconComp = item.icon;
-                    return (
-                      <TouchableOpacity
-                        key={item.key}
-                        style={[
-                          styles.pickerOptionCard,
-                          isSelected && styles.pickerOptionCardActive,
-                          isSelected && { borderColor: item.accent },
-                        ]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setFitnessLevel(item.key);
-                          setActivePicker(null);
-                        }}
-                      >
-                        <View style={[styles.pickerIconBox, { backgroundColor: `${item.accent}20` }]}>
-                          <IconComp size={20} color={item.accent} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={[styles.pickerOptionTitle, isSelected && { color: '#ffffff' }]}>
-                              {item.title}
-                            </Text>
-                            <View style={[styles.selectorBadge, { backgroundColor: `${item.accent}25` }]}>
-                              <Text style={[styles.selectorBadgeText, { color: item.accent }]}>
-                                {item.badge}
-                              </Text>
-                            </View>
-                          </View>
-                          <Text style={styles.pickerOptionDesc}>{item.desc}</Text>
-                        </View>
-                        {isSelected ? (
-                          <CheckCircleFill size={22} color={item.accent} />
-                        ) : (
-                          <RadioUnchecked size={22} color="#374151" />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            {/* Antrenman Hedefi Listesi */}
-            {activePicker === 'goal' && (
-              <>
-                <Text style={styles.pickerTitle}>Antrenman Hedefinizi Seçin</Text>
-                <Text style={styles.pickerDesc}>
-                  Set sayısı, hedef tekrar aralıkları ve dinlenme sürelerini optimize eder.
-                </Text>
-
-                <View style={styles.pickerOptionsList}>
-                  {GOAL_OPTIONS.map((item) => {
-                    const isSelected = goal === item.key;
-                    const IconComp = item.icon;
-                    return (
-                      <TouchableOpacity
-                        key={item.key}
-                        style={[
-                          styles.pickerOptionCard,
-                          isSelected && styles.pickerOptionCardActive,
-                          isSelected && { borderColor: item.accent },
-                        ]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setGoal(item.key);
-                          setActivePicker(null);
-                        }}
-                      >
-                        <View style={[styles.pickerIconBox, { backgroundColor: `${item.accent}20` }]}>
-                          <IconComp size={20} color={item.accent} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={[styles.pickerOptionTitle, isSelected && { color: '#ffffff' }]}>
-                              {item.title}
-                            </Text>
-                            <View style={[styles.selectorBadge, { backgroundColor: `${item.accent}25` }]}>
-                              <Text style={[styles.selectorBadgeText, { color: item.accent }]}>
-                                {item.badge}
-                              </Text>
-                            </View>
-                          </View>
-                          <Text style={styles.pickerOptionDesc}>{item.desc}</Text>
-                        </View>
-                        {isSelected ? (
-                          <CheckCircleFill size={22} color={item.accent} />
-                        ) : (
-                          <RadioUnchecked size={22} color="#374151" />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            {/* Sıklık (Frekans) Listesi */}
-            {activePicker === 'frequency' && (
-              <>
-                <Text style={styles.pickerTitle}>Haftalık Antrenman Sıklığı</Text>
-                <Text style={styles.pickerDesc}>
-                  Haftada kaç gün spor yapacağınızı seçin.
-                </Text>
-
-                <View style={styles.pickerSimpleList}>
-                  {DAY_PRESETS.map((day) => {
-                    const isSelected = daysPerWeek === String(day);
-                    return (
-                      <TouchableOpacity
-                        key={day}
-                        style={[styles.pickerSimpleItem, isSelected && styles.pickerSimpleItemActive]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setDaysPerWeek(String(day));
-                          setActivePicker(null);
-                        }}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <CalendarIcon size={18} color={isSelected ? '#3b82f6' : '#9ca3af'} />
-                          <Text style={[styles.pickerSimpleText, isSelected && styles.pickerSimpleTextActive]}>
-                            {day} Gün / Hafta
-                          </Text>
-                        </View>
-                        {isSelected ? (
-                          <CheckCircleFill size={20} color="#3b82f6" />
-                        ) : (
-                          <RadioUnchecked size={20} color="#374151" />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            {/* Seans Süresi Listesi */}
-            {activePicker === 'duration' && (
-              <>
-                <Text style={styles.pickerTitle}>Hedef Seans Süresi</Text>
-                <Text style={styles.pickerDesc}>
-                  Antrenman başına ortalama harcamak istediğiniz süre.
-                </Text>
-
-                <View style={styles.pickerSimpleList}>
-                  {SESSION_PRESETS.map((mins) => {
-                    const isSelected = sessionTimeMins === String(mins);
-                    return (
-                      <TouchableOpacity
-                        key={mins}
-                        style={[styles.pickerSimpleItem, isSelected && styles.pickerSimpleItemActive]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setSessionTimeMins(String(mins));
-                          setActivePicker(null);
-                        }}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <ClockIcon size={18} color={isSelected ? '#f59e0b' : '#9ca3af'} />
-                          <Text style={[styles.pickerSimpleText, isSelected && styles.pickerSimpleTextActive]}>
-                            {mins} Dakika
-                          </Text>
-                        </View>
-                        {isSelected ? (
-                          <CheckCircleFill size={20} color="#f59e0b" />
-                        ) : (
-                          <RadioUnchecked size={20} color="#374151" />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            <Button
-              variant="secondary"
-              onPress={() => setActivePicker(null)}
-              style={{ marginTop: Spacing.four }}
-            >
-              Kapat
-            </Button>
-          </View>
-        </View>
-      </Modal>
-    </Card>
+    </TouchableOpacity>
   );
 }
 
-// ─── Ana Profil Ekranı ───
-
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, loading, error, refetch, updateProfile, isUpdatingProfile } = useUser();
+  const { signOut } = useAuth();
   const { workouts } = useWorkouts();
+  const {
+    user,
+    loading,
+    error,
+    refetch,
+    updateProfile,
+    isUpdatingProfile,
+    deleteAccount,
+    isDeletingAccount,
+    requestEmailUpdate,
+    isRequestingEmail,
+    confirmEmailUpdate,
+    isConfirmingEmail,
+    requestChangePassword,
+    isRequestingPassword,
+    confirmChangePassword,
+    isConfirmingPassword,
+  } = useUser();
 
-  // RPG & XP Gelişim Seviyesi Durumu (Web Platformuyla Uyumlu)
+  // Tercih Durumları
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
+  const [distanceUnit, setDistanceUnit] = useState<'km' | 'mil'>('km');
+  const [themeMode, setThemeMode] = useState<'Koyu' | 'Açık' | 'Sistem'>('Koyu');
+  const [language, setLanguage] = useState<'Türkçe' | 'English'>('Türkçe');
+
+  // Antrenman Tercihleri
+  const [defaultRestSec, setDefaultRestSec] = useState<number>(90);
+  const [restTimerSound, setRestTimerSound] = useState<boolean>(true);
+  const [autoStartTimer, setAutoStartTimer] = useState<boolean>(true);
+
+  // Bildirimler
+  const [workoutReminders, setWorkoutReminders] = useState<boolean>(true);
+  const [restDayAlerts, setRestDayAlerts] = useState<boolean>(false);
+  const [prCelebrations, setPrCelebrations] = useState<boolean>(true);
+
+  // Modal Durumları
+  const [activeModal, setActiveModal] = useState<
+    | 'personalInfo'
+    | 'fitnessLevel'
+    | 'goal'
+    | 'account'
+    | 'notifications'
+    | 'workout'
+    | 'units'
+    | 'themeAndLanguage'
+    | 'contact'
+    | 'about'
+    | 'deleteAccount'
+    | null
+  >(null);
+
+  // Kişisel Bilgiler Form State (Modal içi düzenleme)
+  const [gender, setGender] = useState<'male' | 'female'>('male');
+  const [age, setAge] = useState('');
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
+  const [daysPerWeek, setDaysPerWeek] = useState('4');
+  const [sessionTimeMins, setSessionTimeMins] = useState('60');
+
+  // Hesap & Güvenlik State
+  const [accountSubView, setAccountSubView] = useState<'info' | 'changeEmail' | 'changePassword'>('info');
+  const [newEmail, setNewEmail] = useState('');
+  const [emailOtpToken, setEmailOtpToken] = useState('');
+  const [emailOtpCode, setEmailOtpCode] = useState('');
+  const [emailStep, setEmailStep] = useState<'request' | 'confirm'>('request');
+
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordOtpToken, setPasswordOtpToken] = useState('');
+  const [passwordOtpCode, setPasswordOtpCode] = useState('');
+  const [passwordStep, setPasswordStep] = useState<'request' | 'confirm'>('request');
+
+  // Tehlikeli Bölge State
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Geri Bildirim Formu
+  const [feedbackText, setFeedbackText] = useState('');
+
+  // RPG & XP Durumu
   const rpgState = useMemo(() => calculateRpgState(workouts), [workouts]);
 
-  const normalizedLvl = normalizeFitnessLevel(user?.fitness_level);
+  // Seviye Rozet Bilgisi
   const levelBadgeInfo =
-    normalizedLvl === 'Advanced'
-      ? { label: 'İleri Seviye (Elite)', color: '#f59e0b' }
-      : normalizedLvl === 'Intermediate'
-        ? { label: 'Orta Seviye Atlet', color: '#3b82f6' }
+    rpgState.currentLevel >= 6
+      ? { label: 'Elit Atlet', color: '#f59e0b' }
+      : rpgState.currentLevel >= 3
+        ? { label: 'İleri Seviye', color: '#3b82f6' }
         : { label: 'Başlangıç Atlet', color: '#10b981' };
 
-  // Profil Güncelleme
-  const handleSaveProfile = async (formData: {
-    age: number | null;
-    gender: string;
-    height: number | null;
-    weight: number | null;
-    fitness_level: string;
-    goal: string;
-    days_per_week: number;
-    session_time_mins: number;
-  }) => {
+  // Seçili Seviye & Hedef Bilgisi
+  const userFitness = normalizeFitnessLevel(user?.fitness_level);
+  const selectedFitnessObj = useMemo(
+    () => FITNESS_LEVELS.find((f) => f.key === userFitness) || FITNESS_LEVELS[1],
+    [userFitness]
+  );
+
+  const userGoal = normalizeGoal(user?.goal);
+  const selectedGoalObj = useMemo(
+    () => GOAL_OPTIONS.find((g) => g.key === userGoal) || GOAL_OPTIONS[0],
+    [userGoal]
+  );
+
+  // Kişisel Bilgiler Modalını Aç ve Formu Doldur
+  const openPersonalInfoModal = () => {
+    if (user) {
+      setGender(normalizeGender(user.gender));
+      setAge(user.age ? String(user.age) : '');
+      setHeight(user.height ? String(user.height) : '');
+      setWeight(user.weight ? String(user.weight) : '');
+      setDaysPerWeek(user.days_per_week ? String(user.days_per_week) : '4');
+      setSessionTimeMins(user.session_time_mins ? String(user.session_time_mins) : '60');
+    }
+    setActiveModal('personalInfo');
+  };
+
+  // Kişisel Bilgileri Kaydet
+  const handleSavePersonalInfo = async () => {
     if (!user) return;
     try {
       await updateProfile({
         username: user.username,
-        ...formData,
+        gender,
+        age: age ? parseInt(age, 10) : null,
+        height: height ? parseFloat(height) : null,
+        weight: weight ? parseFloat(weight) : null,
+        fitness_level: user.fitness_level || 'Intermediate',
+        goal: user.goal || 'hypertrophy',
+        days_per_week: daysPerWeek ? parseInt(daysPerWeek, 10) : 4,
+        session_time_mins: sessionTimeMins ? parseInt(sessionTimeMins, 10) : 60,
       });
-      Alert.alert('Başarılı', 'Profil bilgileriniz güncellendi.');
+      Alert.alert('Başarılı', 'Kişisel bilgileriniz güncellendi.');
+      setActiveModal(null);
     } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Profil güncellenemedi.');
+      Alert.alert('Hata', err?.message || 'Bilgiler güncellenemedi.');
+    }
+  };
+
+  // Seviye Değiştir
+  const handleSelectFitnessLevel = async (newLevel: string) => {
+    if (!user) return;
+    try {
+      await updateProfile({
+        username: user.username,
+        fitness_level: newLevel,
+      });
+      setActiveModal(null);
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'Seviye güncellenemedi.');
+    }
+  };
+
+  // Hedef Değiştir
+  const handleSelectGoal = async (newGoal: string) => {
+    if (!user) return;
+    try {
+      await updateProfile({
+        username: user.username,
+        goal: newGoal,
+      });
+      setActiveModal(null);
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'Hedef güncellenemedi.');
+    }
+  };
+
+  // E-posta Güncelleme Adım 1
+  const handleRequestEmail = async () => {
+    if (!newEmail.trim() || !newEmail.includes('@')) {
+      Alert.alert('Uyarı', 'Lütfen geçerli bir e-posta adresi girin.');
+      return;
+    }
+    try {
+      const res = await requestEmailUpdate({ new_email: newEmail.trim() });
+      setEmailOtpToken(res.token);
+      setEmailStep('confirm');
+      Alert.alert('Doğrulama Kodu Gönderildi', res.message);
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'E-posta kodu gönderilemedi.');
+    }
+  };
+
+  // E-posta Güncelleme Adım 2
+  const handleConfirmEmail = async () => {
+    if (emailOtpCode.trim().length !== 6) {
+      Alert.alert('Uyarı', 'Lütfen 6 haneli doğrulama kodunu girin.');
+      return;
+    }
+    try {
+      const res = await confirmEmailUpdate({
+        token: emailOtpToken,
+        code: emailOtpCode.trim(),
+      });
+      Alert.alert('Başarılı', res.message);
+      setAccountSubView('info');
+      setEmailStep('request');
+      setNewEmail('');
+      setEmailOtpCode('');
+      refetch();
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'Kod doğrulanamadı.');
+    }
+  };
+
+  // Şifre Değiştirme Adım 1
+  const handleRequestPassword = async () => {
+    if (!oldPassword || newPassword.length < 6) {
+      Alert.alert('Uyarı', 'Mevcut şifrenizi ve en az 6 karakterli yeni şifrenizi girin.');
+      return;
+    }
+    try {
+      const res = await requestChangePassword({
+        old_password: oldPassword,
+        new_password: newPassword,
+      });
+      setPasswordOtpToken(res.token);
+      setPasswordStep('confirm');
+      Alert.alert('Doğrulama Kodu Gönderildi', res.message);
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'Şifre değiştirme talebi başarısız.');
+    }
+  };
+
+  // Şifre Değiştirme Adım 2
+  const handleConfirmPassword = async () => {
+    if (passwordOtpCode.trim().length !== 6) {
+      Alert.alert('Uyarı', 'Lütfen 6 haneli onay kodunu girin.');
+      return;
+    }
+    try {
+      const res = await confirmChangePassword({
+        token: passwordOtpToken,
+        code: passwordOtpCode.trim(),
+      });
+      Alert.alert('Başarılı', res.message);
+      setAccountSubView('info');
+      setPasswordStep('request');
+      setOldPassword('');
+      setNewPassword('');
+      setPasswordOtpCode('');
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'Şifre güncellenemedi.');
+    }
+  };
+
+  // Çıkış Yap İşlemi
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+      setLogoutConfirmVisible(false);
+      router.replace('/(auth)/login');
+    } catch (err) {
+      console.error('Çıkış hatası:', err);
+      Alert.alert('Hata', 'Çıkış yapılırken bir sorun oluştu.');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  // Hesabı Kalıcı Olarak Silme İşlemi
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      Alert.alert('Uyarı', 'Hesabı silmek için mevcut şifrenizi girmelisiniz.');
+      return;
+    }
+    if (deleteConfirmationText.trim() !== 'HESABIMI KALICI OLARAK SİL') {
+      Alert.alert(
+        'Uyarı',
+        "Lütfen onaylamak için tam olarak 'HESABIMI KALICI OLARAK SİL' yazın."
+      );
+      return;
+    }
+
+    try {
+      const res = await deleteAccount({
+        password: deletePassword,
+        confirmation: deleteConfirmationText.trim(),
+      });
+      Alert.alert('Hesap Silindi', res.message, [
+        {
+          text: 'Tamam',
+          onPress: () => {
+            setActiveModal(null);
+            signOut();
+          },
+        },
+      ]);
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'Hesap silinemedi.');
     }
   };
 
@@ -918,30 +839,48 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      {/* ─── Üst Başlık & Sağda Düzenle Kalemi (Görseldeki gibi) ─── */}
+      <View style={styles.headerRow}>
+        <View style={styles.headerLeft}>
+          {router.canGoBack() ? (
+            <TouchableOpacity
+              style={styles.headerCircleBtn}
+              onPress={() => router.back()}
+              activeOpacity={0.7}
+              hitSlop={10}
+            >
+              <BackIcon size={20} color="#ffffff" />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
+        </View>
+        <Text style={styles.headerTitle}>Profil</Text>
+        <TouchableOpacity
+          style={styles.headerCircleBtn}
+          onPress={openPersonalInfoModal}
+          activeOpacity={0.7}
+          hitSlop={10}
+          accessibilityLabel="Kişisel Bilgileri Düzenle"
+        >
+          <EditPencilIcon size={18} color="#ffffff" />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Üst Başlık & Ayarlar Butonu */}
-        <View style={styles.headerRow}>
-          <Text style={styles.screenTitle}>Sporcu Profili</Text>
-          <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() => router.push('/(app)/settings')}
-            activeOpacity={0.7}
-            accessibilityLabel="Ayarlar"
-          >
-            <SettingsGearIcon size={22} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
-
-        {/* 1. Kullanıcı Başlık & XP Gelişim Seviyesi Kartı */}
+        {/* ═══════════════════════════════════════════════
+            1. KULLANICI KARTI & RPG GELİŞİM SEVİYESİ
+            (Kullanıcının isteği üzerine tam korunuyor)
+           ═══════════════════════════════════════════════ */}
         <Card style={styles.userCard}>
           <View style={styles.userCardTopRow}>
             <View style={styles.avatarCircle}>
               <Text style={styles.avatarText}>
-                {user.username.slice(0, 2).toUpperCase()}
+                {(user.username || 'HX').slice(0, 2).toUpperCase()}
               </Text>
             </View>
 
@@ -965,7 +904,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* XP & Gelişim Seviyesi Widget'ı (Web Platformu Tarzında) */}
+          {/* XP & Gelişim Seviyesi Widget'ı */}
           <View style={styles.rpgCard}>
             <View style={styles.rpgTopRow}>
               <View>
@@ -1009,49 +948,981 @@ export default function ProfileScreen() {
               <Text style={styles.rpgTotalXpText}>{rpgState.totalXP} XP Toplam</Text>
             </View>
           </View>
+
+          {/* ─── 3'lü Özet İstatistik Kutuları (Görseldeki Yaş / Boy / Kilo) ─── */}
+          <View style={styles.statBoxesRow}>
+            <TouchableOpacity
+              style={styles.statBox}
+              onPress={openPersonalInfoModal}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.statBoxLabel}>Yaş</Text>
+              <Text style={styles.statBoxValue}>
+                {user.age ? `${user.age}` : '--'}{' '}
+                <Text style={styles.statBoxUnit}>yaş</Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.statBox}
+              onPress={openPersonalInfoModal}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.statBoxLabel}>Boy</Text>
+              <Text style={styles.statBoxValue}>
+                {user.height ? `${user.height}` : '--'}{' '}
+                <Text style={styles.statBoxUnit}>cm</Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.statBox}
+              onPress={openPersonalInfoModal}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.statBoxLabel}>Kilo</Text>
+              <Text style={styles.statBoxValue}>
+                {user.weight ? `${user.weight}` : '--'}{' '}
+                <Text style={styles.statBoxUnit}>kg</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
         </Card>
 
-        {/* 2. 3'lü Özet İstatistik Kartları (ProfilSayfası.png) */}
-        <View style={styles.profileStatsRow}>
-          <View style={styles.profileStatBox}>
-            <View style={[styles.profileStatIconWrap, { backgroundColor: 'rgba(250, 204, 21, 0.12)' }]}>
-              <FlameIcon size={18} color="#FACC15" />
-            </View>
-            <View style={styles.profileStatTextWrap}>
-              <Text style={styles.profileStatVal}>{rpgState.streakWeeks > 0 ? rpgState.streakWeeks * 7 : 12} gün</Text>
-              <Text style={styles.profileStatLabel}>Seri</Text>
-            </View>
-          </View>
+        {/* ═══════════════════════════════════════════════
+            BÖLÜM 1: HESAP AYARLARI (Account settings)
+           ═══════════════════════════════════════════════ */}
+        <Text style={styles.sectionTitle}>Hesap Ayarları</Text>
+        <View style={styles.groupCard}>
+          <SettingItem
+            icon={<UserIcon color="#3b82f6" />}
+            title="Kişisel Bilgiler"
+            subtitle="Cinsiyet, yaş, boy ve kilo ölçümleri"
+            valueBadge={user.age && user.weight ? `${user.age} y · ${user.weight} kg` : undefined}
+            onPress={openPersonalInfoModal}
+          />
+          <SettingItem
+            icon={<BellIcon color="#8b5cf6" />}
+            title="Hatırlatıcılar & Bildirimler"
+            subtitle="Antrenman saatleri ve dinlenme uyarıları"
+            valueBadge={workoutReminders ? 'Açık' : 'Kapalı'}
+            onPress={() => setActiveModal('notifications')}
+          />
+          <SettingItem
+            icon={<SoundIcon color="#10b981" />}
+            title="Sesler"
+            subtitle="Dinlenme sayacı ses efektleri"
+            rightElement={
+              <Switch
+                value={restTimerSound}
+                onValueChange={setRestTimerSound}
+                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                thumbColor="#ffffff"
+              />
+            }
+          />
+        </View>
 
-          <View style={styles.profileStatBox}>
-            <View style={[styles.profileStatIconWrap, { backgroundColor: 'rgba(198, 244, 50, 0.12)' }]}>
-              <StarIcon size={18} color="#C6F432" />
-            </View>
-            <View style={styles.profileStatTextWrap}>
-              <Text style={styles.profileStatVal}>{rpgState.totalXP > 0 ? rpgState.totalXP : 48} XP</Text>
-              <Text style={styles.profileStatLabel}>Puan</Text>
-            </View>
-          </View>
+        {/* ═══════════════════════════════════════════════
+            BÖLÜM 2: TERCİHLER (Preferences)
+           ═══════════════════════════════════════════════ */}
+        <Text style={styles.sectionTitle}>Tercihler</Text>
+        <View style={styles.groupCard}>
+          <SettingItem
+            icon={<TrophyIcon color="#f59e0b" />}
+            title="Deneyim Seviyesi"
+            subtitle="Mevcut antrenman tecrübeniz ve periyotlama"
+            valueBadge={selectedFitnessObj.title}
+            onPress={() => setActiveModal('fitnessLevel')}
+          />
+          <SettingItem
+            icon={<TargetIcon color="#ec4899" />}
+            title="Fitness Hedefi"
+            subtitle="Hipertrofi, bulk, definasyon, güç..."
+            valueBadge={selectedGoalObj.title}
+            onPress={() => setActiveModal('goal')}
+          />
+          <SettingItem
+            icon={<DumbbellIcon color="#06b6d4" />}
+            title="Antrenman Tercihleri"
+            subtitle="Dinlenme sayacı ve otomatik başlatma"
+            valueBadge={`${defaultRestSec} sn`}
+            onPress={() => setActiveModal('workout')}
+          />
+          <SettingItem
+            icon={<ScaleIcon color="#a855f7" />}
+            title="Birimler"
+            subtitle="Ağırlık ve mesafe ölçü birimleri"
+            valueBadge={`${weightUnit} / ${distanceUnit}`}
+            onPress={() => setActiveModal('units')}
+          />
+          <SettingItem
+            icon={<GlobeIcon color="#3b82f6" />}
+            title="Tema ve Dil"
+            subtitle="Arayüz renk teması ve dil seçimi"
+            valueBadge={`${language} · ${themeMode}`}
+            onPress={() => setActiveModal('themeAndLanguage')}
+          />
+        </View>
 
-          <View style={styles.profileStatBox}>
-            <View style={[styles.profileStatIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.12)' }]}>
-              <BadgeRibbonIcon size={18} color="#38BDF8" />
+        {/* ═══════════════════════════════════════════════
+            BÖLÜM 3: YARDIM VE DESTEK (Help & Support)
+           ═══════════════════════════════════════════════ */}
+        <Text style={styles.sectionTitle}>Yardım ve Destek</Text>
+        <View style={styles.groupCard}>
+          <SettingItem
+            icon={<MailIcon color="#6366f1" />}
+            title="Bize Ulaşın"
+            subtitle="Destek ekibi ve geri bildirim gönderin"
+            onPress={() => setActiveModal('contact')}
+          />
+          <SettingItem
+            icon={<InfoIcon color="#64748b" />}
+            title="Hakkında"
+            subtitle="Hypertrophy-X v4.0.0 · Gizlilik & Şartlar"
+            onPress={() => setActiveModal('about')}
+          />
+        </View>
+
+        {/* ═══════════════════════════════════════════════
+            BÖLÜM 4: HESAP GÜVENLİĞİ & OTURUM
+           ═══════════════════════════════════════════════ */}
+        <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>Hesap Güvenliği & Oturum</Text>
+        <View style={[styles.groupCard, styles.dangerCard]}>
+          <SettingItem
+            icon={<ShieldIcon color="#10b981" />}
+            title="Hesap ve Güvenlik"
+            subtitle="E-posta güncelleme, şifre değiştirme ve detaylar"
+            onPress={() => {
+              setAccountSubView('info');
+              setActiveModal('account');
+            }}
+          />
+          <SettingItem
+            icon={<LogoutIcon color="#f59e0b" />}
+            title="Oturumu Kapat"
+            subtitle="Bu cihazdaki sporcu oturumunu sonlandır"
+            destructive
+            onPress={() => setLogoutConfirmVisible(true)}
+          />
+          <SettingItem
+            icon={<TrashIcon color="#ef4444" />}
+            title="Hesabı Kalıcı Olarak Sil"
+            subtitle="Tüm verilerinizi ve geçmişinizi kalıcı olarak siler"
+            destructive
+            onPress={() => {
+              setDeletePassword('');
+              setDeleteConfirmationText('');
+              setActiveModal('deleteAccount');
+            }}
+          />
+        </View>
+
+        <Text style={styles.footerText}>
+          Hypertrophy-X Pro Athlete Platform · v4.0 (Build 58)
+        </Text>
+      </ScrollView>
+
+      {/* ═══════════════════════════════════════════════
+          ETKİLEŞİMLİ MODAL PENCERELER (BOTTOM SHEETS)
+         ═══════════════════════════════════════════════ */}
+
+      {/* 1. KİŞİSEL BİLGİLER MODALI */}
+      <Modal visible={activeModal === 'personalInfo'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Kişisel Bilgiler</Text>
+            <Text style={styles.modalDesc}>
+              Biyometrik ölçümlerinizi güncelleyin. Kalori motoru ve antrenman hacmi bu değerlere göre optimize edilir.
+            </Text>
+
+            {/* Cinsiyet Seçimi */}
+            <Text style={styles.modalSubheading}>CİNSİYET</Text>
+            <View style={styles.genderRow}>
+              <TouchableOpacity
+                style={[styles.genderCard, gender === 'male' && styles.genderCardActiveMale]}
+                onPress={() => setGender('male')}
+                activeOpacity={0.7}
+              >
+                <MaleIcon size={18} color={gender === 'male' ? '#3b82f6' : '#94a3b8'} />
+                <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>
+                  Erkek
+                </Text>
+                {gender === 'male' && <CheckCircleFill size={16} color="#3b82f6" />}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.genderCard, gender === 'female' && styles.genderCardActiveFemale]}
+                onPress={() => setGender('female')}
+                activeOpacity={0.7}
+              >
+                <FemaleIcon size={18} color={gender === 'female' ? '#ec4899' : '#94a3b8'} />
+                <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>
+                  Kadın
+                </Text>
+                {gender === 'female' && <CheckCircleFill size={16} color="#ec4899" />}
+              </TouchableOpacity>
             </View>
-            <View style={styles.profileStatTextWrap}>
-              <Text style={styles.profileStatVal}>{Math.max(1, rpgState.currentLevel + 2)} rozet</Text>
-              <Text style={styles.profileStatLabel}>Başarılar</Text>
+
+            {/* Yaş, Boy, Kilo Kutuları */}
+            <Text style={styles.modalSubheading}>BİYOMETRİK ÖLÇÜMLER</Text>
+            <View style={styles.metricInputRow}>
+              <View style={styles.metricInputCol}>
+                <Text style={styles.label}>
+                  Yaş <Text style={styles.labelUnit}>(yıl)</Text>
+                </Text>
+                <TextInput
+                  style={styles.metricTextInput}
+                  value={age}
+                  onChangeText={setAge}
+                  keyboardType="number-pad"
+                  placeholder="24"
+                  placeholderTextColor="#6b7280"
+                  maxLength={3}
+                />
+              </View>
+
+              <View style={styles.metricInputCol}>
+                <Text style={styles.label}>
+                  Boy <Text style={styles.labelUnit}>(cm)</Text>
+                </Text>
+                <TextInput
+                  style={styles.metricTextInput}
+                  value={height}
+                  onChangeText={setHeight}
+                  keyboardType="decimal-pad"
+                  placeholder="178"
+                  placeholderTextColor="#6b7280"
+                  maxLength={5}
+                />
+              </View>
+
+              <View style={styles.metricInputCol}>
+                <Text style={styles.label}>
+                  Kilo <Text style={styles.labelUnit}>(kg)</Text>
+                </Text>
+                <TextInput
+                  style={styles.metricTextInput}
+                  value={weight}
+                  onChangeText={setWeight}
+                  keyboardType="decimal-pad"
+                  placeholder="76.5"
+                  placeholderTextColor="#6b7280"
+                  maxLength={5}
+                />
+              </View>
+            </View>
+
+            {/* Haftalık Gün Sıklığı */}
+            <Text style={styles.modalSubheading}>HAFTALIK ANTRENMAN SIKLIĞI</Text>
+            <View style={styles.pillOptionsRow}>
+              {[2, 3, 4, 5, 6, 7].map((d) => (
+                <TouchableOpacity
+                  key={d}
+                  style={[styles.smallPill, daysPerWeek === String(d) && styles.smallPillActive]}
+                  onPress={() => setDaysPerWeek(String(d))}
+                >
+                  <Text style={[styles.smallPillText, daysPerWeek === String(d) && styles.smallPillTextActive]}>
+                    {d} Gün
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Seans Süresi */}
+            <Text style={styles.modalSubheading}>HEDEF SEANS SÜRESİ</Text>
+            <View style={styles.pillOptionsRow}>
+              {[45, 60, 75, 90, 120].map((mins) => (
+                <TouchableOpacity
+                  key={mins}
+                  style={[styles.smallPill, sessionTimeMins === String(mins) && styles.smallPillActive]}
+                  onPress={() => setSessionTimeMins(String(mins))}
+                >
+                  <Text style={[styles.smallPillText, sessionTimeMins === String(mins) && styles.smallPillTextActive]}>
+                    {mins} dk
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalActionButtons}>
+              <Button
+                variant="secondary"
+                onPress={() => setActiveModal(null)}
+                style={{ flex: 1 }}
+              >
+                Vazgeç
+              </Button>
+              <Button
+                onPress={handleSavePersonalInfo}
+                loading={isUpdatingProfile}
+                disabled={isUpdatingProfile}
+                style={{ flex: 1.4 }}
+              >
+                Bilgileri Kaydet
+              </Button>
             </View>
           </View>
         </View>
+      </Modal>
 
-        {/* 3. Atletik Profil Formu */}
-        <ProfileForm
-          key={user.id}
-          user={user}
-          onSave={handleSaveProfile}
-          saving={isUpdatingProfile}
-        />
-      </ScrollView>
+      {/* 2. DENEYİM SEVİYESİ MODALI */}
+      <Modal visible={activeModal === 'fitnessLevel'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Deneyim Seviyesi</Text>
+            <Text style={styles.modalDesc}>
+              Ağırlık antrenmanı tecrübenize uygun periyotlama ve set hacmini belirleyin.
+            </Text>
+
+            <View style={{ gap: 10, marginTop: Spacing.two }}>
+              {FITNESS_LEVELS.map((item) => {
+                const isSelected = userFitness === item.key;
+                const IconComp = item.icon;
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={[
+                      styles.pickerCard,
+                      isSelected && styles.pickerCardActive,
+                      isSelected && { borderColor: item.accent },
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={() => handleSelectFitnessLevel(item.key)}
+                  >
+                    <View style={[styles.pickerIconWrap, { backgroundColor: `${item.accent}20` }]}>
+                      <IconComp size={20} color={item.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.pickerCardTitle, isSelected && { color: '#ffffff' }]}>
+                          {item.title}
+                        </Text>
+                        <View style={[styles.badge, { borderColor: `${item.accent}40`, backgroundColor: `${item.accent}20` }]}>
+                          <Text style={[styles.badgeText, { color: item.accent }]}>{item.badge}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.pickerCardDesc}>{item.desc}</Text>
+                    </View>
+                    {isSelected ? (
+                      <CheckCircleFill size={22} color={item.accent} />
+                    ) : (
+                      <RadioUnchecked size={22} color="#374151" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Button
+              variant="secondary"
+              onPress={() => setActiveModal(null)}
+              style={{ marginTop: Spacing.four }}
+            >
+              Kapat
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 3. FİTNESS HEDEFİ MODALI */}
+      <Modal visible={activeModal === 'goal'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Fitness Hedefi</Text>
+            <Text style={styles.modalDesc}>
+              Antrenman hacmi, hedef tekrar aralıkları ve toparlanma hedefinize göre ayarlanır.
+            </Text>
+
+            <View style={{ gap: 10, marginTop: Spacing.two }}>
+              {GOAL_OPTIONS.map((item) => {
+                const isSelected = userGoal === item.key;
+                const IconComp = item.icon;
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={[
+                      styles.pickerCard,
+                      isSelected && styles.pickerCardActive,
+                      isSelected && { borderColor: item.accent },
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={() => handleSelectGoal(item.key)}
+                  >
+                    <View style={[styles.pickerIconWrap, { backgroundColor: `${item.accent}20` }]}>
+                      <IconComp size={20} color={item.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.pickerCardTitle, isSelected && { color: '#ffffff' }]}>
+                          {item.title}
+                        </Text>
+                        <View style={[styles.badge, { borderColor: `${item.accent}40`, backgroundColor: `${item.accent}20` }]}>
+                          <Text style={[styles.badgeText, { color: item.accent }]}>{item.badge}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.pickerCardDesc}>{item.desc}</Text>
+                    </View>
+                    {isSelected ? (
+                      <CheckCircleFill size={22} color={item.accent} />
+                    ) : (
+                      <RadioUnchecked size={22} color="#374151" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Button
+              variant="secondary"
+              onPress={() => setActiveModal(null)}
+              style={{ marginTop: Spacing.four }}
+            >
+              Kapat
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 4. ANTRENMAN AYARLARI MODALI */}
+      <Modal visible={activeModal === 'workout'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Antrenman Tercihleri</Text>
+
+            <Text style={styles.modalSubheading}>VARSAYILAN DİNLENME SÜRESİ</Text>
+            <View style={styles.pillOptionsRow}>
+              {[60, 90, 120, 180].map((sec) => (
+                <TouchableOpacity
+                  key={sec}
+                  style={[styles.smallPill, defaultRestSec === sec && styles.smallPillActive]}
+                  onPress={() => setDefaultRestSec(sec)}
+                >
+                  <Text style={[styles.smallPillText, defaultRestSec === sec && styles.smallPillTextActive]}>
+                    {sec < 60 ? `${sec}sn` : `${sec / 60}dk`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchTitle}>Dinlenme Sayacı Sesi</Text>
+                <Text style={styles.switchSubtitle}>Süre bittiğinde bip sesi çal</Text>
+              </View>
+              <Switch
+                value={restTimerSound}
+                onValueChange={setRestTimerSound}
+                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                thumbColor="#ffffff"
+              />
+            </View>
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchTitle}>Otomatik Sayacı Başlat</Text>
+                <Text style={styles.switchSubtitle}>Set onaylandığında sayacı otomatik başlat</Text>
+              </View>
+              <Switch
+                value={autoStartTimer}
+                onValueChange={setAutoStartTimer}
+                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                thumbColor="#ffffff"
+              />
+            </View>
+
+            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
+              Kaydet ve Kapat
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 5. BİLDİRİMLER MODALI */}
+      <Modal visible={activeModal === 'notifications'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Bildirim Ayarları</Text>
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchTitle}>Antrenman Hatırlatıcıları</Text>
+                <Text style={styles.switchSubtitle}>Planlanan günlerde hazırlık bildirimi gönder</Text>
+              </View>
+              <Switch
+                value={workoutReminders}
+                onValueChange={setWorkoutReminders}
+                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                thumbColor="#ffffff"
+              />
+            </View>
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchTitle}>Dinlenme Günü Uyarıları</Text>
+                <Text style={styles.switchSubtitle}>Toparlanma günlerinde hatırlatma yap</Text>
+              </View>
+              <Switch
+                value={restDayAlerts}
+                onValueChange={setRestDayAlerts}
+                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                thumbColor="#ffffff"
+              />
+            </View>
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchTitle}>Kişisel Rekor Tebrikleri</Text>
+                <Text style={styles.switchSubtitle}>Yeni PR kırdığında motivasyon bildirimi al</Text>
+              </View>
+              <Switch
+                value={prCelebrations}
+                onValueChange={setPrCelebrations}
+                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                thumbColor="#ffffff"
+              />
+            </View>
+
+            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
+              Tamam
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 6. BİRİMLER MODALI */}
+      <Modal visible={activeModal === 'units'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Birim Tercihleri</Text>
+            <Text style={styles.modalDesc}>
+              Ağırlıkları ve mesafeleri hangi birimde takip etmek istersiniz?
+            </Text>
+
+            <Text style={styles.modalSubheading}>AĞIRLIK BİRİMİ</Text>
+            <View style={styles.pillOptionsRow}>
+              {(['kg', 'lbs'] as const).map((unit) => (
+                <TouchableOpacity
+                  key={unit}
+                  style={[styles.smallPill, weightUnit === unit && styles.smallPillActive]}
+                  onPress={() => setWeightUnit(unit)}
+                >
+                  <Text style={[styles.smallPillText, weightUnit === unit && styles.smallPillTextActive]}>
+                    {unit.toUpperCase()} ({unit === 'kg' ? 'Kilogram' : 'Pound'})
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalSubheading}>MESAFE BİRİMİ</Text>
+            <View style={styles.pillOptionsRow}>
+              {(['km', 'mil'] as const).map((unit) => (
+                <TouchableOpacity
+                  key={unit}
+                  style={[styles.smallPill, distanceUnit === unit && styles.smallPillActive]}
+                  onPress={() => setDistanceUnit(unit)}
+                >
+                  <Text style={[styles.smallPillText, distanceUnit === unit && styles.smallPillTextActive]}>
+                    {unit === 'km' ? 'Kilometre (km)' : 'Mil (mi)'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
+              Tamam
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 7. TEMA VE DİL MODALI */}
+      <Modal visible={activeModal === 'themeAndLanguage'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Tema ve Dil Tercihleri</Text>
+
+            <Text style={styles.modalSubheading}>DİL SEÇİMİ</Text>
+            <View style={{ gap: 8, marginTop: 4 }}>
+              {(['Türkçe', 'English'] as const).map((lang) => (
+                <TouchableOpacity
+                  key={lang}
+                  style={[styles.modalRadioItem, language === lang && styles.modalRadioItemActive]}
+                  onPress={() => setLanguage(lang)}
+                >
+                  <Text style={[styles.modalRadioText, language === lang && styles.modalRadioTextActive]}>
+                    {lang}
+                  </Text>
+                  {language === lang ? <Text style={styles.checkmarkText}>✓</Text> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.modalSubheading, { marginTop: Spacing.three }]}>TEMA TERCİHİ</Text>
+            <View style={{ gap: 8, marginTop: 4 }}>
+              {(['Koyu', 'Açık', 'Sistem'] as const).map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[styles.modalRadioItem, themeMode === item && styles.modalRadioItemActive]}
+                  onPress={() => setThemeMode(item)}
+                >
+                  <Text style={[styles.modalRadioText, themeMode === item && styles.modalRadioTextActive]}>
+                    {item === 'Koyu'
+                      ? '🌙 Koyu Mod (Tavsiye Edilen)'
+                      : item === 'Açık'
+                        ? '☀️ Açık Mod'
+                        : '📱 Sistem Teması'}
+                  </Text>
+                  {themeMode === item ? <Text style={styles.checkmarkText}>✓</Text> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
+              Kaydet ve Kapat
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 8. BİZE ULAŞIN MODALI */}
+      <Modal visible={activeModal === 'contact'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Bize Ulaşın</Text>
+            <Text style={styles.modalDesc}>Öneri, istek veya geri bildirimlerinizi iletin.</Text>
+
+            <TextInput
+              style={styles.feedbackInput}
+              placeholder="Mesajınızı veya geri bildiriminizi buraya yazın..."
+              placeholderTextColor="#6b7280"
+              multiline
+              numberOfLines={4}
+              value={feedbackText}
+              onChangeText={setFeedbackText}
+            />
+
+            <Button
+              onPress={() => {
+                if (!feedbackText.trim()) {
+                  Alert.alert('Uyarı', 'Lütfen bir mesaj yazın.');
+                  return;
+                }
+                Alert.alert('Teşekkürler', 'Geri bildiriminiz geliştirici ekibine iletildi.');
+                setFeedbackText('');
+                setActiveModal(null);
+              }}
+              style={{ marginTop: Spacing.three }}
+            >
+              Gönder
+            </Button>
+            <Button
+              variant="secondary"
+              onPress={() => setActiveModal(null)}
+              style={{ marginTop: Spacing.two }}
+            >
+              Vazgeç
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 9. HAKKINDA MODALI */}
+      <Modal visible={activeModal === 'about'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Hypertrophy-X Hakkında</Text>
+            <Text style={styles.modalDesc}>
+              Hipertrofi odaklı bilimsel antrenman, RIR/RPE takibi, progresif aşırı yükleme ve hacim optimizasyon platformu.
+            </Text>
+
+            <View style={styles.aboutRow}>
+              <Text style={styles.aboutLabel}>Sürüm</Text>
+              <Text style={styles.aboutVal}>v4.0.0 (Production)</Text>
+            </View>
+            <View style={styles.aboutRow}>
+              <Text style={styles.aboutLabel}>Framework</Text>
+              <Text style={styles.aboutVal}>Expo SDK 58 / React Native</Text>
+            </View>
+            <View style={styles.aboutRow}>
+              <Text style={styles.aboutLabel}>Geliştirici</Text>
+              <Text style={styles.aboutVal}>Turan Asgarlı</Text>
+            </View>
+
+            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
+              Kapat
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 10. HESAP VE GÜVENLİK MODALI */}
+      <Modal visible={activeModal === 'account'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+
+            {accountSubView === 'info' && (
+              <>
+                <Text style={styles.modalTitle}>Hesap ve Güvenlik</Text>
+                <Text style={styles.modalDesc}>
+                  Profil güvenliği, e-posta ve şifre yönetimi ayarlarınız.
+                </Text>
+
+                <View style={styles.accountDetailBox}>
+                  <Text style={styles.accountDetailLabel}>Kullanıcı Adı</Text>
+                  <Text style={styles.accountDetailVal}>{user?.username || '-'}</Text>
+                </View>
+
+                <View style={styles.accountDetailBox}>
+                  <Text style={styles.accountDetailLabel}>Kayıtlı E-posta</Text>
+                  <Text style={styles.accountDetailVal}>{user?.email || 'Tanımlanmamış'}</Text>
+                </View>
+
+                <View style={styles.accountDetailBox}>
+                  <Text style={styles.accountDetailLabel}>Hesap Rolü</Text>
+                  <Text style={styles.accountDetailVal}>{user?.is_admin ? 'Yönetici' : 'Sporcu'}</Text>
+                </View>
+
+                <View style={{ gap: Spacing.two, marginTop: Spacing.two }}>
+                  <Button
+                    variant="secondary"
+                    onPress={() => {
+                      setEmailStep('request');
+                      setNewEmail('');
+                      setEmailOtpCode('');
+                      setAccountSubView('changeEmail');
+                    }}
+                  >
+                    E-posta Adresini Değiştir
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    onPress={() => {
+                      setPasswordStep('request');
+                      setOldPassword('');
+                      setNewPassword('');
+                      setPasswordOtpCode('');
+                      setAccountSubView('changePassword');
+                    }}
+                  >
+                    Şifre Değiştir
+                  </Button>
+                </View>
+
+                <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.three }}>
+                  Kapat
+                </Button>
+              </>
+            )}
+
+            {accountSubView === 'changeEmail' && (
+              <>
+                <Text style={styles.modalTitle}>E-posta Güncelleme</Text>
+                {emailStep === 'request' ? (
+                  <>
+                    <Text style={styles.modalDesc}>
+                      Yeni e-posta adresinizi girin. Bu adrese 6 haneli doğrulama kodu gönderilecektir.
+                    </Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="yeni.eposta@ornek.com"
+                      placeholderTextColor="#6b7280"
+                      value={newEmail}
+                      onChangeText={setNewEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                    />
+                    <View style={styles.modalActionButtons}>
+                      <Button variant="secondary" onPress={() => setAccountSubView('info')} style={{ flex: 1 }}>
+                        Geri
+                      </Button>
+                      <Button onPress={handleRequestEmail} loading={isRequestingEmail} style={{ flex: 1.2 }}>
+                        Kod Gönder
+                      </Button>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.modalDesc}>
+                      {newEmail} adresine gönderilen 6 haneli doğrulama kodunu girin:
+                    </Text>
+                    <TextInput
+                      style={[styles.modalInput, { textAlign: 'center', fontSize: 20, letterSpacing: 4 }]}
+                      placeholder="123456"
+                      placeholderTextColor="#6b7280"
+                      value={emailOtpCode}
+                      onChangeText={setEmailOtpCode}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                    />
+                    <View style={styles.modalActionButtons}>
+                      <Button variant="secondary" onPress={() => setEmailStep('request')} style={{ flex: 1 }}>
+                        Geri
+                      </Button>
+                      <Button onPress={handleConfirmEmail} loading={isConfirmingEmail} style={{ flex: 1.2 }}>
+                        Onayla
+                      </Button>
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+
+            {accountSubView === 'changePassword' && (
+              <>
+                <Text style={styles.modalTitle}>Şifre Değiştirme</Text>
+                {passwordStep === 'request' ? (
+                  <>
+                    <Text style={styles.modalDesc}>
+                      Mevcut şifrenizi ve en az 6 haneli yeni şifrenizi girin.
+                    </Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Mevcut Şifre"
+                      placeholderTextColor="#6b7280"
+                      value={oldPassword}
+                      onChangeText={setOldPassword}
+                      secureTextEntry
+                    />
+                    <TextInput
+                      style={[styles.modalInput, { marginTop: Spacing.two }]}
+                      placeholder="Yeni Şifre (en az 6 karakter)"
+                      placeholderTextColor="#6b7280"
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      secureTextEntry
+                    />
+                    <View style={styles.modalActionButtons}>
+                      <Button variant="secondary" onPress={() => setAccountSubView('info')} style={{ flex: 1 }}>
+                        Geri
+                      </Button>
+                      <Button onPress={handleRequestPassword} loading={isRequestingPassword} style={{ flex: 1.2 }}>
+                        Kod Gönder
+                      </Button>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.modalDesc}>
+                      Kayıtlı e-posta adresinize gönderilen 6 haneli onay kodunu girin:
+                    </Text>
+                    <TextInput
+                      style={[styles.modalInput, { textAlign: 'center', fontSize: 20, letterSpacing: 4 }]}
+                      placeholder="123456"
+                      placeholderTextColor="#6b7280"
+                      value={passwordOtpCode}
+                      onChangeText={setPasswordOtpCode}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                    />
+                    <View style={styles.modalActionButtons}>
+                      <Button variant="secondary" onPress={() => setPasswordStep('request')} style={{ flex: 1 }}>
+                        Geri
+                      </Button>
+                      <Button onPress={handleConfirmPassword} loading={isConfirmingPassword} style={{ flex: 1.2 }}>
+                        Şifreyi Güncelle
+                      </Button>
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* 11. HESAP SİLME MODALI (TEHLİKELİ BÖLGE) */}
+      <Modal visible={activeModal === 'deleteAccount'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalSheet, { borderColor: '#ef4444', borderWidth: 1.5 }]}>
+            <View style={[styles.modalHandle, { backgroundColor: '#ef4444' }]} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.two }}>
+              <TrashIcon size={22} color="#ef4444" />
+              <Text style={[styles.modalTitle, { color: '#ef4444', marginBottom: 0 }]}>
+                Hesabı Kalıcı Olarak Sil
+              </Text>
+            </View>
+            <Text style={styles.modalDesc}>
+              Bu işlem kesinlikle geri alınamaz. Antrenman geçmişiniz, programlarınız ve tüm
+              verileriniz sistemden tamamen silinecektir. Devam etmek için şifrenizi girin ve
+              onay kutusuna büyük harflerle{' '}
+              <Text style={{ fontWeight: '800', color: '#ffffff' }}>
+                HESABIMI KALICI OLARAK SİL
+              </Text>{' '}
+              yazın.
+            </Text>
+
+            <TextInput
+              style={[styles.modalInput, { borderColor: 'rgba(239, 68, 68, 0.4)' }]}
+              placeholder="Mevcut Şifreniz"
+              placeholderTextColor="#6b7280"
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              secureTextEntry
+            />
+
+            <TextInput
+              style={[
+                styles.modalInput,
+                {
+                  marginTop: Spacing.two,
+                  borderColor:
+                    deleteConfirmationText.trim() === 'HESABIMI KALICI OLARAK SİL'
+                      ? '#10b981'
+                      : 'rgba(239, 68, 68, 0.4)',
+                },
+              ]}
+              placeholder="HESABIMI KALICI OLARAK SİL"
+              placeholderTextColor="#6b7280"
+              value={deleteConfirmationText}
+              onChangeText={setDeleteConfirmationText}
+              autoCapitalize="characters"
+            />
+
+            <View style={styles.modalActionButtons}>
+              <Button
+                variant="secondary"
+                onPress={() => setActiveModal(null)}
+                style={{ flex: 1 }}
+              >
+                Vazgeç
+              </Button>
+              <Button
+                variant="danger"
+                onPress={handleDeleteAccount}
+                loading={isDeletingAccount}
+                style={{ flex: 1.2 }}
+              >
+                Hesabı Sil
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 12. ÇIKIŞ ONAYI DİYALOĞU */}
+      <ConfirmDialog
+        visible={logoutConfirmVisible}
+        title="Oturumu Kapat"
+        message="Bu cihazdaki sporcu oturumunuzu sonlandırmak istediğinizden emin misiniz?"
+        confirmText="Çıkış Yap"
+        cancelText="Vazgeç"
+        destructive
+        busy={isLoggingOut}
+        onConfirm={handleLogout}
+        onCancel={() => setLogoutConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1061,99 +1932,72 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.dark.background,
   },
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 2,
-    gap: Spacing.three,
-  },
-  profileStatsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  profileStatBox: {
-    flex: 1,
-    backgroundColor: '#13161F',
-    borderRadius: Radius.lg,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#232A3B',
-  },
-  profileStatIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileStatTextWrap: {
-    flex: 1,
-  },
-  profileStatVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  profileStatLabel: {
-    fontSize: 11,
-    color: '#8E99AF',
-    marginTop: 1,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.one,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  settingsBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#1a1b1e',
-    borderWidth: 1,
-    borderColor: '#2d3139',
+  headerLeft: {
+    width: 40,
+  },
+  headerCircleBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  screenTitle: {
-    fontSize: Typography.title,
+  headerTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    color: Colors.dark.text,
+    color: '#ffffff',
+    letterSpacing: 0.3,
+  },
+  container: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 20,
+    gap: Spacing.three,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.three,
     padding: Spacing.four,
+    gap: Spacing.two,
   },
   errorText: {
-    fontSize: Typography.body,
-    color: Colors.dark.text,
+    color: '#ef4444',
+    fontSize: 14,
     textAlign: 'center',
   },
+
+  // ─── 1. KULLANICI KARTI & RPG WIDGET'I ───
   userCard: {
-    backgroundColor: Colors.dark.backgroundElement,
-    padding: Spacing.three,
-    borderRadius: Radius.md,
+    padding: 16,
+    borderRadius: 24,
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: '#252830',
-    gap: Spacing.three,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 14,
   },
   userCardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    gap: 14,
   },
   avatarCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#1e293b',
     borderWidth: 2,
     borderColor: '#3b82f6',
@@ -1161,13 +2005,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#fff',
+    color: '#ffffff',
   },
   userInfo: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   nameRow: {
     flexDirection: 'row',
@@ -1176,86 +2020,85 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   username: {
-    fontSize: Typography.heading,
-    fontWeight: '700',
-    color: Colors.dark.text,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#ffffff',
   },
   levelBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 9999,
   },
   levelBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   emailText: {
-    fontSize: Typography.label,
-    color: Colors.dark.textSecondary,
+    fontSize: 13,
+    color: '#94a3b8',
   },
   dateSubtext: {
     fontSize: 11,
-    color: Colors.dark.textSecondary,
-    marginTop: 2,
+    color: '#64748b',
+    marginTop: 1,
   },
 
-  /* ═══ RPG & XP Gelişim Kartı ═══ */
+  // RPG Kartı
   rpgCard: {
-    backgroundColor: '#16181d',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.3)',
+    backgroundColor: '#0c101c',
+    borderRadius: 18,
     padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     gap: 10,
   },
   rpgTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   rpgLabel: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '800',
-    textTransform: 'uppercase',
+    color: '#64748b',
     letterSpacing: 0.8,
-    color: '#94a3b8',
-    marginBottom: 2,
   },
   rpgTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginTop: 2,
   },
   rpgLevelTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: '#ffffff',
   },
   rpgLevelBadge: {
-    backgroundColor: 'rgba(168, 85, 247, 0.2)',
-    paddingHorizontal: 7,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.4)',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
   },
   rpgLevelBadgeText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#c084fc',
+    color: '#60a5fa',
   },
   rpgStreakPill: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.35)',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
   },
   rpgStreakText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#fbbf24',
+    fontWeight: '800',
+    color: '#f87171',
   },
   rpgProgressSection: {
     gap: 6,
@@ -1266,70 +2109,220 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rpgProgressLabel: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#94a3b8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.5,
   },
   rpgProgressValue: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#c084fc',
+    color: '#94a3b8',
   },
   rpgProgressBarTrack: {
-    height: 7,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 999,
+    height: 8,
+    backgroundColor: '#1e293b',
+    borderRadius: 4,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   rpgProgressBarFill: {
     height: '100%',
-    backgroundColor: '#a855f7',
-    borderRadius: 999,
+    backgroundColor: '#3b82f6',
+    borderRadius: 4,
   },
   rpgBottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    paddingTop: 2,
   },
   rpgNextText: {
     fontSize: 11,
-    color: '#94a3b8',
-    flex: 1,
+    fontWeight: '600',
+    color: '#64748b',
   },
   rpgTotalXpText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#cbd5e1',
+    fontWeight: '800',
+    color: '#f59e0b',
   },
 
-  /* ═══ Form Kartı & Alanları ═══ */
-  formCard: {
-    backgroundColor: Colors.dark.backgroundElement,
-    padding: Spacing.three,
-    gap: Spacing.three,
-  },
-  groupHeader: {
-    marginBottom: 2,
-  },
-  groupTitle: {
-    fontSize: Typography.body,
-    fontWeight: '700',
-    color: '#ffffff',
-    letterSpacing: 0.3,
-  },
-  groupSubtitle: {
-    fontSize: 12,
-    color: Colors.dark.textSecondary,
+  // ─── 3'lü Özet İstatistik Kutuları (Görseldeki Yaş / Boy / Kilo) ───
+  statBoxesRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginTop: 2,
   },
-  genderContainer: {
+  statBox: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  statBoxLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginBottom: 4,
+  },
+  statBoxValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  statBoxUnit: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+
+  // ─── AYAR KARTLARI & PILL BİLEŞENLERİ ───
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#e2e8f0',
+    letterSpacing: 0.3,
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  groupCard: {
+    backgroundColor: '#101524',
+    borderRadius: 24,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 8,
+  },
+  dangerCard: {
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    backgroundColor: '#150f14',
+  },
+  itemContainer: {
     flexDirection: 'row',
-    gap: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#161E33',
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  destructiveItemContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  itemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  iconWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  destructiveIconWrapper: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  textWrapper: {
+    flex: 1,
+  },
+  itemTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  destructiveTitle: {
+    color: '#ef4444',
+  },
+  itemSubtitle: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  itemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  badge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#60a5fa',
+  },
+  footerText: {
+    fontSize: 11,
+    color: '#475569',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 6,
+  },
+
+  // ─── MODAL BOTTOM SHEETS ───
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#0f172a',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 36,
+    maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#475569',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginBottom: 6,
+  },
+  modalDesc: {
+    fontSize: 13,
+    color: '#94a3b8',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  modalSubheading: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.8,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   genderCard: {
     flex: 1,
@@ -1337,34 +2330,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: Spacing.two,
-    backgroundColor: Colors.dark.background,
-    borderRadius: Radius.sm,
-    borderWidth: 1.5,
-    borderColor: AppColors.border,
+    backgroundColor: '#161E33',
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   genderCardActiveMale: {
     borderColor: '#3b82f6',
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
   },
   genderCardActiveFemale: {
     borderColor: '#ec4899',
-    backgroundColor: 'rgba(236, 72, 153, 0.08)',
+    backgroundColor: 'rgba(236, 72, 153, 0.12)',
   },
   genderText: {
-    fontSize: Typography.body,
-    fontWeight: '600',
-    color: Colors.dark.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94a3b8',
   },
   genderTextActive: {
     color: '#ffffff',
-    fontWeight: '700',
   },
   metricInputRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 4,
   },
   metricInputCol: {
     flex: 1,
@@ -1373,179 +2363,185 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#9ca3af',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#cbd5e1',
   },
   labelUnit: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#6b7280',
-    textTransform: 'lowercase',
+    fontWeight: '500',
+    color: '#64748b',
   },
   metricTextInput: {
-    height: 48,
-    backgroundColor: '#14151a',
-    borderWidth: 1.5,
-    borderColor: '#262933',
-    borderRadius: Radius.md,
-    paddingHorizontal: 10,
+    backgroundColor: '#161E33',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     fontSize: 16,
-    fontWeight: '700',
-    color: '#ffffff',
-    textAlign: 'center',
-  },
-
-  /* ═══ Seçici Butonları (Açılır Liste Triggers) ═══ */
-  selectorsList: {
-    gap: 10,
-  },
-  selectorTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#16171d',
-    borderWidth: 1.5,
-    borderColor: '#262933',
-    borderRadius: Radius.md,
-    padding: 12,
-    gap: 10,
-  },
-  selectorLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  selectorIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectorLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#9ca3af',
-    marginBottom: 2,
-  },
-  selectorValue: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  selectorRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  selectorBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  selectorBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-
-  /* ═══ Seçici Modal Bottom Sheet ═══ */
-  pickerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'flex-end',
-  },
-  pickerSheet: {
-    backgroundColor: '#1a1b1e',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: '#2d3139',
-    padding: Spacing.four,
-    paddingBottom: Spacing.six,
-    maxHeight: '85%',
-  },
-  pickerHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#4b5563',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: Spacing.three,
-  },
-  pickerTitle: {
-    fontSize: 17,
     fontWeight: '800',
     color: '#ffffff',
-    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    textAlign: 'center',
   },
-  pickerDesc: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginBottom: Spacing.three,
-    lineHeight: 18,
+  pillOptionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  pickerOptionsList: {
-    gap: 10,
+  smallPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#161E33',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  pickerOptionCard: {
+  smallPillActive: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  smallPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  smallPillTextActive: {
+    color: '#ffffff',
+  },
+  modalActionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  pickerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#14151a',
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: '#262933',
-    padding: 12,
     gap: 12,
+    backgroundColor: '#161E33',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  pickerOptionCardActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  pickerCardActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
   },
-  pickerIconBox: {
+  pickerIconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pickerOptionTitle: {
+  pickerCardTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#e4e4e7',
+    fontWeight: '800',
+    color: '#cbd5e1',
   },
-  pickerOptionDesc: {
-    fontSize: 11.5,
-    color: '#8b8e96',
-    marginTop: 2,
+  pickerCardDesc: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 3,
     lineHeight: 16,
   },
-  pickerSimpleList: {
-    gap: 8,
-  },
-  pickerSimpleItem: {
+  switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: Radius.md,
-    backgroundColor: '#14151a',
-    borderWidth: 1.5,
-    borderColor: '#262933',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
-  pickerSimpleItemActive: {
-    borderColor: '#3b82f6',
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
-  },
-  pickerSimpleText: {
+  switchTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#9ca3af',
-  },
-  pickerSimpleTextActive: {
-    color: '#ffffff',
     fontWeight: '700',
+    color: '#ffffff',
+  },
+  switchSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  modalRadioItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#161E33',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  modalRadioItemActive: {
+    borderColor: '#3b82f6',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+  },
+  modalRadioText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  modalRadioTextActive: {
+    color: '#ffffff',
+  },
+  checkmarkText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#3b82f6',
+  },
+  feedbackInput: {
+    backgroundColor: '#161E33',
+    borderRadius: 14,
+    padding: 14,
+    color: '#ffffff',
+    fontSize: 14,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  aboutRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  aboutLabel: {
+    fontSize: 13,
+    color: '#94a3b8',
+  },
+  aboutVal: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  accountDetailBox: {
+    backgroundColor: '#161E33',
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  accountDetailLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+  },
+  accountDetailVal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 2,
+  },
+  modalInput: {
+    backgroundColor: '#161E33',
+    borderRadius: 14,
+    padding: 14,
+    color: '#ffffff',
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
 });

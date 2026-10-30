@@ -9,6 +9,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,7 +26,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import Svg, { Path, Rect } from 'react-native-svg';
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,18 +61,21 @@ const triggerSmoothTransition = () => {
   }
 };
 
-// Web platformundaki @keyframes slideDownHistoryCard ve .history-card-animated ile birebir aynı keyframe
-const slideDownHistoryCard = new Keyframe({
-  0: {
-    opacity: 0,
-    transform: [{ translateY: -20 }],
-  },
-  100: {
-    opacity: 1,
-    transform: [{ translateY: 0 }],
-    easing: Easing.bezier(0.25, 1, 0.5, 1),
-  },
-});
+// Daha uzun, akıcı ve yumuşak süzülme animasyonu (Hızı düşürülmüş, yumuşak iniş)
+const createSlideDownHistoryCard = (index: number) =>
+  new Keyframe({
+    0: {
+      opacity: 0,
+      transform: [{ translateY: -26 }],
+    },
+    100: {
+      opacity: 1,
+      transform: [{ translateY: 0 }],
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+    },
+  })
+    .duration(680)
+    .delay(Math.min(index, 10) * 110);
 
 // ─── Web Tema Renkleri (Web Platformuna Birebir Uyumlu Cyber Dark) ───
 const colors = {
@@ -148,12 +152,12 @@ function PressableScale({
       RNAnimated.timing(scale, {
         toValue: activeScale,
         duration: 80,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       RNAnimated.timing(opacity, {
         toValue: 0.82,
         duration: 80,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
   };
@@ -164,12 +168,12 @@ function PressableScale({
       RNAnimated.timing(scale, {
         toValue: 1,
         duration: 90,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       RNAnimated.timing(opacity, {
         toValue: 1,
         duration: 90,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
   };
@@ -375,12 +379,12 @@ function WorkoutCalendarModal({
       RNAnimated.timing(slideAnim, {
         toValue: direction === 1 ? -65 : 65,
         duration: 120,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       RNAnimated.timing(opacityAnim, {
         toValue: 0.1,
         duration: 120,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start(() => {
       // 2. Ayı güncelle
@@ -400,12 +404,12 @@ function WorkoutCalendarModal({
         RNAnimated.timing(slideAnim, {
           toValue: 0,
           duration: 180,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         RNAnimated.timing(opacityAnim, {
           toValue: 1,
           duration: 180,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start(() => {
         isCalendarMonthAnimating = false;
@@ -442,12 +446,12 @@ function WorkoutCalendarModal({
             RNAnimated.timing(slideAnim, {
               toValue: -80,
               duration: 110,
-              useNativeDriver: true,
+              useNativeDriver: Platform.OS !== 'web',
             }),
             RNAnimated.timing(opacityAnim, {
               toValue: 0.1,
               duration: 110,
-              useNativeDriver: true,
+              useNativeDriver: Platform.OS !== 'web',
             }),
           ]).start(() => {
             setViewMonth((cur) => {
@@ -462,12 +466,12 @@ function WorkoutCalendarModal({
               RNAnimated.timing(slideAnim, {
                 toValue: 0,
                 duration: 180,
-                useNativeDriver: true,
+                useNativeDriver: Platform.OS !== 'web',
               }),
               RNAnimated.timing(opacityAnim, {
                 toValue: 1,
                 duration: 180,
-                useNativeDriver: true,
+                useNativeDriver: Platform.OS !== 'web',
               }),
             ]).start(() => {
               isCalendarMonthAnimating = false;
@@ -481,12 +485,12 @@ function WorkoutCalendarModal({
             RNAnimated.timing(slideAnim, {
               toValue: 80,
               duration: 110,
-              useNativeDriver: true,
+              useNativeDriver: Platform.OS !== 'web',
             }),
             RNAnimated.timing(opacityAnim, {
               toValue: 0.1,
               duration: 110,
-              useNativeDriver: true,
+              useNativeDriver: Platform.OS !== 'web',
             }),
           ]).start(() => {
             setViewMonth((cur) => {
@@ -501,12 +505,12 @@ function WorkoutCalendarModal({
               RNAnimated.timing(slideAnim, {
                 toValue: 0,
                 duration: 180,
-                useNativeDriver: true,
+                useNativeDriver: Platform.OS !== 'web',
               }),
               RNAnimated.timing(opacityAnim, {
                 toValue: 1,
                 duration: 180,
-                useNativeDriver: true,
+                useNativeDriver: Platform.OS !== 'web',
               }),
             ]).start(() => {
               isCalendarMonthAnimating = false;
@@ -519,12 +523,12 @@ function WorkoutCalendarModal({
             RNAnimated.timing(slideAnim, {
               toValue: 0,
               duration: 140,
-              useNativeDriver: true,
+              useNativeDriver: Platform.OS !== 'web',
             }),
             RNAnimated.timing(opacityAnim, {
               toValue: 1,
               duration: 140,
-              useNativeDriver: true,
+              useNativeDriver: Platform.OS !== 'web',
             }),
           ]).start();
         }
@@ -582,16 +586,21 @@ function WorkoutCalendarModal({
               <View style={styles.calIconBox}>
                 <CalendarIcon size={18} color={colors.purple} />
               </View>
-              <View style={{ flex: 1, paddingRight: 6 }}>
-                <Text style={styles.calTitle}>Tarihe Göre Filtrele</Text>
-                <Text style={styles.calSubtitle} numberOfLines={1}>
+              <View style={styles.calHeaderTextWrap}>
+                <Text style={styles.calTitle} numberOfLines={1}>Tarihe Göre Filtrele</Text>
+                <Text style={styles.calSubtitle} numberOfLines={1} ellipsizeMode="tail">
                   {searchQuery && searchQuery.trim()
                     ? `"${searchQuery.trim()}" için ${workoutDatesSet.size} gün işaretlendi`
                     : 'Seans geçmişinde tarih seç'}
                 </Text>
               </View>
             </View>
-            <PressableScale style={styles.calCloseBtn} onPress={onClose} activeScale={0.88} hitSlop={8}>
+            <PressableScale
+              style={styles.calCloseBtn}
+              onPress={onClose}
+              activeScale={0.88}
+              hitSlop={8}
+            >
               <CloseIcon size={14} color={colors.danger} />
             </PressableScale>
           </View>
@@ -837,11 +846,12 @@ const SessionCardItem = React.memo(function SessionCardItem({
   const exercises = workout.exercises || [];
   const currentExercises = isEditing && editingExercises ? editingExercises : exercises;
 
+  // Web platformundaki slideDownHistoryCard animasyonu ile birebir uyumlu bağımsız Keyframe örneği
+  const enteringAnim = useMemo(() => createSlideDownHistoryCard(index), [index]);
+
   return (
     <Animated.View
-      entering={slideDownHistoryCard
-        .duration(400)
-        .delay(Math.min(index, 12) * 90)}
+      entering={enteringAnim}
       layout={LinearTransition.duration(400).easing(Easing.bezier(0.25, 1, 0.5, 1))}
       style={styles.sessionCard}
     >
@@ -1132,7 +1142,27 @@ const SessionCardItem = React.memo(function SessionCardItem({
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const { workouts, loading, updateWorkout, deleteWorkout } = useWorkouts();
+  const { workouts, loading, refetch, updateWorkout, deleteWorkout } = useWorkouts();
+
+  // Sayfaya her girildiğinde kartların webdeki gibi yukardan aşağı sıralı süzülmesini tetikleyen anahtar
+  const [animKey, setAnimKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Sayfaya girildiğinde doğrudan bellekten anında (0ms gecikmeyle) render et ve animasyonu başlat
+      setAnimKey((k) => k + 1);
+    }, [])
+  );
+
+  const handlePullToRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
 
 
   // Filtreler
@@ -1314,6 +1344,14 @@ export default function HistoryScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handlePullToRefresh}
+              tintColor={colors.purple}
+              colors={[colors.purple]}
+            />
+          }
         >
           {/* ─── 1. Ekran Başlığı & Seans Sayacı Rozeti ─── */}
           <View style={styles.topHeaderBar}>
@@ -1419,7 +1457,7 @@ export default function HistoryScreen() {
           ) : (
             filteredWorkouts.map((w, index) => (
               <SessionCardItem
-                key={w.id}
+                key={`session-${w.id}-${animKey}-${selectedDate || 'all'}`}
                 workout={w}
                 index={index}
                 isSummaryOpen={!!openSummaries[w.id]}
@@ -1473,9 +1511,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
 
   /* ─── 1. Ekran Başlığı & Seans Sayacı Rozeti ─── */
@@ -2061,11 +2099,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 14,
+    width: '100%',
   },
   calHeaderTitleBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    marginRight: 10,
+    minWidth: 0,
+  },
+  calHeaderTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   calIconBox: {
     width: 34,
@@ -2076,6 +2122,7 @@ const styles = StyleSheet.create({
     borderColor: colors.purpleBorder,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   calTitle: {
     fontSize: 15,
@@ -2085,6 +2132,7 @@ const styles = StyleSheet.create({
   calSubtitle: {
     fontSize: 11,
     color: colors.textMuted,
+    marginTop: 2,
   },
   calCloseBtn: {
     width: 32,
@@ -2095,6 +2143,7 @@ const styles = StyleSheet.create({
     borderColor: colors.dangerBorder,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   calNav: {
     flexDirection: 'row',

@@ -320,8 +320,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: Spacing.three,
-    paddingBottom: Spacing.six * 2,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
   section: {
     marginBottom: Spacing.three,

@@ -11,6 +11,9 @@ export function useWorkouts() {
   const { data, isLoading, isError, error, refetch } = useQuery<Workout[]>({
     queryKey: WORKOUTS_QUERY_KEY,
     queryFn: () => workoutsApi.listWorkouts(),
+    staleTime: 1000 * 60 * 5, // 5 dakika boyunca taze kabul et (anında bellekten 0ms yüklenir)
+    gcTime: 1000 * 60 * 30, // 30 dakika önbellekte tut
+    refetchOnWindowFocus: false, // Odaklanmalarda gereksiz ağ isteklerini engelle
   });
 
   const saveMutation = useMutation({

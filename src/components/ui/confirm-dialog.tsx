@@ -93,8 +93,10 @@ const styles = StyleSheet.create({
   content: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#0F1528',
     borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
     padding: Spacing.four,
     gap: Spacing.two,
     shadowColor: '#000',

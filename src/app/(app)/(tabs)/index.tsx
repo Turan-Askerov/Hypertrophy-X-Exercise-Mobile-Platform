@@ -16,7 +16,7 @@ import { useNutrition } from '@/hooks/use-nutrition';
 import { useUser } from '@/hooks/use-user';
 
 // ─── SVG İkonları (Cyber Neon Stil) ───
-function DumbbellIcon({ size = 18, color = '#C6F432' }: { size?: number; color?: string }) {
+function DumbbellIcon({ size = 18, color = '#C084FC' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -100,7 +100,7 @@ function ArrowRightIcon({ size = 18, color = '#000000' }: { size?: number; color
   );
 }
 
-function BrainAiIcon({ size = 20, color = '#C6F432' }: { size?: number; color?: string }) {
+function BrainAiIcon({ size = 20, color = '#C084FC' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -165,13 +165,13 @@ export default function DashboardScreen() {
               activeOpacity={0.7}
               onPress={() => router.push('/(app)/ai-status' as any)}
             >
-              <BrainAiIcon size={20} color="#C6F432" />
+              <BrainAiIcon size={20} color="#C084FC" />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.actionBtn}
               activeOpacity={0.7}
-              onPress={() => router.push('/(app)/settings')}
+              onPress={() => router.push('/(app)/(tabs)/profile')}
             >
               <BellIcon size={20} color="#FFFFFF" />
               <View style={styles.notificationDot} />
@@ -217,22 +217,22 @@ export default function DashboardScreen() {
           {/* Antrenman Kartı */}
           <View style={styles.metricCard}>
             <View style={styles.metricCardHeader}>
-              <View style={[styles.iconPill, { backgroundColor: 'rgba(198, 244, 50, 0.12)' }]}>
-                <DumbbellIcon size={16} color="#C6F432" />
+              <View style={[styles.iconPill, { backgroundColor: 'rgba(192, 132, 252, 0.14)' }]}>
+                <DumbbellIcon size={16} color="#C084FC" />
               </View>
               <Text style={styles.metricPercent}>40%</Text>
             </View>
             <Text style={styles.metricValue}>2/5</Text>
             <Text style={styles.metricLabel}>Antrenman</Text>
             <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: '40%', backgroundColor: '#C6F432' }]} />
+              <View style={[styles.progressBarFill, { width: '40%', backgroundColor: '#C084FC' }]} />
             </View>
           </View>
 
           {/* Adımlar / Aktivite Kartı */}
           <View style={styles.metricCard}>
             <View style={styles.metricCardHeader}>
-              <View style={[styles.iconPill, { backgroundColor: 'rgba(56, 189, 248, 0.12)' }]}>
+              <View style={[styles.iconPill, { backgroundColor: 'rgba(56, 189, 248, 0.14)' }]}>
                 <ShoeIcon size={16} color="#38BDF8" />
               </View>
               <Text style={styles.metricPercent}>65%</Text>
@@ -247,8 +247,8 @@ export default function DashboardScreen() {
           {/* Kalori / Beslenme Kartı */}
           <View style={styles.metricCard}>
             <View style={styles.metricCardHeader}>
-              <View style={[styles.iconPill, { backgroundColor: 'rgba(251, 146, 60, 0.12)' }]}>
-                <AppleDietIcon size={16} color="#FB923C" />
+              <View style={[styles.iconPill, { backgroundColor: 'rgba(251, 191, 36, 0.14)' }]}>
+                <AppleDietIcon size={16} color="#FBBF24" />
               </View>
               <Text style={styles.metricPercent}>
                 {todayLog?.calories ? Math.min(100, Math.round((todayLog.calories / 2600) * 100)) : 0}%
@@ -264,7 +264,7 @@ export default function DashboardScreen() {
                   styles.progressBarFill,
                   {
                     width: `${Math.min(100, Math.round(((todayLog?.calories || 0) / 2600) * 100))}%`,
-                    backgroundColor: '#FB923C',
+                    backgroundColor: '#FBBF24',
                   },
                 ]}
               />
@@ -283,7 +283,7 @@ export default function DashboardScreen() {
                   cx="50"
                   cy="50"
                   r="40"
-                  stroke="#1E2333"
+                  stroke="#161E33"
                   strokeWidth="8"
                   fill="transparent"
                 />
@@ -291,7 +291,7 @@ export default function DashboardScreen() {
                   cx="50"
                   cy="50"
                   r="40"
-                  stroke="#C6F432"
+                  stroke="#C084FC"
                   strokeWidth="8"
                   fill="transparent"
                   strokeDasharray={2 * Math.PI * 40}
@@ -321,7 +321,7 @@ export default function DashboardScreen() {
                       styles.barFill,
                       {
                         width: `${Math.min(100, Math.round(((todayLog?.calories || 0) / 2600) * 100))}%`,
-                        backgroundColor: '#C6F432',
+                        backgroundColor: '#C084FC',
                       },
                     ]}
                   />
@@ -351,7 +351,7 @@ export default function DashboardScreen() {
                       styles.barFill,
                       {
                         width: `${Math.min(100, Math.round(((todayLog?.protein || 0) / 160) * 100))}%`,
-                        backgroundColor: '#FB923C',
+                        backgroundColor: '#34D399',
                       },
                     ]}
                   />
@@ -461,10 +461,10 @@ export default function DashboardScreen() {
             </View>
 
             <View style={[styles.streakBadgeCard, styles.streakBadgeActive]}>
-              <View style={[styles.badgeIconBox, { backgroundColor: 'rgba(198, 244, 50, 0.2)' }]}>
-                <FlameIcon size={22} color="#C6F432" />
+              <View style={[styles.badgeIconBox, { backgroundColor: 'rgba(192, 132, 252, 0.2)' }]}>
+                <FlameIcon size={22} color="#C084FC" />
               </View>
-              <Text style={[styles.badgeDays, { color: '#C6F432' }]}>7 Gün</Text>
+              <Text style={[styles.badgeDays, { color: '#C084FC' }]}>7 Gün</Text>
               <Text style={styles.badgeTitle}>Demir İrade</Text>
             </View>
 
@@ -494,7 +494,7 @@ export default function DashboardScreen() {
         >
           <View style={styles.aiBannerLeft}>
             <View style={styles.aiBannerIconWrap}>
-              <BrainAiIcon size={24} color="#C6F432" />
+              <BrainAiIcon size={24} color="#C084FC" />
             </View>
             <View style={styles.aiBannerTexts}>
               <Text style={styles.aiBannerTitle}>AI Toparlanma Skoru: 80 / 100</Text>
@@ -504,7 +504,7 @@ export default function DashboardScreen() {
             </View>
           </View>
           <View style={styles.aiBannerArrow}>
-            <ArrowRightIcon size={18} color="#C6F432" />
+            <ArrowRightIcon size={18} color="#C084FC" />
           </View>
         </TouchableOpacity>
       </ScrollView>
@@ -515,14 +515,15 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#090A0F',
+    backgroundColor: '#080B14',
   },
   container: {
     flex: 1,
   },
   scrollContent: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six * 1.5,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
     gap: Spacing.four,
   },
 
@@ -539,9 +540,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#161A26',
+    backgroundColor: '#101524',
     borderWidth: 2,
-    borderColor: '#C6F432',
+    borderColor: '#C084FC',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
   },
   welcomeSubtitle: {
     fontSize: 13,
-    color: '#8E99AF',
+    color: '#94A3B8',
     fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -575,9 +576,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -589,19 +590,19 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#C6F432',
+    backgroundColor: '#C084FC',
     borderWidth: 1.5,
-    borderColor: '#13161F',
+    borderColor: '#101524',
   },
 
   /* 2. Zaman Filtresi */
   timeFilterContainer: {
     flexDirection: 'row',
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.lg,
     padding: 4,
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   timeFilterBtn: {
     flex: 1,
@@ -611,15 +612,15 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   timeFilterBtnActive: {
-    backgroundColor: '#C6F432',
+    backgroundColor: '#8B5CF6',
   },
   timeFilterText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8E99AF',
+    color: '#94A3B8',
   },
   timeFilterTextActive: {
-    color: '#000000',
+    color: '#FFFFFF',
     fontWeight: '800',
   },
 
@@ -630,11 +631,11 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.lg,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   metricCardHeader: {
     flexDirection: 'row',
@@ -651,7 +652,7 @@ const styles = StyleSheet.create({
   },
   metricPercent: {
     fontSize: 11,
-    color: '#8E99AF',
+    color: '#94A3B8',
     fontWeight: '600',
   },
   metricValue: {
@@ -662,12 +663,12 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 11,
-    color: '#8E99AF',
+    color: '#94A3B8',
     marginBottom: 8,
   },
   progressBarTrack: {
     height: 4,
-    backgroundColor: '#1E2333',
+    backgroundColor: '#161E33',
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -678,11 +679,11 @@ const styles = StyleSheet.create({
 
   /* 4. Aktivite & Hedef Kartı */
   activityCard: {
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.xl,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   activityCardTitle: {
     fontSize: 16,
@@ -714,7 +715,7 @@ const styles = StyleSheet.create({
   },
   gaugeSub: {
     fontSize: 10,
-    color: '#8E99AF',
+    color: '#94A3B8',
     fontWeight: '600',
   },
   progressRows: {
@@ -729,7 +730,7 @@ const styles = StyleSheet.create({
   },
   progressItemName: {
     fontSize: 12,
-    color: '#8E99AF',
+    color: '#94A3B8',
     fontWeight: '500',
   },
   progressItemVal: {
@@ -739,7 +740,7 @@ const styles = StyleSheet.create({
   },
   barTrack: {
     height: 6,
-    backgroundColor: '#1E2333',
+    backgroundColor: '#161E33',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -750,11 +751,11 @@ const styles = StyleSheet.create({
 
   /* 5. Günün Antrenmanı (Hero Card) */
   workoutHeroCard: {
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.xl,
     padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(198, 244, 50, 0.25)',
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   workoutHeroTop: {
     flexDirection: 'row',
@@ -763,7 +764,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   workoutTagPill: {
-    backgroundColor: 'rgba(198, 244, 50, 0.15)',
+    backgroundColor: 'rgba(139, 92, 246, 0.14)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.sm,
@@ -771,7 +772,7 @@ const styles = StyleSheet.create({
   workoutTagText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#C6F432',
+    color: '#C084FC',
     letterSpacing: 0.5,
   },
   streakSmallChip: {
@@ -781,7 +782,7 @@ const styles = StyleSheet.create({
   },
   streakSmallText: {
     fontSize: 12,
-    color: '#FACC15',
+    color: '#FBBF24',
     fontWeight: '700',
   },
   workoutHeroTitle: {
@@ -797,27 +798,27 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   muscleChip: {
-    backgroundColor: '#181C28',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(56, 189, 248, 0.35)',
   },
   muscleChipText: {
     fontSize: 11,
-    color: '#C6F432',
+    color: '#38BDF8',
     fontWeight: '600',
   },
   workoutMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0D0E14',
+    backgroundColor: '#0F1528',
     padding: 12,
     borderRadius: Radius.md,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1E2333',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   metaItem: {
     flex: 1,
@@ -825,7 +826,7 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     fontSize: 10,
-    color: '#8E99AF',
+    color: '#94A3B8',
     marginBottom: 2,
   },
   metaValue: {
@@ -836,13 +837,13 @@ const styles = StyleSheet.create({
   metaDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#232A3B',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   startWorkoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#C6F432',
+    backgroundColor: '#8B5CF6',
     paddingVertical: 14,
     borderRadius: Radius.lg,
     gap: 8,
@@ -850,7 +851,7 @@ const styles = StyleSheet.create({
   startWorkoutBtnText: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#000000',
+    color: '#FFFFFF',
   },
 
   /* 6. Haftalık Takvim */
@@ -869,17 +870,17 @@ const styles = StyleSheet.create({
   },
   seeAllLink: {
     fontSize: 13,
-    color: '#C6F432',
+    color: '#C084FC',
     fontWeight: '600',
   },
   daysRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     padding: 8,
     borderRadius: Radius.xl,
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   dayCapsule: {
     alignItems: 'center',
@@ -889,16 +890,16 @@ const styles = StyleSheet.create({
     minWidth: 40,
   },
   dayCapsuleActive: {
-    backgroundColor: '#C6F432',
+    backgroundColor: '#8B5CF6',
   },
   dayCapsuleLabel: {
     fontSize: 11,
-    color: '#8E99AF',
+    color: '#94A3B8',
     fontWeight: '600',
     marginBottom: 4,
   },
   dayCapsuleLabelActive: {
-    color: '#000000',
+    color: '#FFFFFF',
   },
   dayCapsuleDate: {
     fontSize: 14,
@@ -906,7 +907,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   dayCapsuleDateActive: {
-    color: '#000000',
+    color: '#FFFFFF',
   },
 
   /* 7. Seri & Rozetler */
@@ -917,16 +918,16 @@ const styles = StyleSheet.create({
   },
   streakBadgeCard: {
     flex: 1,
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.lg,
     padding: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#232A3B',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   streakBadgeActive: {
-    borderColor: '#C6F432',
-    backgroundColor: 'rgba(198, 244, 50, 0.05)',
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
   },
   badgeIconBox: {
     width: 38,
@@ -943,7 +944,7 @@ const styles = StyleSheet.create({
   },
   badgeTitle: {
     fontSize: 10,
-    color: '#8E99AF',
+    color: '#94A3B8',
     marginTop: 2,
     textAlign: 'center',
   },
@@ -953,11 +954,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#13161F',
+    backgroundColor: '#101524',
     borderRadius: Radius.xl,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(198, 244, 50, 0.2)',
+    borderColor: 'rgba(139, 92, 246, 0.35)',
   },
   aiBannerLeft: {
     flexDirection: 'row',
@@ -969,7 +970,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(198, 244, 50, 0.1)',
+    backgroundColor: 'rgba(139, 92, 246, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -979,11 +980,11 @@ const styles = StyleSheet.create({
   aiBannerTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#C6F432',
+    color: '#C084FC',
   },
   aiBannerDesc: {
     fontSize: 11,
-    color: '#8E99AF',
+    color: '#94A3B8',
     marginTop: 2,
     lineHeight: 15,
   },
