@@ -1,7 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  PanResponder,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -19,14 +27,65 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useUser } from '@/hooks/use-user';
 import { useWorkouts } from '@/hooks/use-workouts';
 import { formatTrDate } from '@/lib/rpe';
 
+// ─── Renk Token'ları (Geçmiş & Beslenme Sayfaları ile Birebir Uyumlu Cyber Dark) ───
+const colors = {
+  background: '#080B14',
+  cardBg: '#101524',
+  cardBgInner: '#0C101C',
+  itemBg: '#121829',
+  cardBorder: 'rgba(255, 255, 255, 0.08)',
+  cardBorderHover: 'rgba(139, 92, 246, 0.35)',
+  text: '#F8FAFC',
+  textMuted: '#94A3B8',
+  textDim: '#64748B',
+
+  // Mor / Vurgu (Cyber Dark / Neon Violet)
+  purple: '#8B5CF6',
+  purpleLight: '#C084FC',
+  purpleDark: '#7C3AED',
+  purpleBg: 'rgba(139, 92, 246, 0.14)',
+  purpleBorder: 'rgba(139, 92, 246, 0.35)',
+
+  // Ağırlık / Başarı (Yeşil / Emerald)
+  emerald: '#10B981',
+  emeraldLight: '#34D399',
+  emeraldBg: 'rgba(16, 185, 129, 0.14)',
+  emeraldBorder: 'rgba(16, 185, 129, 0.35)',
+
+  // RIR / Rozet (Amber / Turuncu)
+  amber: '#F59E0B',
+  amberLight: '#FBBF24',
+  amberBg: 'rgba(245, 158, 11, 0.12)',
+  amberBorder: 'rgba(245, 158, 11, 0.3)',
+
+  // Cyan / Tekrar
+  cyan: '#38BDF8',
+  cyanBg: 'rgba(56, 189, 248, 0.12)',
+  cyanBorder: 'rgba(56, 189, 248, 0.3)',
+
+  // Rose / Pembe
+  rose: '#FB7185',
+  roseBg: 'rgba(251, 113, 133, 0.12)',
+  roseBorder: 'rgba(251, 113, 133, 0.3)',
+
+  // Hata / Eylemler
+  danger: '#EF4444',
+  dangerBg: 'rgba(239, 68, 68, 0.12)',
+  dangerBorder: 'rgba(239, 68, 68, 0.35)',
+
+  // Modal Sheet
+  modalSheetBg: '#0F1424',
+  modalHandle: '#334155',
+};
+
 // ─── SVG İkonları ───
 
-function BackIcon({ color = '#ffffff', size = 20 }: { color?: string; size?: number }) {
+function BackIcon({ color = colors.text, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" />
@@ -34,7 +93,7 @@ function BackIcon({ color = '#ffffff', size = 20 }: { color?: string; size?: num
   );
 }
 
-function EditPencilIcon({ color = '#ffffff', size = 18 }: { color?: string; size?: number }) {
+function EditPencilIcon({ color = colors.purpleLight, size = 18 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path
@@ -47,7 +106,15 @@ function EditPencilIcon({ color = '#ffffff', size = 18 }: { color?: string; size
   );
 }
 
-function ChevronRightIcon({ color = '#6b7280', size = 18 }: { color?: string; size?: number }) {
+function CloseIcon({ size = 14, color = '#EF4444' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M6 18L18 6M6 6l12 12" />
+    </Svg>
+  );
+}
+
+function ChevronRightIcon({ color = colors.textDim, size = 18 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
@@ -55,7 +122,7 @@ function ChevronRightIcon({ color = '#6b7280', size = 18 }: { color?: string; si
   );
 }
 
-function UserIcon({ color = '#3b82f6', size = 20 }: { color?: string; size?: number }) {
+function UserIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path
@@ -68,7 +135,7 @@ function UserIcon({ color = '#3b82f6', size = 20 }: { color?: string; size?: num
   );
 }
 
-function BellIcon({ color = '#8b5cf6', size = 20 }: { color?: string; size?: number }) {
+function BellIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path
@@ -81,7 +148,7 @@ function BellIcon({ color = '#8b5cf6', size = 20 }: { color?: string; size?: num
   );
 }
 
-function SoundIcon({ color = '#10b981', size = 20 }: { color?: string; size?: number }) {
+function SoundIcon({ color = colors.emeraldLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path
@@ -94,7 +161,7 @@ function SoundIcon({ color = '#10b981', size = 20 }: { color?: string; size?: nu
   );
 }
 
-function TrophyIcon({ color = '#f59e0b', size = 20 }: { color?: string; size?: number }) {
+function TrophyIcon({ color = colors.amberLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 21h8m-4-4v4M5 4h14v4a7 7 0 01-14 0V4z" />
@@ -103,17 +170,7 @@ function TrophyIcon({ color = '#f59e0b', size = 20 }: { color?: string; size?: n
   );
 }
 
-function TargetIcon({ color = '#ec4899', size = 20 }: { color?: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="12" cy="12" r="10" strokeWidth="2" />
-      <Circle cx="12" cy="12" r="6" strokeWidth="2" />
-      <Circle cx="12" cy="12" r="2" strokeWidth="2" />
-    </Svg>
-  );
-}
-
-function DumbbellIcon({ color = '#06b6d4', size = 20 }: { color?: string; size?: number }) {
+function DumbbellIcon({ color = colors.cyan, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 5v14M18 5v14M2 9v6M22 9v6M6 12h12" />
@@ -121,7 +178,7 @@ function DumbbellIcon({ color = '#06b6d4', size = 20 }: { color?: string; size?:
   );
 }
 
-function ScaleIcon({ color = '#a855f7', size = 20 }: { color?: string; size?: number }) {
+function ScaleIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l9-4 9 4M12 2v20M5 18h14M6 18l-3-7h6l-3 7zm12 0l-3-7h6l-3 7z" />
@@ -129,7 +186,26 @@ function ScaleIcon({ color = '#a855f7', size = 20 }: { color?: string; size?: nu
   );
 }
 
-function GlobeIcon({ color = '#3b82f6', size = 20 }: { color?: string; size?: number }) {
+function RouteIcon({ color = colors.emeraldLight, size = 18 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Circle cx="6" cy="19" r="3" strokeWidth="2" />
+      <Circle cx="18" cy="5" r="3" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19h4.5a3.5 3.5 0 000-7h-9a3.5 3.5 0 010-7H12" />
+    </Svg>
+  );
+}
+
+function RulerIcon({ color = colors.cyan, size = 18 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Rect x="2" y="7" width="20" height="10" rx="2" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 7v4M10 7v3M14 7v4M18 7v3" />
+    </Svg>
+  );
+}
+
+function GlobeIcon({ color = colors.cyan, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Circle cx="12" cy="12" r="10" strokeWidth="2" />
@@ -138,7 +214,56 @@ function GlobeIcon({ color = '#3b82f6', size = 20 }: { color?: string; size?: nu
   );
 }
 
-function MailIcon({ color = '#6366f1', size = 20 }: { color?: string; size?: number }) {
+function MoonIcon({ color = colors.amberLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+      />
+    </Svg>
+  );
+}
+
+function SunIcon({ color = colors.amberLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Circle cx="12" cy="12" r="5" strokeWidth="2" />
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+      />
+    </Svg>
+  );
+}
+
+function SystemThemeIcon({ color = colors.cyan, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Rect x="5" y="2" width="14" height="20" rx="3" strokeWidth="2" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01" />
+    </Svg>
+  );
+}
+
+function ThemePaletteIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
+      />
+    </Svg>
+  );
+}
+
+function MailIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Rect x="3" y="5" width="18" height="14" rx="2" strokeWidth="2" />
@@ -147,7 +272,7 @@ function MailIcon({ color = '#6366f1', size = 20 }: { color?: string; size?: num
   );
 }
 
-function InfoIcon({ color = '#64748b', size = 20 }: { color?: string; size?: number }) {
+function InfoIcon({ color = colors.textDim, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Circle cx="12" cy="12" r="10" strokeWidth="2" />
@@ -156,7 +281,7 @@ function InfoIcon({ color = '#64748b', size = 20 }: { color?: string; size?: num
   );
 }
 
-function ShieldIcon({ color = '#10b981', size = 20 }: { color?: string; size?: number }) {
+function ShieldIcon({ color = colors.emeraldLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -164,7 +289,7 @@ function ShieldIcon({ color = '#10b981', size = 20 }: { color?: string; size?: n
   );
 }
 
-function LogoutIcon({ color = '#f59e0b', size = 20 }: { color?: string; size?: number }) {
+function LogoutIcon({ color = colors.amberLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -172,7 +297,7 @@ function LogoutIcon({ color = '#f59e0b', size = 20 }: { color?: string; size?: n
   );
 }
 
-function TrashIcon({ color = '#ef4444', size = 20 }: { color?: string; size?: number }) {
+function TrashIcon({ color = colors.danger, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -180,7 +305,55 @@ function TrashIcon({ color = '#ef4444', size = 20 }: { color?: string; size?: nu
   );
 }
 
-function CheckCircleFill({ size = 20, color = '#3b82f6' }: { size?: number; color?: string }) {
+function CalendarIcon({ color = '#C084FC', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+      />
+      <Circle cx="9" cy="15" r="1" fill={color} />
+      <Circle cx="12" cy="15" r="1" fill={color} />
+      <Circle cx="15" cy="15" r="1" fill={color} />
+    </Svg>
+  );
+}
+
+function SummaryFlameIcon({ color = '#34D399', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"
+      />
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M9.879 16.121A3 3 0 1012.015 11L11 14H9.879z"
+      />
+    </Svg>
+  );
+}
+
+function TrendingUpIcon({ color = '#C084FC', size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.4"
+        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+      />
+    </Svg>
+  );
+}
+
+function CheckCircleFill({ size = 20, color = colors.purpleLight }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="12" r="10" fill={color} />
@@ -189,7 +362,7 @@ function CheckCircleFill({ size = 20, color = '#3b82f6' }: { size?: number; colo
   );
 }
 
-function RadioUnchecked({ size = 20, color = '#374151' }: { size?: number; color?: string }) {
+function RadioUnchecked({ size = 20, color = 'rgba(255, 255, 255, 0.2)' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="2" />
@@ -197,25 +370,7 @@ function RadioUnchecked({ size = 20, color = '#374151' }: { size?: number; color
   );
 }
 
-function MaleIcon({ size = 18, color = '#3b82f6' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="10" cy="14" r="5" strokeWidth="2" />
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 5l-5.4 5.4M19 5h-5M19 5v5" />
-    </Svg>
-  );
-}
-
-function FemaleIcon({ size = 18, color = '#ec4899' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="12" cy="9" r="5" strokeWidth="2" />
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14v7M9 18h6" />
-    </Svg>
-  );
-}
-
-function SeedlingIcon({ size = 20, color = '#10b981' }: { size?: number; color?: string }) {
+function SeedlingIcon({ size = 20, color = colors.emeraldLight }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 22V12m0 0a5 5 0 015-5h2a5 5 0 01-5 5zm0 0a5 5 0 00-5-5H5a5 5 0 005 5z" />
@@ -223,7 +378,7 @@ function SeedlingIcon({ size = 20, color = '#10b981' }: { size?: number; color?:
   );
 }
 
-function LightningIcon({ size = 20, color = '#3b82f6' }: { size?: number; color?: string }) {
+function LightningIcon({ size = 20, color = colors.purpleLight }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
@@ -231,7 +386,7 @@ function LightningIcon({ size = 20, color = '#3b82f6' }: { size?: number; color?
   );
 }
 
-function MuscleIcon({ size = 20, color = '#8b5cf6' }: { size?: number; color?: string }) {
+function MuscleIcon({ size = 20, color = colors.purpleLight }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 19v-2a4 4 0 014-4h8a4 4 0 014 4v2M12 3a4 4 0 100 8 4 4 0 000-8z" />
@@ -239,7 +394,7 @@ function MuscleIcon({ size = 20, color = '#8b5cf6' }: { size?: number; color?: s
   );
 }
 
-function FlameIcon({ size = 20, color = '#ef4444' }: { size?: number; color?: string }) {
+function FlameIcon({ size = 20, color = colors.danger }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -248,7 +403,7 @@ function FlameIcon({ size = 20, color = '#ef4444' }: { size?: number; color?: st
   );
 }
 
-function BoltIcon({ size = 20, color = '#06b6d4' }: { size?: number; color?: string }) {
+function BoltIcon({ size = 20, color = colors.cyan }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -265,7 +420,7 @@ const FITNESS_LEVELS = [
     badge: '0 - 1 Yıl',
     desc: 'Temel bileşik hareket kalıpları, form stabilitesi ve nöromüsküler adaptasyon.',
     icon: SeedlingIcon,
-    accent: '#10b981',
+    accent: colors.emeraldLight,
   },
   {
     key: 'Intermediate',
@@ -273,7 +428,7 @@ const FITNESS_LEVELS = [
     badge: '1 - 3 Yıl',
     desc: 'Aşamalı aşırı yüklenme (progressive overload), hacim döngüleri ve hipertrofi.',
     icon: LightningIcon,
-    accent: '#3b82f6',
+    accent: colors.purpleLight,
   },
   {
     key: 'Advanced',
@@ -281,7 +436,7 @@ const FITNESS_LEVELS = [
     badge: '3+ Yıl',
     desc: 'Yüksek yoğunluklu setler, RPE/RIR hassasiyeti, plato aşımı ve mikro döngüler.',
     icon: TrophyIcon,
-    accent: '#f59e0b',
+    accent: colors.amberLight,
   },
 ] as const;
 
@@ -292,7 +447,7 @@ const GOAL_OPTIONS = [
     badge: 'Lif Büyümesi',
     desc: 'Mekanik gerilim ve metabolik stres ile hedef kas lifi mikroyırtığı ve optimum büyüme.',
     icon: MuscleIcon,
-    accent: '#8b5cf6',
+    accent: colors.purpleLight,
   },
   {
     key: 'bulk',
@@ -300,7 +455,7 @@ const GOAL_OPTIONS = [
     badge: 'MAV Hacim',
     desc: 'Kontrollü kalori fazlası ve maksimum hipertrofi hacmi ile net kas kütlesi inşası.',
     icon: DumbbellIcon,
-    accent: '#3b82f6',
+    accent: colors.cyan,
   },
   {
     key: 'cut',
@@ -308,7 +463,7 @@ const GOAL_OPTIONS = [
     badge: 'MEV Yağ Yakımı',
     desc: 'Kalori açığında kas kütlesini azami seviyede koruyan minimum etkili hacim.',
     icon: FlameIcon,
-    accent: '#ef4444',
+    accent: colors.danger,
   },
   {
     key: 'strength',
@@ -316,7 +471,7 @@ const GOAL_OPTIONS = [
     badge: '1RM & MSS',
     desc: 'Düşük tekrar, yüksek yoğunluklu nöromüsküler patlayıcı kuvvet adaptasyonu.',
     icon: BoltIcon,
-    accent: '#06b6d4',
+    accent: colors.cyan,
   },
   {
     key: 'maintain',
@@ -324,7 +479,7 @@ const GOAL_OPTIONS = [
     badge: 'MV Denge',
     desc: 'Yorulma birikimi olmadan mevcut kas kütlesini koruma ve metabolik zindelik.',
     icon: ShieldIcon,
-    accent: '#10b981',
+    accent: colors.emeraldLight,
   },
 ] as const;
 
@@ -438,13 +593,6 @@ function normalizeFitnessLevel(raw?: string | null): string {
   return 'Intermediate';
 }
 
-function normalizeGender(raw?: string | null): 'male' | 'female' {
-  if (!raw) return 'male';
-  const g = raw.toLowerCase();
-  if (g.includes('fem') || g.includes('kadın') || g.includes('kadin')) return 'female';
-  return 'male';
-}
-
 function normalizeGoal(raw?: string | null): string {
   if (!raw) return 'hypertrophy';
   const g = raw.toLowerCase();
@@ -514,6 +662,1147 @@ function SettingItem({
   );
 }
 
+// ─── Otomatik Klavye Kaydırma Hesaplayıcı ───
+function calculateAutoKeyboardShift(params: {
+  keyboardScreenY?: number;
+  keyboardHeight: number;
+  containerLayoutY: number;
+  containerHeight: number;
+  sheetHeight: number;
+  statusBarInset?: number;
+}): number {
+  const {
+    keyboardScreenY = 0,
+    keyboardHeight,
+    containerLayoutY,
+    containerHeight,
+    sheetHeight,
+    statusBarInset = 44,
+  } = params;
+
+  if (keyboardHeight <= 0) return 0;
+
+  const screenH = Dimensions.get('screen').height;
+  const windowH = Dimensions.get('window').height;
+  const baseScreenHeight = Math.max(screenH, windowH);
+
+  // 1. Android / Sistem adjustResize Kontrolü:
+  const isAlreadyResizedBySystem = containerHeight <= baseScreenHeight - keyboardHeight * 0.7;
+  if (isAlreadyResizedBySystem) {
+    return 0;
+  }
+
+  // 2. Ekran Geometrisi:
+  const actualKeyboardTop =
+    keyboardScreenY > 0 && keyboardScreenY < baseScreenHeight
+      ? keyboardScreenY
+      : baseScreenHeight - keyboardHeight;
+
+  const containerScreenBottom = containerLayoutY + containerHeight;
+  const overlap = Math.max(0, containerScreenBottom - actualKeyboardTop);
+  if (overlap <= 0) return 0;
+
+  // 3. Tavan Güvenliği:
+  const maxAllowedShift = Math.max(0, containerHeight - sheetHeight - statusBarInset);
+
+  return Math.min(overlap, maxAllowedShift);
+}
+
+// ─── Sürüklenebilir Hakkında Alt Panosu ───
+function AboutBottomSheetModal({
+  visible,
+  onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const estimatedSheetHeight = 360;
+  const [sheetHeight, setSheetHeight] = useState(estimatedSheetHeight);
+
+  const [translateY] = useState(() => new Animated.Value(estimatedSheetHeight));
+  const [backdropAnim] = useState(() => new Animated.Value(0));
+
+  const openSheet = useCallback(() => {
+    translateY.setValue(sheetHeight || estimatedSheetHeight);
+    backdropAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        damping: 24,
+        mass: 0.8,
+        stiffness: 220,
+        restDisplacementThreshold: 0.1,
+        restSpeedThreshold: 0.1,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [backdropAnim, estimatedSheetHeight, sheetHeight, translateY]);
+
+  const closeSheet = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: sheetHeight || estimatedSheetHeight,
+        duration: 220,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: false,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        onClose();
+      }
+    });
+  }, [backdropAnim, estimatedSheetHeight, onClose, sheetHeight, translateY]);
+
+  useEffect(() => {
+    if (visible) {
+      openSheet();
+    }
+  }, [visible, openSheet]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return gestureState.dy > 1 || Math.abs(gestureState.dy) > 2;
+        },
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+          return gestureState.dy > 1 || Math.abs(gestureState.dy) > 2;
+        },
+        onPanResponderGrant: () => {
+          translateY.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            translateY.setValue(gestureState.dy);
+            const fade = Math.max(0.2, 1 - gestureState.dy / (sheetHeight * 1.1));
+            backdropAnim.setValue(fade);
+          } else {
+            translateY.setValue(gestureState.dy * 0.18);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const shouldDismiss = gestureState.dy > 70 || gestureState.vy > 0.4;
+          if (shouldDismiss) {
+            closeSheet();
+          } else {
+            Animated.parallel([
+              Animated.spring(translateY, {
+                toValue: 0,
+                damping: 22,
+                mass: 0.8,
+                stiffness: 240,
+                useNativeDriver: false,
+              }),
+              Animated.timing(backdropAnim, {
+                toValue: 1,
+                duration: 160,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: false,
+              }),
+            ]).start();
+          }
+        },
+      }),
+    [backdropAnim, closeSheet, sheetHeight, translateY]
+  );
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={closeSheet}
+      statusBarTranslucent
+    >
+      <View style={styles.modalRootContainer}>
+        <Animated.View style={[styles.modalBackdrop, { opacity: backdropAnim }]}>
+          <Pressable style={styles.modalBackdropTapInner} onPress={closeSheet} />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.modalSheet,
+            {
+              transform: [{ translateY }],
+            },
+          ]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && Math.abs(h - sheetHeight) > 2) {
+              setSheetHeight(h);
+            }
+          }}
+        >
+          {/* Sürükleme Tutamaç Alanı */}
+          <View {...panResponder.panHandlers} style={styles.modalDragHandleZone}>
+            <View style={styles.modalHandle} />
+          </View>
+
+          {/* Başlık Satırı (Aynı zamanda sürüklenebilir) */}
+          <View style={styles.modalHeaderRow}>
+            <View {...panResponder.panHandlers} style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.modalTitle}>Hypertrophy-X Hakkında</Text>
+              <Text style={styles.modalDesc}>
+                Aşağı sürükleyerek kapatabilirsiniz
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.modalCloseButtonRed}
+              onPress={closeSheet}
+              hitSlop={10}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Kapat"
+            >
+              <CloseIcon size={14} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={{ fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: 14 }}>
+            Hipertrofi odaklı bilimsel antrenman, RIR/RPE takibi, progresif aşırı yükleme ve hacim optimizasyon platformu.
+          </Text>
+
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Sürüm</Text>
+            <Text style={styles.aboutVal}>v4.0.0 (Production)</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Framework</Text>
+            <Text style={styles.aboutVal}>Expo SDK 58 / React Native</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Geliştirici</Text>
+            <Text style={styles.aboutVal}>Turan Asgarlı</Text>
+          </View>
+
+          <View style={styles.sheetBottomExtension} pointerEvents="none" />
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Modern & Sürüklenebilir Tema Tercihi Alt Panosu ───
+function ThemeBottomSheetModal({
+  visible,
+  onClose,
+  currentTheme,
+  onSelectTheme,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  currentTheme: 'Koyu' | 'Açık' | 'Sistem';
+  onSelectTheme: (theme: 'Koyu' | 'Açık' | 'Sistem') => void;
+}) {
+  const estimatedSheetHeight = 490;
+  const [sheetHeight, setSheetHeight] = useState(estimatedSheetHeight);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [containerLayoutY, setContainerLayoutY] = useState(0);
+
+  const [translateY] = useState(() => new Animated.Value(estimatedSheetHeight));
+  const [backdropAnim] = useState(() => new Animated.Value(0));
+  const [keyboardShiftAnim] = useState(() => new Animated.Value(0));
+
+  const openSheet = useCallback(() => {
+    translateY.setValue(sheetHeight || estimatedSheetHeight);
+    backdropAnim.setValue(0);
+    keyboardShiftAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        damping: 24,
+        mass: 0.8,
+        stiffness: 220,
+        restDisplacementThreshold: 0.1,
+        restSpeedThreshold: 0.1,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [backdropAnim, estimatedSheetHeight, keyboardShiftAnim, sheetHeight, translateY]);
+
+  const closeSheet = useCallback(() => {
+    Keyboard.dismiss();
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: sheetHeight || estimatedSheetHeight,
+        duration: 220,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: false,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+      Animated.timing(keyboardShiftAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        onClose();
+      }
+    });
+  }, [backdropAnim, estimatedSheetHeight, keyboardShiftAnim, onClose, sheetHeight, translateY]);
+
+  useEffect(() => {
+    if (visible) {
+      openSheet();
+    }
+  }, [visible, openSheet]);
+
+  // Klavye Dinamik Takipçi & Otomatik Hesaplama (Klavye Açıldığında Panoyu Klavyenin Üzerine Taşır)
+  useEffect(() => {
+    if (!visible) {
+      keyboardShiftAnim.setValue(0);
+      return;
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (e: any) => {
+      const kHeight = e?.endCoordinates?.height || 0;
+      const kScreenY = e?.endCoordinates?.screenY;
+      const duration = e?.duration || 220;
+
+      const targetShift = calculateAutoKeyboardShift({
+        keyboardScreenY: kScreenY,
+        keyboardHeight: kHeight,
+        containerLayoutY,
+        containerHeight,
+        sheetHeight,
+        statusBarInset: 44,
+      });
+
+      Animated.timing(keyboardShiftAnim, {
+        toValue: targetShift,
+        duration: Math.max(160, duration),
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const onHide = (e: any) => {
+      const duration = e?.duration || 200;
+      Animated.timing(keyboardShiftAnim, {
+        toValue: 0,
+        duration: Math.max(140, duration),
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const subShow = Keyboard.addListener(showEvent, onShow);
+    const subHide = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [containerHeight, containerLayoutY, keyboardShiftAnim, sheetHeight, visible]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return gestureState.dy > 1 || Math.abs(gestureState.dy) > 2;
+        },
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+          return gestureState.dy > 1 || Math.abs(gestureState.dy) > 2;
+        },
+        onPanResponderGrant: () => {
+          translateY.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            translateY.setValue(gestureState.dy);
+            const fade = Math.max(0.2, 1 - gestureState.dy / (sheetHeight * 1.1));
+            backdropAnim.setValue(fade);
+          } else {
+            translateY.setValue(gestureState.dy * 0.18);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const shouldDismiss = gestureState.dy > 70 || gestureState.vy > 0.4;
+          if (shouldDismiss) {
+            closeSheet();
+          } else {
+            Animated.parallel([
+              Animated.spring(translateY, {
+                toValue: 0,
+                damping: 22,
+                mass: 0.8,
+                stiffness: 240,
+                useNativeDriver: false,
+              }),
+              Animated.timing(backdropAnim, {
+                toValue: 1,
+                duration: 160,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: false,
+              }),
+            ]).start();
+          }
+        },
+      }),
+    [backdropAnim, closeSheet, sheetHeight, translateY]
+  );
+
+  const themeOptions: {
+    id: 'Koyu' | 'Açık' | 'Sistem';
+    title: string;
+    subtitle: string;
+    badge?: string;
+    badgeBg?: string;
+    badgeBorder?: string;
+    badgeColor?: string;
+    icon: () => React.ReactNode;
+    iconBg: string;
+    iconBorder: string;
+    preview: () => React.ReactNode;
+  }[] = [
+    {
+      id: 'Koyu',
+      title: 'Koyu Tema',
+      subtitle: 'OLED derin siyahı & neon mor vurgular',
+      badge: 'Tavsiye Edilen',
+      badgeBg: 'rgba(139, 92, 246, 0.14)',
+      badgeBorder: 'rgba(139, 92, 246, 0.4)',
+      badgeColor: colors.purpleLight,
+      iconBg: colors.purpleBg,
+      iconBorder: colors.purpleBorder,
+      icon: () => <MoonIcon color={colors.purpleLight} size={22} />,
+      preview: () => (
+        <View style={themeModalStyles.previewDarkBox}>
+          <View style={themeModalStyles.previewDarkHeader} />
+          <View style={themeModalStyles.previewDarkLine1} />
+          <View style={themeModalStyles.previewDarkLine2} />
+        </View>
+      ),
+    },
+    {
+      id: 'Açık',
+      title: 'Açık Tema',
+      subtitle: 'Yüksek aydınlıkta maksimum netlik ve kontrast',
+      badge: 'Yüksek Kontrast',
+      badgeBg: 'rgba(245, 158, 11, 0.14)',
+      badgeBorder: 'rgba(245, 158, 11, 0.35)',
+      badgeColor: colors.amberLight,
+      iconBg: 'rgba(245, 158, 11, 0.12)',
+      iconBorder: 'rgba(245, 158, 11, 0.35)',
+      icon: () => <SunIcon color={colors.amberLight} size={22} />,
+      preview: () => (
+        <View style={themeModalStyles.previewLightBox}>
+          <View style={themeModalStyles.previewLightHeader} />
+          <View style={themeModalStyles.previewLightLine1} />
+          <View style={themeModalStyles.previewLightLine2} />
+        </View>
+      ),
+    },
+    {
+      id: 'Sistem',
+      title: 'Sistem Teması',
+      subtitle: 'Cihaz ayarlarınızla otomatik senkronize olur',
+      badge: 'Otomatik',
+      badgeBg: 'rgba(56, 189, 248, 0.12)',
+      badgeBorder: 'rgba(56, 189, 248, 0.35)',
+      badgeColor: colors.cyan,
+      iconBg: colors.cyanBg,
+      iconBorder: colors.cyanBorder,
+      icon: () => <SystemThemeIcon color={colors.cyan} size={22} />,
+      preview: () => (
+        <View style={themeModalStyles.previewSplitBox}>
+          <View style={themeModalStyles.previewSplitLeft}>
+            <View style={themeModalStyles.previewDarkHeader} />
+            <View style={themeModalStyles.previewDarkLine1} />
+          </View>
+          <View style={themeModalStyles.previewSplitRight}>
+            <View style={themeModalStyles.previewLightHeader} />
+            <View style={themeModalStyles.previewLightLine1} />
+          </View>
+        </View>
+      ),
+    },
+  ];
+
+  const handleSelect = (id: 'Koyu' | 'Açık' | 'Sistem') => {
+    onSelectTheme(id);
+    setTimeout(() => {
+      closeSheet();
+    }, 180);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={closeSheet}
+      statusBarTranslucent
+    >
+      <View
+        style={styles.modalRootContainer}
+        onLayout={(e) => {
+          const { y, height } = e.nativeEvent.layout;
+          setContainerLayoutY(y);
+          setContainerHeight(height);
+        }}
+      >
+        <Animated.View style={[styles.modalBackdrop, { opacity: backdropAnim }]}>
+          <Pressable style={styles.modalBackdropTapInner} onPress={closeSheet} />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.modalSheet,
+            {
+              transform: [
+                {
+                  translateY: Animated.subtract(translateY, keyboardShiftAnim),
+                },
+              ],
+            },
+          ]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && Math.abs(h - sheetHeight) > 2) {
+              setSheetHeight(h);
+            }
+          }}
+        >
+          {/* Sürükleme Tutamaç Alanı */}
+          <View {...panResponder.panHandlers} style={styles.modalDragHandleZone}>
+            <View style={styles.modalHandle} />
+          </View>
+
+          {/* Başlık Satırı */}
+          <View style={styles.modalHeaderRow}>
+            <View {...panResponder.panHandlers} style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ThemePaletteIcon size={20} color={colors.purpleLight} />
+                <Text style={styles.modalTitle}>Tema Tercihi</Text>
+              </View>
+              <Text style={styles.modalDesc}>
+                Uygulama arayüzünün görsel görünümünü seçin
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.modalCloseButtonRed}
+              onPress={closeSheet}
+              hitSlop={10}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Kapat"
+            >
+              <CloseIcon size={14} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Tema Seçenek Kartları */}
+          <View style={{ gap: 10, marginTop: 4, marginBottom: 14 }}>
+            {themeOptions.map((opt) => {
+              const isSelected = currentTheme === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[
+                    themeModalStyles.themeCard,
+                    isSelected && themeModalStyles.themeCardSelected,
+                  ]}
+                  onPress={() => handleSelect(opt.id)}
+                  activeOpacity={0.75}
+                >
+                  {/* İkon */}
+                  <View
+                    style={[
+                      themeModalStyles.themeIconBox,
+                      { backgroundColor: opt.iconBg, borderColor: opt.iconBorder },
+                    ]}
+                  >
+                    {opt.icon()}
+                  </View>
+
+                  {/* Metinler */}
+                  <View style={themeModalStyles.themeInfoCol}>
+                    <View style={themeModalStyles.themeTitleRow}>
+                      <Text style={themeModalStyles.themeTitle}>{opt.title}</Text>
+                      {opt.badge ? (
+                        <View
+                          style={[
+                            themeModalStyles.themeBadge,
+                            {
+                              backgroundColor: opt.badgeBg,
+                              borderColor: opt.badgeBorder,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              themeModalStyles.themeBadgeText,
+                              { color: opt.badgeColor },
+                            ]}
+                          >
+                            {opt.badge}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={themeModalStyles.themeSubtitle} numberOfLines={2}>
+                      {opt.subtitle}
+                    </Text>
+                  </View>
+
+                  {/* Mini Önizleme Maketi */}
+                  <View style={themeModalStyles.previewContainer}>
+                    {opt.preview()}
+                  </View>
+
+                  {/* Radio Çemberi */}
+                  <View
+                    style={[
+                      themeModalStyles.radioOuter,
+                      isSelected && themeModalStyles.radioOuterSelected,
+                    ]}
+                  >
+                    {isSelected ? <View style={themeModalStyles.radioInner} /> : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Alt Bilgi İpucu Kutusu */}
+          <View style={themeModalStyles.tipBox}>
+            <Text style={themeModalStyles.tipIcon}>💡</Text>
+            <Text style={themeModalStyles.tipText}>
+              {"Cyber Dark teması AMOLED ekranlarda %30'a kadar pil tasarrufu sağlar ve antrenman sırasında odaklanmanızı artırır."}
+            </Text>
+          </View>
+
+          <View style={styles.sheetBottomExtension} pointerEvents="none" />
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Modern & Sürüklenebilir Birim Tercihleri Alt Panosu ───
+function UnitsBottomSheetModal({
+  visible,
+  onClose,
+  weightUnit,
+  distanceUnit,
+  bodyMeasurementUnit,
+  onSave,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  weightUnit: 'kg' | 'lbs';
+  distanceUnit: 'km' | 'mil';
+  bodyMeasurementUnit: 'cm' | 'in';
+  onSave: (units: {
+    weight: 'kg' | 'lbs';
+    distance: 'km' | 'mil';
+    body: 'cm' | 'in';
+  }) => void;
+}) {
+  const estimatedSheetHeight = 390;
+  const [sheetHeight, setSheetHeight] = useState(estimatedSheetHeight);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [containerLayoutY, setContainerLayoutY] = useState(0);
+
+  // Yerel seçim state'leri
+  const [selectedWeight, setSelectedWeight] = useState<'kg' | 'lbs'>(weightUnit);
+  const [selectedDistance, setSelectedDistance] = useState<'km' | 'mil'>(distanceUnit);
+  const [selectedBody, setSelectedBody] = useState<'cm' | 'in'>(bodyMeasurementUnit);
+
+  const [translateY] = useState(() => new Animated.Value(estimatedSheetHeight));
+  const [backdropAnim] = useState(() => new Animated.Value(0));
+  const [keyboardShiftAnim] = useState(() => new Animated.Value(0));
+
+
+  const openSheet = useCallback(() => {
+    translateY.setValue(sheetHeight || estimatedSheetHeight);
+    backdropAnim.setValue(0);
+    keyboardShiftAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        damping: 24,
+        mass: 0.8,
+        stiffness: 220,
+        restDisplacementThreshold: 0.1,
+        restSpeedThreshold: 0.1,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [backdropAnim, estimatedSheetHeight, keyboardShiftAnim, sheetHeight, translateY]);
+
+  const closeSheet = useCallback(() => {
+    Keyboard.dismiss();
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: sheetHeight || estimatedSheetHeight,
+        duration: 220,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: false,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+      Animated.timing(keyboardShiftAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        onClose();
+      }
+    });
+  }, [backdropAnim, estimatedSheetHeight, keyboardShiftAnim, onClose, sheetHeight, translateY]);
+
+  useEffect(() => {
+    if (visible) {
+      openSheet();
+    }
+  }, [visible, openSheet]);
+
+  // Klavye Dinamik Takipçi & Otomatik Hesaplama
+  useEffect(() => {
+    if (!visible) {
+      keyboardShiftAnim.setValue(0);
+      return;
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (e: any) => {
+      const kHeight = e?.endCoordinates?.height || 0;
+      const kScreenY = e?.endCoordinates?.screenY;
+      const duration = e?.duration || 220;
+
+      const targetShift = calculateAutoKeyboardShift({
+        keyboardScreenY: kScreenY,
+        keyboardHeight: kHeight,
+        containerLayoutY,
+        containerHeight,
+        sheetHeight,
+        statusBarInset: 44,
+      });
+
+      Animated.timing(keyboardShiftAnim, {
+        toValue: targetShift,
+        duration: Math.max(160, duration),
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const onHide = (e: any) => {
+      const duration = e?.duration || 200;
+      Animated.timing(keyboardShiftAnim, {
+        toValue: 0,
+        duration: Math.max(140, duration),
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const subShow = Keyboard.addListener(showEvent, onShow);
+    const subHide = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [containerHeight, containerLayoutY, keyboardShiftAnim, sheetHeight, visible]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return gestureState.dy > 1 || Math.abs(gestureState.dy) > 2;
+        },
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+          return gestureState.dy > 1 || Math.abs(gestureState.dy) > 2;
+        },
+        onPanResponderGrant: () => {
+          translateY.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            translateY.setValue(gestureState.dy);
+            const fade = Math.max(0.2, 1 - gestureState.dy / (sheetHeight * 1.1));
+            backdropAnim.setValue(fade);
+          } else {
+            translateY.setValue(gestureState.dy * 0.18);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const shouldDismiss = gestureState.dy > 70 || gestureState.vy > 0.4;
+          if (shouldDismiss) {
+            closeSheet();
+          } else {
+            Animated.parallel([
+              Animated.spring(translateY, {
+                toValue: 0,
+                damping: 22,
+                mass: 0.8,
+                stiffness: 240,
+                useNativeDriver: false,
+              }),
+              Animated.timing(backdropAnim, {
+                toValue: 1,
+                duration: 160,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: false,
+              }),
+            ]).start();
+          }
+        },
+      }),
+    [backdropAnim, closeSheet, sheetHeight, translateY]
+  );
+
+  const handleSave = () => {
+    onSave({
+      weight: selectedWeight,
+      distance: selectedDistance,
+      body: selectedBody,
+    });
+    closeSheet();
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={closeSheet}
+      statusBarTranslucent
+    >
+      <View
+        style={styles.modalRootContainer}
+        onLayout={(e) => {
+          const { y, height } = e.nativeEvent.layout;
+          setContainerLayoutY(y);
+          setContainerHeight(height);
+        }}
+      >
+        <Animated.View style={[styles.modalBackdrop, { opacity: backdropAnim }]}>
+          <Pressable style={styles.modalBackdropTapInner} onPress={closeSheet} />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.modalSheet,
+            {
+              transform: [
+                {
+                  translateY: Animated.subtract(translateY, keyboardShiftAnim),
+                },
+              ],
+            },
+          ]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && Math.abs(h - sheetHeight) > 2) {
+              setSheetHeight(h);
+            }
+          }}
+        >
+          {/* Sürükleme Tutamaç Alanı */}
+          <View {...panResponder.panHandlers} style={styles.modalDragHandleZone}>
+            <View style={styles.modalHandle} />
+          </View>
+
+          {/* Başlık Satırı */}
+          <View style={styles.modalHeaderRow}>
+            <View {...panResponder.panHandlers} style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ScaleIcon size={20} color={colors.purpleLight} />
+                <Text style={styles.modalTitle}>Birim Tercihleri</Text>
+              </View>
+              <Text style={styles.modalDesc}>
+                Ağırlık, mesafe ve vücut ölçüleri formatını seçin
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.modalCloseButtonRed}
+              onPress={closeSheet}
+              hitSlop={10}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Kapat"
+            >
+              <CloseIcon size={14} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ gap: 14, marginVertical: 6 }}>
+            {/* 1. BÖLÜM: AĞIRLIK BİRİMİ */}
+            <View style={unitsModalStyles.groupBlock}>
+              <View style={unitsModalStyles.groupHeader}>
+                <DumbbellIcon size={14} color={colors.amberLight} />
+                <Text style={unitsModalStyles.groupTitle}>AĞIRLIK BİRİMİ</Text>
+              </View>
+              <View style={unitsModalStyles.optionsRow}>
+                <TouchableOpacity
+                  style={[
+                    unitsModalStyles.unitBtn,
+                    selectedWeight === 'kg' && unitsModalStyles.unitBtnSelected,
+                  ]}
+                  onPress={() => setSelectedWeight('kg')}
+                  activeOpacity={0.75}
+                >
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnSymbol,
+                      selectedWeight === 'kg' && unitsModalStyles.unitBtnSymbolSelected,
+                    ]}
+                  >
+                    kg
+                  </Text>
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnName,
+                      selectedWeight === 'kg' && unitsModalStyles.unitBtnNameSelected,
+                    ]}
+                  >
+                    Kilogram
+                  </Text>
+                  {selectedWeight === 'kg' ? (
+                    <Text style={unitsModalStyles.unitBtnCheck}>✓</Text>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    unitsModalStyles.unitBtn,
+                    selectedWeight === 'lbs' && unitsModalStyles.unitBtnSelected,
+                  ]}
+                  onPress={() => setSelectedWeight('lbs')}
+                  activeOpacity={0.75}
+                >
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnSymbol,
+                      selectedWeight === 'lbs' && unitsModalStyles.unitBtnSymbolSelected,
+                    ]}
+                  >
+                    lbs
+                  </Text>
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnName,
+                      selectedWeight === 'lbs' && unitsModalStyles.unitBtnNameSelected,
+                    ]}
+                  >
+                    Pound
+                  </Text>
+                  {selectedWeight === 'lbs' ? (
+                    <Text style={unitsModalStyles.unitBtnCheck}>✓</Text>
+                  ) : null}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* 2. BÖLÜM: MESAFE BİRİMİ */}
+            <View style={unitsModalStyles.groupBlock}>
+              <View style={unitsModalStyles.groupHeader}>
+                <RouteIcon size={14} color={colors.emeraldLight} />
+                <Text style={unitsModalStyles.groupTitle}>MESAFE BİRİMİ</Text>
+              </View>
+              <View style={unitsModalStyles.optionsRow}>
+                <TouchableOpacity
+                  style={[
+                    unitsModalStyles.unitBtn,
+                    selectedDistance === 'km' && unitsModalStyles.unitBtnSelected,
+                  ]}
+                  onPress={() => setSelectedDistance('km')}
+                  activeOpacity={0.75}
+                >
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnSymbol,
+                      selectedDistance === 'km' && unitsModalStyles.unitBtnSymbolSelected,
+                    ]}
+                  >
+                    km
+                  </Text>
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnName,
+                      selectedDistance === 'km' && unitsModalStyles.unitBtnNameSelected,
+                    ]}
+                  >
+                    Kilometre
+                  </Text>
+                  {selectedDistance === 'km' ? (
+                    <Text style={unitsModalStyles.unitBtnCheck}>✓</Text>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    unitsModalStyles.unitBtn,
+                    selectedDistance === 'mil' && unitsModalStyles.unitBtnSelected,
+                  ]}
+                  onPress={() => setSelectedDistance('mil')}
+                  activeOpacity={0.75}
+                >
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnSymbol,
+                      selectedDistance === 'mil' && unitsModalStyles.unitBtnSymbolSelected,
+                    ]}
+                  >
+                    mi
+                  </Text>
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnName,
+                      selectedDistance === 'mil' && unitsModalStyles.unitBtnNameSelected,
+                    ]}
+                  >
+                    Mil
+                  </Text>
+                  {selectedDistance === 'mil' ? (
+                    <Text style={unitsModalStyles.unitBtnCheck}>✓</Text>
+                  ) : null}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* 3. BÖLÜM: VÜCUT ÖLÇÜLERİ */}
+            <View style={unitsModalStyles.groupBlock}>
+              <View style={unitsModalStyles.groupHeader}>
+                <RulerIcon size={14} color={colors.cyan} />
+                <Text style={unitsModalStyles.groupTitle}>VÜCUT ÖLÇÜLERİ</Text>
+              </View>
+              <View style={unitsModalStyles.optionsRow}>
+                <TouchableOpacity
+                  style={[
+                    unitsModalStyles.unitBtn,
+                    selectedBody === 'cm' && unitsModalStyles.unitBtnSelected,
+                  ]}
+                  onPress={() => setSelectedBody('cm')}
+                  activeOpacity={0.75}
+                >
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnSymbol,
+                      selectedBody === 'cm' && unitsModalStyles.unitBtnSymbolSelected,
+                    ]}
+                  >
+                    cm
+                  </Text>
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnName,
+                      selectedBody === 'cm' && unitsModalStyles.unitBtnNameSelected,
+                    ]}
+                  >
+                    Santimetre
+                  </Text>
+                  {selectedBody === 'cm' ? (
+                    <Text style={unitsModalStyles.unitBtnCheck}>✓</Text>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    unitsModalStyles.unitBtn,
+                    selectedBody === 'in' && unitsModalStyles.unitBtnSelected,
+                  ]}
+                  onPress={() => setSelectedBody('in')}
+                  activeOpacity={0.75}
+                >
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnSymbol,
+                      selectedBody === 'in' && unitsModalStyles.unitBtnSymbolSelected,
+                    ]}
+                  >
+                    in
+                  </Text>
+                  <Text
+                    style={[
+                      unitsModalStyles.unitBtnName,
+                      selectedBody === 'in' && unitsModalStyles.unitBtnNameSelected,
+                    ]}
+                  >
+                    İnç
+                  </Text>
+                  {selectedBody === 'in' ? (
+                    <Text style={unitsModalStyles.unitBtnCheck}>✓</Text>
+                  ) : null}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Yeşil Kaydet Butonu (Vazgeç Yok) */}
+          <View style={unitsModalStyles.actionBox}>
+            <TouchableOpacity
+              style={unitsModalStyles.saveBtnGreen}
+              onPress={handleSave}
+              activeOpacity={0.75}
+            >
+              <Text style={unitsModalStyles.saveBtnGreenText}>Kaydet</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.sheetBottomExtension} pointerEvents="none" />
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
@@ -524,22 +1813,14 @@ export default function ProfileScreen() {
     error,
     refetch,
     updateProfile,
-    isUpdatingProfile,
     deleteAccount,
     isDeletingAccount,
-    requestEmailUpdate,
-    isRequestingEmail,
-    confirmEmailUpdate,
-    isConfirmingEmail,
-    requestChangePassword,
-    isRequestingPassword,
-    confirmChangePassword,
-    isConfirmingPassword,
   } = useUser();
 
   // Tercih Durumları
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
   const [distanceUnit, setDistanceUnit] = useState<'km' | 'mil'>('km');
+  const [bodyMeasurementUnit, setBodyMeasurementUnit] = useState<'cm' | 'in'>('cm');
   const [themeMode, setThemeMode] = useState<'Koyu' | 'Açık' | 'Sistem'>('Koyu');
   const [language, setLanguage] = useState<'Türkçe' | 'English'>('Türkçe');
 
@@ -555,40 +1836,17 @@ export default function ProfileScreen() {
 
   // Modal Durumları
   const [activeModal, setActiveModal] = useState<
-    | 'personalInfo'
     | 'fitnessLevel'
     | 'goal'
-    | 'account'
     | 'notifications'
     | 'workout'
     | 'units'
-    | 'themeAndLanguage'
-    | 'contact'
+    | 'language'
+    | 'theme'
     | 'about'
     | 'deleteAccount'
     | null
   >(null);
-
-  // Kişisel Bilgiler Form State (Modal içi düzenleme)
-  const [gender, setGender] = useState<'male' | 'female'>('male');
-  const [age, setAge] = useState('');
-  const [height, setHeight] = useState('');
-  const [weight, setWeight] = useState('');
-  const [daysPerWeek, setDaysPerWeek] = useState('4');
-  const [sessionTimeMins, setSessionTimeMins] = useState('60');
-
-  // Hesap & Güvenlik State
-  const [accountSubView, setAccountSubView] = useState<'info' | 'changeEmail' | 'changePassword'>('info');
-  const [newEmail, setNewEmail] = useState('');
-  const [emailOtpToken, setEmailOtpToken] = useState('');
-  const [emailOtpCode, setEmailOtpCode] = useState('');
-  const [emailStep, setEmailStep] = useState<'request' | 'confirm'>('request');
-
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [passwordOtpToken, setPasswordOtpToken] = useState('');
-  const [passwordOtpCode, setPasswordOtpCode] = useState('');
-  const [passwordStep, setPasswordStep] = useState<'request' | 'confirm'>('request');
 
   // Tehlikeli Bölge State
   const [deletePassword, setDeletePassword] = useState('');
@@ -596,67 +1854,83 @@ export default function ProfileScreen() {
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Geri Bildirim Formu
-  const [feedbackText, setFeedbackText] = useState('');
-
   // RPG & XP Durumu
   const rpgState = useMemo(() => calculateRpgState(workouts), [workouts]);
+
+  // ─── Dinamik Kullanıcı Antrenman & Devamlılık İstatistikleri ───
+  const workoutStats = useMemo(() => {
+    const list = Array.isArray(workouts) ? workouts : [];
+    const totalCount = list.length;
+
+    // 1. Bu Hafta tamamlanan seanslar (Pazartesi 00:00 - Pazar 23:59 yerel saat aralığı)
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0: Pazar, 1: Pazartesi, ...
+    const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    const thisWeekCount = list.filter((w) => {
+      if (!w || !w.date) return false;
+      const dateStr = String(w.date).trim();
+      const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`);
+      return !isNaN(d.getTime()) && d >= monday && d <= sunday;
+    }).length;
+
+    // 2. Devamlılık Yüzdesi: Üyelik başlangıcından (user.created_at) bu yana kaçırılan antrenmanlara göre
+    let hasConsistencyData = false;
+    let consistencyRate = 0;
+
+    if (user?.created_at) {
+      const regDate = new Date(user.created_at);
+      if (!isNaN(regDate.getTime())) {
+        const diffMs = Math.max(0, now.getTime() - regDate.getTime());
+        const elapsedDays = Math.max(1, diffMs / (1000 * 60 * 60 * 24));
+        const elapsedWeeks = Math.max(1, elapsedDays / 7);
+        const targetDaysPerWeek = Number(user.days_per_week) || 4;
+        const totalTarget = elapsedWeeks * targetDaysPerWeek;
+
+        if (totalTarget > 0 && totalCount > 0) {
+          consistencyRate = Math.min(100, Math.max(0, Math.round((totalCount / totalTarget) * 100)));
+          hasConsistencyData = true;
+        }
+      }
+    }
+
+    // 3. Veri bulunamıyorsa veya 0 ise BMI (Vücut Kitle İndeksi) yedeği
+    let bmiValue: string | null = null;
+    if (user?.height && user?.weight && user.height > 0 && user.weight > 0) {
+      const heightM = user.height / 100;
+      const bmiCalc = user.weight / (heightM * heightM);
+      if (bmiCalc > 10 && bmiCalc < 80) {
+        bmiValue = bmiCalc.toFixed(1);
+      }
+    }
+
+    return {
+      thisWeekCount,
+      totalCount,
+      hasConsistencyData,
+      consistencyRate,
+      bmiValue,
+    };
+  }, [workouts, user]);
 
   // Seviye Rozet Bilgisi
   const levelBadgeInfo =
     rpgState.currentLevel >= 6
-      ? { label: 'Elit Atlet', color: '#f59e0b' }
+      ? { label: 'Elit Atlet', color: colors.amberLight }
       : rpgState.currentLevel >= 3
-        ? { label: 'İleri Seviye', color: '#3b82f6' }
-        : { label: 'Başlangıç Atlet', color: '#10b981' };
+        ? { label: 'İleri Seviye', color: colors.purpleLight }
+        : { label: 'Başlangıç Atlet', color: colors.emeraldLight };
 
   // Seçili Seviye & Hedef Bilgisi
   const userFitness = normalizeFitnessLevel(user?.fitness_level);
-  const selectedFitnessObj = useMemo(
-    () => FITNESS_LEVELS.find((f) => f.key === userFitness) || FITNESS_LEVELS[1],
-    [userFitness]
-  );
-
   const userGoal = normalizeGoal(user?.goal);
-  const selectedGoalObj = useMemo(
-    () => GOAL_OPTIONS.find((g) => g.key === userGoal) || GOAL_OPTIONS[0],
-    [userGoal]
-  );
-
-  // Kişisel Bilgiler Modalını Aç ve Formu Doldur
-  const openPersonalInfoModal = () => {
-    if (user) {
-      setGender(normalizeGender(user.gender));
-      setAge(user.age ? String(user.age) : '');
-      setHeight(user.height ? String(user.height) : '');
-      setWeight(user.weight ? String(user.weight) : '');
-      setDaysPerWeek(user.days_per_week ? String(user.days_per_week) : '4');
-      setSessionTimeMins(user.session_time_mins ? String(user.session_time_mins) : '60');
-    }
-    setActiveModal('personalInfo');
-  };
-
-  // Kişisel Bilgileri Kaydet
-  const handleSavePersonalInfo = async () => {
-    if (!user) return;
-    try {
-      await updateProfile({
-        username: user.username,
-        gender,
-        age: age ? parseInt(age, 10) : null,
-        height: height ? parseFloat(height) : null,
-        weight: weight ? parseFloat(weight) : null,
-        fitness_level: user.fitness_level || 'Intermediate',
-        goal: user.goal || 'hypertrophy',
-        days_per_week: daysPerWeek ? parseInt(daysPerWeek, 10) : 4,
-        session_time_mins: sessionTimeMins ? parseInt(sessionTimeMins, 10) : 60,
-      });
-      Alert.alert('Başarılı', 'Kişisel bilgileriniz güncellendi.');
-      setActiveModal(null);
-    } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Bilgiler güncellenemedi.');
-    }
-  };
 
   // Seviye Değiştir
   const handleSelectFitnessLevel = async (newLevel: string) => {
@@ -683,85 +1957,6 @@ export default function ProfileScreen() {
       setActiveModal(null);
     } catch (err: any) {
       Alert.alert('Hata', err?.message || 'Hedef güncellenemedi.');
-    }
-  };
-
-  // E-posta Güncelleme Adım 1
-  const handleRequestEmail = async () => {
-    if (!newEmail.trim() || !newEmail.includes('@')) {
-      Alert.alert('Uyarı', 'Lütfen geçerli bir e-posta adresi girin.');
-      return;
-    }
-    try {
-      const res = await requestEmailUpdate({ new_email: newEmail.trim() });
-      setEmailOtpToken(res.token);
-      setEmailStep('confirm');
-      Alert.alert('Doğrulama Kodu Gönderildi', res.message);
-    } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'E-posta kodu gönderilemedi.');
-    }
-  };
-
-  // E-posta Güncelleme Adım 2
-  const handleConfirmEmail = async () => {
-    if (emailOtpCode.trim().length !== 6) {
-      Alert.alert('Uyarı', 'Lütfen 6 haneli doğrulama kodunu girin.');
-      return;
-    }
-    try {
-      const res = await confirmEmailUpdate({
-        token: emailOtpToken,
-        code: emailOtpCode.trim(),
-      });
-      Alert.alert('Başarılı', res.message);
-      setAccountSubView('info');
-      setEmailStep('request');
-      setNewEmail('');
-      setEmailOtpCode('');
-      refetch();
-    } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Kod doğrulanamadı.');
-    }
-  };
-
-  // Şifre Değiştirme Adım 1
-  const handleRequestPassword = async () => {
-    if (!oldPassword || newPassword.length < 6) {
-      Alert.alert('Uyarı', 'Mevcut şifrenizi ve en az 6 karakterli yeni şifrenizi girin.');
-      return;
-    }
-    try {
-      const res = await requestChangePassword({
-        old_password: oldPassword,
-        new_password: newPassword,
-      });
-      setPasswordOtpToken(res.token);
-      setPasswordStep('confirm');
-      Alert.alert('Doğrulama Kodu Gönderildi', res.message);
-    } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Şifre değiştirme talebi başarısız.');
-    }
-  };
-
-  // Şifre Değiştirme Adım 2
-  const handleConfirmPassword = async () => {
-    if (passwordOtpCode.trim().length !== 6) {
-      Alert.alert('Uyarı', 'Lütfen 6 haneli onay kodunu girin.');
-      return;
-    }
-    try {
-      const res = await confirmChangePassword({
-        token: passwordOtpToken,
-        code: passwordOtpCode.trim(),
-      });
-      Alert.alert('Başarılı', res.message);
-      setAccountSubView('info');
-      setPasswordStep('request');
-      setOldPassword('');
-      setNewPassword('');
-      setPasswordOtpCode('');
-    } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Şifre güncellenemedi.');
     }
   };
 
@@ -849,7 +2044,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               hitSlop={10}
             >
-              <BackIcon size={20} color="#ffffff" />
+              <BackIcon size={20} color={colors.text} />
             </TouchableOpacity>
           ) : (
             <View style={{ width: 40 }} />
@@ -858,12 +2053,12 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitle}>Profil</Text>
         <TouchableOpacity
           style={styles.headerCircleBtn}
-          onPress={openPersonalInfoModal}
+          onPress={() => router.push('/(app)/personal-info' as any)}
           activeOpacity={0.7}
           hitSlop={10}
-          accessibilityLabel="Kişisel Bilgileri Düzenle"
+          accessibilityLabel="Kişisel Bilgiler"
         >
-          <EditPencilIcon size={18} color="#ffffff" />
+          <EditPencilIcon size={18} color={colors.purpleLight} />
         </TouchableOpacity>
       </View>
 
@@ -949,74 +2144,100 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* ─── 3'lü Özet İstatistik Kutuları (Görseldeki Yaş / Boy / Kilo) ─── */}
-          <View style={styles.statBoxesRow}>
-            <TouchableOpacity
-              style={styles.statBox}
-              onPress={openPersonalInfoModal}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.statBoxLabel}>Yaş</Text>
-              <Text style={styles.statBoxValue}>
-                {user.age ? `${user.age}` : '--'}{' '}
-                <Text style={styles.statBoxUnit}>yaş</Text>
-              </Text>
-            </TouchableOpacity>
+          {/* ─── Bu Ayki Özetin Kart Bölümü (Fotoğraftaki Tasarım) ─── */}
+          <View style={styles.monthlySummarySection}>
+            <Text style={styles.monthlySummaryTitle}>Bu ayki özetin</Text>
 
-            <TouchableOpacity
-              style={styles.statBox}
-              onPress={openPersonalInfoModal}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.statBoxLabel}>Boy</Text>
-              <Text style={styles.statBoxValue}>
-                {user.height ? `${user.height}` : '--'}{' '}
-                <Text style={styles.statBoxUnit}>cm</Text>
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.monthlySummaryStatsRow}>
+              {/* 1. Bu Hafta */}
+              <TouchableOpacity
+                style={styles.monthlySummaryStatCol}
+                onPress={() => router.push('/(app)/(tabs)/history' as any)}
+                activeOpacity={0.7}
+                accessibilityLabel="Bu Hafta Antrenman Seansları"
+              >
+                <CalendarIcon size={22} color="#C084FC" />
+                <Text style={styles.monthlySummaryStatLabel}>Bu Hafta</Text>
+                <View style={styles.monthlySummaryValWrap}>
+                  <Text style={styles.monthlySummaryStatNumber}>{workoutStats.thisWeekCount}</Text>
+                  <Text style={styles.monthlySummaryStatUnit}>seans</Text>
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.statBox}
-              onPress={openPersonalInfoModal}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.statBoxLabel}>Kilo</Text>
-              <Text style={styles.statBoxValue}>
-                {user.weight ? `${user.weight}` : '--'}{' '}
-                <Text style={styles.statBoxUnit}>kg</Text>
-              </Text>
-            </TouchableOpacity>
+              <View style={styles.monthlySummaryDivider} />
+
+              {/* 2. Devamlılık */}
+              <TouchableOpacity
+                style={styles.monthlySummaryStatCol}
+                onPress={() => router.push('/(app)/(tabs)/progress' as any)}
+                activeOpacity={0.7}
+                accessibilityLabel="Antrenman Devamlılık Oranı"
+              >
+                <SummaryFlameIcon size={22} color="#34D399" />
+                <Text style={styles.monthlySummaryStatLabel}>Devamlılık</Text>
+                <View style={styles.monthlySummaryValWrap}>
+                  <Text style={styles.monthlySummaryStatNumber}>%{workoutStats.consistencyRate}</Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.monthlySummaryDivider} />
+
+              {/* 3. Toplam */}
+              <TouchableOpacity
+                style={styles.monthlySummaryStatCol}
+                onPress={() => router.push('/(app)/(tabs)/history' as any)}
+                activeOpacity={0.7}
+                accessibilityLabel="Toplam Antrenman Seansları"
+              >
+                <TrendingUpIcon size={22} color="#C084FC" />
+                <Text style={styles.monthlySummaryStatLabel}>Toplam</Text>
+                <View style={styles.monthlySummaryValWrap}>
+                  <Text style={styles.monthlySummaryStatNumber}>{workoutStats.totalCount}</Text>
+                  <Text style={styles.monthlySummaryStatUnit}>seans</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
         </Card>
 
         {/* ═══════════════════════════════════════════════
-            BÖLÜM 1: HESAP AYARLARI (Account settings)
+            BÖLÜM 1: HESAP (Account)
            ═══════════════════════════════════════════════ */}
-        <Text style={styles.sectionTitle}>Hesap Ayarları</Text>
+        <Text style={styles.sectionTitle}>Hesap</Text>
         <View style={styles.groupCard}>
           <SettingItem
-            icon={<UserIcon color="#3b82f6" />}
+            icon={<UserIcon color={colors.purpleLight} />}
             title="Kişisel Bilgiler"
-            subtitle="Cinsiyet, yaş, boy ve kilo ölçümleri"
-            valueBadge={user.age && user.weight ? `${user.age} y · ${user.weight} kg` : undefined}
-            onPress={openPersonalInfoModal}
+            onPress={() => router.push('/(app)/personal-info' as any)}
           />
           <SettingItem
-            icon={<BellIcon color="#8b5cf6" />}
+            icon={<ShieldIcon color={colors.emeraldLight} />}
+            title="Hesap ve Güvenlik"
+            onPress={() => router.push('/(app)/security' as any)}
+          />
+        </View>
+
+        {/* ═══════════════════════════════════════════════
+            BÖLÜM 2: BİLDİRİMLER (Notifications)
+           ═══════════════════════════════════════════════ */}
+        <Text style={styles.sectionTitle}>Bildirimler</Text>
+        <View style={styles.groupCard}>
+          <SettingItem
+            icon={<BellIcon color={colors.purpleLight} />}
             title="Hatırlatıcılar & Bildirimler"
             subtitle="Antrenman saatleri ve dinlenme uyarıları"
             valueBadge={workoutReminders ? 'Açık' : 'Kapalı'}
             onPress={() => setActiveModal('notifications')}
           />
           <SettingItem
-            icon={<SoundIcon color="#10b981" />}
+            icon={<SoundIcon color={colors.emeraldLight} />}
             title="Sesler"
             subtitle="Dinlenme sayacı ses efektleri"
             rightElement={
               <Switch
                 value={restTimerSound}
                 onValueChange={setRestTimerSound}
-                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                trackColor={{ false: '#1E2538', true: colors.purple }}
                 thumbColor="#ffffff"
               />
             }
@@ -1024,60 +2245,53 @@ export default function ProfileScreen() {
         </View>
 
         {/* ═══════════════════════════════════════════════
-            BÖLÜM 2: TERCİHLER (Preferences)
+            BÖLÜM 3: TERCİHLER (Preferences)
            ═══════════════════════════════════════════════ */}
         <Text style={styles.sectionTitle}>Tercihler</Text>
         <View style={styles.groupCard}>
           <SettingItem
-            icon={<TrophyIcon color="#f59e0b" />}
-            title="Deneyim Seviyesi"
-            subtitle="Mevcut antrenman tecrübeniz ve periyotlama"
-            valueBadge={selectedFitnessObj.title}
-            onPress={() => setActiveModal('fitnessLevel')}
-          />
-          <SettingItem
-            icon={<TargetIcon color="#ec4899" />}
-            title="Fitness Hedefi"
-            subtitle="Hipertrofi, bulk, definasyon, güç..."
-            valueBadge={selectedGoalObj.title}
-            onPress={() => setActiveModal('goal')}
-          />
-          <SettingItem
-            icon={<DumbbellIcon color="#06b6d4" />}
-            title="Antrenman Tercihleri"
+            icon={<DumbbellIcon color={colors.cyan} />}
+            title="Antrenman Tercihi"
             subtitle="Dinlenme sayacı ve otomatik başlatma"
             valueBadge={`${defaultRestSec} sn`}
             onPress={() => setActiveModal('workout')}
           />
           <SettingItem
-            icon={<ScaleIcon color="#a855f7" />}
+            icon={<ScaleIcon color={colors.purpleLight} />}
             title="Birimler"
-            subtitle="Ağırlık ve mesafe ölçü birimleri"
-            valueBadge={`${weightUnit} / ${distanceUnit}`}
+            subtitle="Ağırlık, mesafe ve vücut ölçüleri"
+            valueBadge={`${weightUnit} · ${distanceUnit} · ${bodyMeasurementUnit}`}
             onPress={() => setActiveModal('units')}
           />
           <SettingItem
-            icon={<GlobeIcon color="#3b82f6" />}
-            title="Tema ve Dil"
-            subtitle="Arayüz renk teması ve dil seçimi"
-            valueBadge={`${language} · ${themeMode}`}
-            onPress={() => setActiveModal('themeAndLanguage')}
+            icon={<GlobeIcon color={colors.cyan} />}
+            title="Dil"
+            subtitle="Uygulama arayüz dili"
+            valueBadge={language}
+            onPress={() => setActiveModal('language')}
+          />
+          <SettingItem
+            icon={<MoonIcon color={colors.amberLight} />}
+            title="Tema"
+            subtitle="Arayüz renk teması"
+            valueBadge={themeMode}
+            onPress={() => setActiveModal('theme')}
           />
         </View>
 
         {/* ═══════════════════════════════════════════════
-            BÖLÜM 3: YARDIM VE DESTEK (Help & Support)
+            BÖLÜM 4: YARDIM VE DESTEK (Help & Support)
            ═══════════════════════════════════════════════ */}
         <Text style={styles.sectionTitle}>Yardım ve Destek</Text>
         <View style={styles.groupCard}>
           <SettingItem
-            icon={<MailIcon color="#6366f1" />}
+            icon={<MailIcon color={colors.purpleLight} />}
             title="Bize Ulaşın"
-            subtitle="Destek ekibi ve geri bildirim gönderin"
-            onPress={() => setActiveModal('contact')}
+            subtitle="Destek ekibi ve iletişim"
+            onPress={() => router.push('/(app)/contact' as any)}
           />
           <SettingItem
-            icon={<InfoIcon color="#64748b" />}
+            icon={<InfoIcon color={colors.textDim} />}
             title="Hakkında"
             subtitle="Hypertrophy-X v4.0.0 · Gizlilik & Şartlar"
             onPress={() => setActiveModal('about')}
@@ -1085,31 +2299,20 @@ export default function ProfileScreen() {
         </View>
 
         {/* ═══════════════════════════════════════════════
-            BÖLÜM 4: HESAP GÜVENLİĞİ & OTURUM
+            BÖLÜM 5: OTURUM (Session)
            ═══════════════════════════════════════════════ */}
-        <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>Hesap Güvenliği & Oturum</Text>
-        <View style={[styles.groupCard, styles.dangerCard]}>
+        <Text style={styles.sectionTitle}>Oturum</Text>
+        <View style={styles.groupCard}>
           <SettingItem
-            icon={<ShieldIcon color="#10b981" />}
-            title="Hesap ve Güvenlik"
-            subtitle="E-posta güncelleme, şifre değiştirme ve detaylar"
-            onPress={() => {
-              setAccountSubView('info');
-              setActiveModal('account');
-            }}
-          />
-          <SettingItem
-            icon={<LogoutIcon color="#f59e0b" />}
+            icon={<LogoutIcon color={colors.amberLight} />}
             title="Oturumu Kapat"
             subtitle="Bu cihazdaki sporcu oturumunu sonlandır"
-            destructive
             onPress={() => setLogoutConfirmVisible(true)}
           />
           <SettingItem
-            icon={<TrashIcon color="#ef4444" />}
+            icon={<TrashIcon color={colors.rose} />}
             title="Hesabı Kalıcı Olarak Sil"
             subtitle="Tüm verilerinizi ve geçmişinizi kalıcı olarak siler"
-            destructive
             onPress={() => {
               setDeletePassword('');
               setDeleteConfirmationText('');
@@ -1127,157 +2330,32 @@ export default function ProfileScreen() {
           ETKİLEŞİMLİ MODAL PENCERELER (BOTTOM SHEETS)
          ═══════════════════════════════════════════════ */}
 
-      {/* 1. KİŞİSEL BİLGİLER MODALI */}
-      <Modal visible={activeModal === 'personalInfo'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
+      {/* 1. DENEYİM SEVİYESİ MODALI */}
+      <Modal visible={activeModal === 'fitnessLevel'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
+        <View style={styles.modalRootContainer}>
+          <Pressable style={styles.modalBackdropTap} onPress={() => setActiveModal(null)} />
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Kişisel Bilgiler</Text>
-            <Text style={styles.modalDesc}>
-              Biyometrik ölçümlerinizi güncelleyin. Kalori motoru ve antrenman hacmi bu değerlere göre optimize edilir.
-            </Text>
-
-            {/* Cinsiyet Seçimi */}
-            <Text style={styles.modalSubheading}>CİNSİYET</Text>
-            <View style={styles.genderRow}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>Deneyim Seviyesi</Text>
+                <Text style={styles.modalDesc}>
+                  Ağırlık antrenmanı tecrübenize uygun periyotlama ve set hacmini belirleyin.
+                </Text>
+              </View>
               <TouchableOpacity
-                style={[styles.genderCard, gender === 'male' && styles.genderCardActiveMale]}
-                onPress={() => setGender('male')}
-                activeOpacity={0.7}
-              >
-                <MaleIcon size={18} color={gender === 'male' ? '#3b82f6' : '#94a3b8'} />
-                <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>
-                  Erkek
-                </Text>
-                {gender === 'male' && <CheckCircleFill size={16} color="#3b82f6" />}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.genderCard, gender === 'female' && styles.genderCardActiveFemale]}
-                onPress={() => setGender('female')}
-                activeOpacity={0.7}
-              >
-                <FemaleIcon size={18} color={gender === 'female' ? '#ec4899' : '#94a3b8'} />
-                <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>
-                  Kadın
-                </Text>
-                {gender === 'female' && <CheckCircleFill size={16} color="#ec4899" />}
-              </TouchableOpacity>
-            </View>
-
-            {/* Yaş, Boy, Kilo Kutuları */}
-            <Text style={styles.modalSubheading}>BİYOMETRİK ÖLÇÜMLER</Text>
-            <View style={styles.metricInputRow}>
-              <View style={styles.metricInputCol}>
-                <Text style={styles.label}>
-                  Yaş <Text style={styles.labelUnit}>(yıl)</Text>
-                </Text>
-                <TextInput
-                  style={styles.metricTextInput}
-                  value={age}
-                  onChangeText={setAge}
-                  keyboardType="number-pad"
-                  placeholder="24"
-                  placeholderTextColor="#6b7280"
-                  maxLength={3}
-                />
-              </View>
-
-              <View style={styles.metricInputCol}>
-                <Text style={styles.label}>
-                  Boy <Text style={styles.labelUnit}>(cm)</Text>
-                </Text>
-                <TextInput
-                  style={styles.metricTextInput}
-                  value={height}
-                  onChangeText={setHeight}
-                  keyboardType="decimal-pad"
-                  placeholder="178"
-                  placeholderTextColor="#6b7280"
-                  maxLength={5}
-                />
-              </View>
-
-              <View style={styles.metricInputCol}>
-                <Text style={styles.label}>
-                  Kilo <Text style={styles.labelUnit}>(kg)</Text>
-                </Text>
-                <TextInput
-                  style={styles.metricTextInput}
-                  value={weight}
-                  onChangeText={setWeight}
-                  keyboardType="decimal-pad"
-                  placeholder="76.5"
-                  placeholderTextColor="#6b7280"
-                  maxLength={5}
-                />
-              </View>
-            </View>
-
-            {/* Haftalık Gün Sıklığı */}
-            <Text style={styles.modalSubheading}>HAFTALIK ANTRENMAN SIKLIĞI</Text>
-            <View style={styles.pillOptionsRow}>
-              {[2, 3, 4, 5, 6, 7].map((d) => (
-                <TouchableOpacity
-                  key={d}
-                  style={[styles.smallPill, daysPerWeek === String(d) && styles.smallPillActive]}
-                  onPress={() => setDaysPerWeek(String(d))}
-                >
-                  <Text style={[styles.smallPillText, daysPerWeek === String(d) && styles.smallPillTextActive]}>
-                    {d} Gün
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Seans Süresi */}
-            <Text style={styles.modalSubheading}>HEDEF SEANS SÜRESİ</Text>
-            <View style={styles.pillOptionsRow}>
-              {[45, 60, 75, 90, 120].map((mins) => (
-                <TouchableOpacity
-                  key={mins}
-                  style={[styles.smallPill, sessionTimeMins === String(mins) && styles.smallPillActive]}
-                  onPress={() => setSessionTimeMins(String(mins))}
-                >
-                  <Text style={[styles.smallPillText, sessionTimeMins === String(mins) && styles.smallPillTextActive]}>
-                    {mins} dk
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.modalActionButtons}>
-              <Button
-                variant="secondary"
+                style={styles.modalCloseButtonRed}
                 onPress={() => setActiveModal(null)}
-                style={{ flex: 1 }}
+                hitSlop={10}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
               >
-                Vazgeç
-              </Button>
-              <Button
-                onPress={handleSavePersonalInfo}
-                loading={isUpdatingProfile}
-                disabled={isUpdatingProfile}
-                style={{ flex: 1.4 }}
-              >
-                Bilgileri Kaydet
-              </Button>
+                <CloseIcon size={14} color="#EF4444" />
+              </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
 
-      {/* 2. DENEYİM SEVİYESİ MODALI */}
-      <Modal visible={activeModal === 'fitnessLevel'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Deneyim Seviyesi</Text>
-            <Text style={styles.modalDesc}>
-              Ağırlık antrenmanı tecrübenize uygun periyotlama ve set hacmini belirleyin.
-            </Text>
-
-            <View style={{ gap: 10, marginTop: Spacing.two }}>
+            <View style={{ gap: 10, marginTop: Spacing.one }}>
               {FITNESS_LEVELS.map((item) => {
                 const isSelected = userFitness === item.key;
                 const IconComp = item.icon;
@@ -1297,7 +2375,7 @@ export default function ProfileScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[styles.pickerCardTitle, isSelected && { color: '#ffffff' }]}>
+                        <Text style={[styles.pickerCardTitle, isSelected && { color: colors.text }]}>
                           {item.title}
                         </Text>
                         <View style={[styles.badge, { borderColor: `${item.accent}40`, backgroundColor: `${item.accent}20` }]}>
@@ -1309,35 +2387,44 @@ export default function ProfileScreen() {
                     {isSelected ? (
                       <CheckCircleFill size={22} color={item.accent} />
                     ) : (
-                      <RadioUnchecked size={22} color="#374151" />
+                      <RadioUnchecked size={22} color="rgba(255, 255, 255, 0.2)" />
                     )}
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <Button
-              variant="secondary"
-              onPress={() => setActiveModal(null)}
-              style={{ marginTop: Spacing.four }}
-            >
-              Kapat
-            </Button>
+            <View style={styles.sheetBottomExtension} pointerEvents="none" />
           </View>
         </View>
       </Modal>
 
-      {/* 3. FİTNESS HEDEFİ MODALI */}
-      <Modal visible={activeModal === 'goal'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
+      {/* 2. FİTNESS HEDEFİ MODALI */}
+      <Modal visible={activeModal === 'goal'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
+        <View style={styles.modalRootContainer}>
+          <Pressable style={styles.modalBackdropTap} onPress={() => setActiveModal(null)} />
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Fitness Hedefi</Text>
-            <Text style={styles.modalDesc}>
-              Antrenman hacmi, hedef tekrar aralıkları ve toparlanma hedefinize göre ayarlanır.
-            </Text>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>Fitness Hedefi</Text>
+                <Text style={styles.modalDesc}>
+                  Antrenman hacmi, hedef tekrar aralıkları ve toparlanma hedefinize göre ayarlanır.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButtonRed}
+                onPress={() => setActiveModal(null)}
+                hitSlop={10}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
+              >
+                <CloseIcon size={14} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
 
-            <View style={{ gap: 10, marginTop: Spacing.two }}>
+            <View style={{ gap: 10, marginTop: Spacing.one }}>
               {GOAL_OPTIONS.map((item) => {
                 const isSelected = userGoal === item.key;
                 const IconComp = item.icon;
@@ -1357,7 +2444,7 @@ export default function ProfileScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[styles.pickerCardTitle, isSelected && { color: '#ffffff' }]}>
+                        <Text style={[styles.pickerCardTitle, isSelected && { color: colors.text }]}>
                           {item.title}
                         </Text>
                         <View style={[styles.badge, { borderColor: `${item.accent}40`, backgroundColor: `${item.accent}20` }]}>
@@ -1369,30 +2456,40 @@ export default function ProfileScreen() {
                     {isSelected ? (
                       <CheckCircleFill size={22} color={item.accent} />
                     ) : (
-                      <RadioUnchecked size={22} color="#374151" />
+                      <RadioUnchecked size={22} color="rgba(255, 255, 255, 0.2)" />
                     )}
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <Button
-              variant="secondary"
-              onPress={() => setActiveModal(null)}
-              style={{ marginTop: Spacing.four }}
-            >
-              Kapat
-            </Button>
+            <View style={styles.sheetBottomExtension} pointerEvents="none" />
           </View>
         </View>
       </Modal>
 
-      {/* 4. ANTRENMAN AYARLARI MODALI */}
-      <Modal visible={activeModal === 'workout'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
+      {/* 3. ANTRENMAN AYARLARI MODALI */}
+      <Modal visible={activeModal === 'workout'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
+        <View style={styles.modalRootContainer}>
+          <Pressable style={styles.modalBackdropTap} onPress={() => setActiveModal(null)} />
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Antrenman Tercihleri</Text>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>Antrenman Tercihleri</Text>
+                <Text style={styles.modalDesc}>Varsayılan dinlenme ve sayaç bildirimlerini yapılandırın.</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButtonRed}
+                onPress={() => setActiveModal(null)}
+                hitSlop={10}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
+              >
+                <CloseIcon size={14} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.modalSubheading}>VARSAYILAN DİNLENME SÜRESİ</Text>
             <View style={styles.pillOptionsRow}>
@@ -1417,7 +2514,7 @@ export default function ProfileScreen() {
               <Switch
                 value={restTimerSound}
                 onValueChange={setRestTimerSound}
-                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                trackColor={{ false: '#1E2538', true: colors.purple }}
                 thumbColor="#ffffff"
               />
             </View>
@@ -1430,24 +2527,55 @@ export default function ProfileScreen() {
               <Switch
                 value={autoStartTimer}
                 onValueChange={setAutoStartTimer}
-                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                trackColor={{ false: '#1E2538', true: colors.purple }}
                 thumbColor="#ffffff"
               />
             </View>
 
-            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
-              Kaydet ve Kapat
-            </Button>
+            <View style={styles.modalActionButtons}>
+              <TouchableOpacity
+                style={styles.neonCancelBtn}
+                onPress={() => setActiveModal(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.neonCancelBtnText}>Vazgeç</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.neonSaveBtn}
+                onPress={() => setActiveModal(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.neonSaveBtnText}>Kaydet</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sheetBottomExtension} pointerEvents="none" />
           </View>
         </View>
       </Modal>
 
-      {/* 5. BİLDİRİMLER MODALI */}
-      <Modal visible={activeModal === 'notifications'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
+      {/* 4. BİLDİRİMLER MODALI */}
+      <Modal visible={activeModal === 'notifications'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
+        <View style={styles.modalRootContainer}>
+          <Pressable style={styles.modalBackdropTap} onPress={() => setActiveModal(null)} />
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Bildirim Ayarları</Text>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>Bildirim Ayarları</Text>
+                <Text style={styles.modalDesc}>Antrenman hatırlatıcıları ve motivasyon uyarıları.</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButtonRed}
+                onPress={() => setActiveModal(null)}
+                hitSlop={10}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
+              >
+                <CloseIcon size={14} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.switchRow}>
               <View style={{ flex: 1 }}>
@@ -1457,7 +2585,7 @@ export default function ProfileScreen() {
               <Switch
                 value={workoutReminders}
                 onValueChange={setWorkoutReminders}
-                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                trackColor={{ false: '#1E2538', true: colors.purple }}
                 thumbColor="#ffffff"
               />
             </View>
@@ -1470,7 +2598,7 @@ export default function ProfileScreen() {
               <Switch
                 value={restDayAlerts}
                 onValueChange={setRestDayAlerts}
-                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                trackColor={{ false: '#1E2538', true: colors.purple }}
                 thumbColor="#ffffff"
               />
             </View>
@@ -1483,79 +2611,73 @@ export default function ProfileScreen() {
               <Switch
                 value={prCelebrations}
                 onValueChange={setPrCelebrations}
-                trackColor={{ false: '#334155', true: '#3b82f6' }}
+                trackColor={{ false: '#1E2538', true: colors.purple }}
                 thumbColor="#ffffff"
               />
             </View>
 
-            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
-              Tamam
-            </Button>
+            <View style={styles.modalActionButtons}>
+              <TouchableOpacity
+                style={styles.neonSaveBtn}
+                onPress={() => setActiveModal(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.neonSaveBtnText}>Kaydet</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sheetBottomExtension} pointerEvents="none" />
           </View>
         </View>
       </Modal>
 
-      {/* 6. BİRİMLER MODALI */}
-      <Modal visible={activeModal === 'units'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
+      {/* 5. BİRİMLER MODALI (MODERN & SÜRÜKLE BIRAK & DİNAMİK KLAVYE) */}
+      <UnitsBottomSheetModal
+        key={activeModal === 'units' ? 'units-open' : 'units-closed'}
+        visible={activeModal === 'units'}
+        onClose={() => setActiveModal(null)}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        bodyMeasurementUnit={bodyMeasurementUnit}
+        onSave={(newUnits) => {
+          setWeightUnit(newUnits.weight);
+          setDistanceUnit(newUnits.distance);
+          setBodyMeasurementUnit(newUnits.body);
+        }}
+      />
+
+      {/* 6. DİL MODALI */}
+      <Modal visible={activeModal === 'language'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
+        <View style={styles.modalRootContainer}>
+          <Pressable style={styles.modalBackdropTap} onPress={() => setActiveModal(null)} />
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Birim Tercihleri</Text>
-            <Text style={styles.modalDesc}>
-              Ağırlıkları ve mesafeleri hangi birimde takip etmek istersiniz?
-            </Text>
-
-            <Text style={styles.modalSubheading}>AĞIRLIK BİRİMİ</Text>
-            <View style={styles.pillOptionsRow}>
-              {(['kg', 'lbs'] as const).map((unit) => (
-                <TouchableOpacity
-                  key={unit}
-                  style={[styles.smallPill, weightUnit === unit && styles.smallPillActive]}
-                  onPress={() => setWeightUnit(unit)}
-                >
-                  <Text style={[styles.smallPillText, weightUnit === unit && styles.smallPillTextActive]}>
-                    {unit.toUpperCase()} ({unit === 'kg' ? 'Kilogram' : 'Pound'})
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>Dil Seçimi</Text>
+                <Text style={styles.modalDesc}>Hypertrophy-X arayüzünde kullanmak istediğiniz dili belirleyin.</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButtonRed}
+                onPress={() => setActiveModal(null)}
+                hitSlop={10}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
+              >
+                <CloseIcon size={14} color="#EF4444" />
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalSubheading}>MESAFE BİRİMİ</Text>
-            <View style={styles.pillOptionsRow}>
-              {(['km', 'mil'] as const).map((unit) => (
-                <TouchableOpacity
-                  key={unit}
-                  style={[styles.smallPill, distanceUnit === unit && styles.smallPillActive]}
-                  onPress={() => setDistanceUnit(unit)}
-                >
-                  <Text style={[styles.smallPillText, distanceUnit === unit && styles.smallPillTextActive]}>
-                    {unit === 'km' ? 'Kilometre (km)' : 'Mil (mi)'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
-              Tamam
-            </Button>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 7. TEMA VE DİL MODALI */}
-      <Modal visible={activeModal === 'themeAndLanguage'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Tema ve Dil Tercihleri</Text>
-
-            <Text style={styles.modalSubheading}>DİL SEÇİMİ</Text>
             <View style={{ gap: 8, marginTop: 4 }}>
               {(['Türkçe', 'English'] as const).map((lang) => (
                 <TouchableOpacity
                   key={lang}
                   style={[styles.modalRadioItem, language === lang && styles.modalRadioItemActive]}
-                  onPress={() => setLanguage(lang)}
+                  onPress={() => {
+                    setLanguage(lang);
+                    setActiveModal(null);
+                  }}
                 >
                   <Text style={[styles.modalRadioText, language === lang && styles.modalRadioTextActive]}>
                     {lang}
@@ -1565,349 +2687,131 @@ export default function ProfileScreen() {
               ))}
             </View>
 
-            <Text style={[styles.modalSubheading, { marginTop: Spacing.three }]}>TEMA TERCİHİ</Text>
-            <View style={{ gap: 8, marginTop: 4 }}>
-              {(['Koyu', 'Açık', 'Sistem'] as const).map((item) => (
-                <TouchableOpacity
-                  key={item}
-                  style={[styles.modalRadioItem, themeMode === item && styles.modalRadioItemActive]}
-                  onPress={() => setThemeMode(item)}
-                >
-                  <Text style={[styles.modalRadioText, themeMode === item && styles.modalRadioTextActive]}>
-                    {item === 'Koyu'
-                      ? '🌙 Koyu Mod (Tavsiye Edilen)'
-                      : item === 'Açık'
-                        ? '☀️ Açık Mod'
-                        : '📱 Sistem Teması'}
+            <View style={styles.sheetBottomExtension} pointerEvents="none" />
+          </View>
+        </View>
+      </Modal>
+
+      {/* 7. TEMA MODALI (MODERN & SÜRÜKLE BIRAK & DİNAMİK KLAVYE) */}
+      <ThemeBottomSheetModal
+        visible={activeModal === 'theme'}
+        onClose={() => setActiveModal(null)}
+        currentTheme={themeMode}
+        onSelectTheme={(theme) => setThemeMode(theme)}
+      />
+
+      {/* 8. HAKKINDA MODALI (SÜRÜKLE BIRAK DESTEKLİ) */}
+      <AboutBottomSheetModal
+        visible={activeModal === 'about'}
+        onClose={() => setActiveModal(null)}
+      />
+
+      {/* 9. HESAP SİLME MODALI (TEHLİKELİ BÖLGE) */}
+      <Modal visible={activeModal === 'deleteAccount'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
+        <View style={styles.modalRootContainer}>
+          <Pressable
+            style={styles.modalBackdropTap}
+            onPress={() => {
+              Keyboard.dismiss();
+              setActiveModal(null);
+            }}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%' }}
+          >
+            <View style={[styles.modalSheet, { borderColor: colors.danger, borderTopColor: colors.danger }]}>
+              <View style={[styles.modalHandle, { backgroundColor: colors.danger, shadowColor: colors.danger }]} />
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 8 }}>
+                  <TrashIcon size={20} color={colors.danger} />
+                  <Text style={[styles.modalTitle, { color: colors.danger, marginBottom: 0 }]}>
+                    Hesabı Kalıcı Olarak Sil
                   </Text>
-                  {themeMode === item ? <Text style={styles.checkmarkText}>✓</Text> : null}
+                </View>
+                <TouchableOpacity
+                  style={styles.modalCloseButtonRed}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setActiveModal(null);
+                  }}
+                  hitSlop={10}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Kapat"
+                >
+                  <CloseIcon size={14} color="#EF4444" />
                 </TouchableOpacity>
-              ))}
-            </View>
+              </View>
 
-            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
-              Kaydet ve Kapat
-            </Button>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 8. BİZE ULAŞIN MODALI */}
-      <Modal visible={activeModal === 'contact'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Bize Ulaşın</Text>
-            <Text style={styles.modalDesc}>Öneri, istek veya geri bildirimlerinizi iletin.</Text>
-
-            <TextInput
-              style={styles.feedbackInput}
-              placeholder="Mesajınızı veya geri bildiriminizi buraya yazın..."
-              placeholderTextColor="#6b7280"
-              multiline
-              numberOfLines={4}
-              value={feedbackText}
-              onChangeText={setFeedbackText}
-            />
-
-            <Button
-              onPress={() => {
-                if (!feedbackText.trim()) {
-                  Alert.alert('Uyarı', 'Lütfen bir mesaj yazın.');
-                  return;
-                }
-                Alert.alert('Teşekkürler', 'Geri bildiriminiz geliştirici ekibine iletildi.');
-                setFeedbackText('');
-                setActiveModal(null);
-              }}
-              style={{ marginTop: Spacing.three }}
-            >
-              Gönder
-            </Button>
-            <Button
-              variant="secondary"
-              onPress={() => setActiveModal(null)}
-              style={{ marginTop: Spacing.two }}
-            >
-              Vazgeç
-            </Button>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 9. HAKKINDA MODALI */}
-      <Modal visible={activeModal === 'about'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Hypertrophy-X Hakkında</Text>
-            <Text style={styles.modalDesc}>
-              Hipertrofi odaklı bilimsel antrenman, RIR/RPE takibi, progresif aşırı yükleme ve hacim optimizasyon platformu.
-            </Text>
-
-            <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Sürüm</Text>
-              <Text style={styles.aboutVal}>v4.0.0 (Production)</Text>
-            </View>
-            <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Framework</Text>
-              <Text style={styles.aboutVal}>Expo SDK 58 / React Native</Text>
-            </View>
-            <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Geliştirici</Text>
-              <Text style={styles.aboutVal}>Turan Asgarlı</Text>
-            </View>
-
-            <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.four }}>
-              Kapat
-            </Button>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 10. HESAP VE GÜVENLİK MODALI */}
-      <Modal visible={activeModal === 'account'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-
-            {accountSubView === 'info' && (
-              <>
-                <Text style={styles.modalTitle}>Hesap ve Güvenlik</Text>
-                <Text style={styles.modalDesc}>
-                  Profil güvenliği, e-posta ve şifre yönetimi ayarlarınız.
-                </Text>
-
-                <View style={styles.accountDetailBox}>
-                  <Text style={styles.accountDetailLabel}>Kullanıcı Adı</Text>
-                  <Text style={styles.accountDetailVal}>{user?.username || '-'}</Text>
-                </View>
-
-                <View style={styles.accountDetailBox}>
-                  <Text style={styles.accountDetailLabel}>Kayıtlı E-posta</Text>
-                  <Text style={styles.accountDetailVal}>{user?.email || 'Tanımlanmamış'}</Text>
-                </View>
-
-                <View style={styles.accountDetailBox}>
-                  <Text style={styles.accountDetailLabel}>Hesap Rolü</Text>
-                  <Text style={styles.accountDetailVal}>{user?.is_admin ? 'Yönetici' : 'Sporcu'}</Text>
-                </View>
-
-                <View style={{ gap: Spacing.two, marginTop: Spacing.two }}>
-                  <Button
-                    variant="secondary"
-                    onPress={() => {
-                      setEmailStep('request');
-                      setNewEmail('');
-                      setEmailOtpCode('');
-                      setAccountSubView('changeEmail');
-                    }}
-                  >
-                    E-posta Adresini Değiştir
-                  </Button>
-
-                  <Button
-                    variant="secondary"
-                    onPress={() => {
-                      setPasswordStep('request');
-                      setOldPassword('');
-                      setNewPassword('');
-                      setPasswordOtpCode('');
-                      setAccountSubView('changePassword');
-                    }}
-                  >
-                    Şifre Değiştir
-                  </Button>
-                </View>
-
-                <Button onPress={() => setActiveModal(null)} style={{ marginTop: Spacing.three }}>
-                  Kapat
-                </Button>
-              </>
-            )}
-
-            {accountSubView === 'changeEmail' && (
-              <>
-                <Text style={styles.modalTitle}>E-posta Güncelleme</Text>
-                {emailStep === 'request' ? (
-                  <>
-                    <Text style={styles.modalDesc}>
-                      Yeni e-posta adresinizi girin. Bu adrese 6 haneli doğrulama kodu gönderilecektir.
-                    </Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="yeni.eposta@ornek.com"
-                      placeholderTextColor="#6b7280"
-                      value={newEmail}
-                      onChangeText={setNewEmail}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                    />
-                    <View style={styles.modalActionButtons}>
-                      <Button variant="secondary" onPress={() => setAccountSubView('info')} style={{ flex: 1 }}>
-                        Geri
-                      </Button>
-                      <Button onPress={handleRequestEmail} loading={isRequestingEmail} style={{ flex: 1.2 }}>
-                        Kod Gönder
-                      </Button>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.modalDesc}>
-                      {newEmail} adresine gönderilen 6 haneli doğrulama kodunu girin:
-                    </Text>
-                    <TextInput
-                      style={[styles.modalInput, { textAlign: 'center', fontSize: 20, letterSpacing: 4 }]}
-                      placeholder="123456"
-                      placeholderTextColor="#6b7280"
-                      value={emailOtpCode}
-                      onChangeText={setEmailOtpCode}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                    />
-                    <View style={styles.modalActionButtons}>
-                      <Button variant="secondary" onPress={() => setEmailStep('request')} style={{ flex: 1 }}>
-                        Geri
-                      </Button>
-                      <Button onPress={handleConfirmEmail} loading={isConfirmingEmail} style={{ flex: 1.2 }}>
-                        Onayla
-                      </Button>
-                    </View>
-                  </>
-                )}
-              </>
-            )}
-
-            {accountSubView === 'changePassword' && (
-              <>
-                <Text style={styles.modalTitle}>Şifre Değiştirme</Text>
-                {passwordStep === 'request' ? (
-                  <>
-                    <Text style={styles.modalDesc}>
-                      Mevcut şifrenizi ve en az 6 haneli yeni şifrenizi girin.
-                    </Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="Mevcut Şifre"
-                      placeholderTextColor="#6b7280"
-                      value={oldPassword}
-                      onChangeText={setOldPassword}
-                      secureTextEntry
-                    />
-                    <TextInput
-                      style={[styles.modalInput, { marginTop: Spacing.two }]}
-                      placeholder="Yeni Şifre (en az 6 karakter)"
-                      placeholderTextColor="#6b7280"
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                      secureTextEntry
-                    />
-                    <View style={styles.modalActionButtons}>
-                      <Button variant="secondary" onPress={() => setAccountSubView('info')} style={{ flex: 1 }}>
-                        Geri
-                      </Button>
-                      <Button onPress={handleRequestPassword} loading={isRequestingPassword} style={{ flex: 1.2 }}>
-                        Kod Gönder
-                      </Button>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.modalDesc}>
-                      Kayıtlı e-posta adresinize gönderilen 6 haneli onay kodunu girin:
-                    </Text>
-                    <TextInput
-                      style={[styles.modalInput, { textAlign: 'center', fontSize: 20, letterSpacing: 4 }]}
-                      placeholder="123456"
-                      placeholderTextColor="#6b7280"
-                      value={passwordOtpCode}
-                      onChangeText={setPasswordOtpCode}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                    />
-                    <View style={styles.modalActionButtons}>
-                      <Button variant="secondary" onPress={() => setPasswordStep('request')} style={{ flex: 1 }}>
-                        Geri
-                      </Button>
-                      <Button onPress={handleConfirmPassword} loading={isConfirmingPassword} style={{ flex: 1.2 }}>
-                        Şifreyi Güncelle
-                      </Button>
-                    </View>
-                  </>
-                )}
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* 11. HESAP SİLME MODALI (TEHLİKELİ BÖLGE) */}
-      <Modal visible={activeModal === 'deleteAccount'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalSheet, { borderColor: '#ef4444', borderWidth: 1.5 }]}>
-            <View style={[styles.modalHandle, { backgroundColor: '#ef4444' }]} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.two }}>
-              <TrashIcon size={22} color="#ef4444" />
-              <Text style={[styles.modalTitle, { color: '#ef4444', marginBottom: 0 }]}>
-                Hesabı Kalıcı Olarak Sil
+              <Text style={styles.modalDesc}>
+                Bu işlem kesinlikle geri alınamaz. Antrenman geçmişiniz, programlarınız ve tüm
+                verileriniz sistemden tamamen silinecektir. Devam etmek için şifrenizi girin ve
+                onay kutusuna büyük harflerle{' '}
+                <Text style={{ fontWeight: '800', color: colors.text }}>
+                  HESABIMI KALICI OLARAK SİL
+                </Text>{' '}
+                yazın.
               </Text>
+
+              <TextInput
+                style={[styles.modalInput, { borderColor: colors.dangerBorder }]}
+                placeholder="Mevcut Şifreniz"
+                placeholderTextColor={colors.textDim}
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                secureTextEntry
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    marginTop: Spacing.two,
+                    borderColor:
+                      deleteConfirmationText.trim() === 'HESABIMI KALICI OLARAK SİL'
+                        ? colors.emeraldLight
+                        : colors.dangerBorder,
+                  },
+                ]}
+                placeholder="HESABIMI KALICI OLARAK SİL"
+                placeholderTextColor={colors.textDim}
+                value={deleteConfirmationText}
+                onChangeText={setDeleteConfirmationText}
+                autoCapitalize="characters"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+
+              <View style={styles.modalActionButtons}>
+                <TouchableOpacity
+                  style={styles.neonCancelBtn}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setActiveModal(null);
+                  }}
+                  activeOpacity={0.7}
+                  disabled={isDeletingAccount}
+                >
+                  <Text style={styles.neonCancelBtnText}>Vazgeç</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.neonDangerBtn, isDeletingAccount && { opacity: 0.6 }]}
+                  onPress={handleDeleteAccount}
+                  activeOpacity={0.7}
+                  disabled={isDeletingAccount}
+                >
+                  <Text style={styles.neonDangerBtnText}>
+                    {isDeletingAccount ? 'Siliniyor...' : 'Hesabı Sil'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.sheetBottomExtension, { borderColor: colors.danger }]} pointerEvents="none" />
             </View>
-            <Text style={styles.modalDesc}>
-              Bu işlem kesinlikle geri alınamaz. Antrenman geçmişiniz, programlarınız ve tüm
-              verileriniz sistemden tamamen silinecektir. Devam etmek için şifrenizi girin ve
-              onay kutusuna büyük harflerle{' '}
-              <Text style={{ fontWeight: '800', color: '#ffffff' }}>
-                HESABIMI KALICI OLARAK SİL
-              </Text>{' '}
-              yazın.
-            </Text>
-
-            <TextInput
-              style={[styles.modalInput, { borderColor: 'rgba(239, 68, 68, 0.4)' }]}
-              placeholder="Mevcut Şifreniz"
-              placeholderTextColor="#6b7280"
-              value={deletePassword}
-              onChangeText={setDeletePassword}
-              secureTextEntry
-            />
-
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  marginTop: Spacing.two,
-                  borderColor:
-                    deleteConfirmationText.trim() === 'HESABIMI KALICI OLARAK SİL'
-                      ? '#10b981'
-                      : 'rgba(239, 68, 68, 0.4)',
-                },
-              ]}
-              placeholder="HESABIMI KALICI OLARAK SİL"
-              placeholderTextColor="#6b7280"
-              value={deleteConfirmationText}
-              onChangeText={setDeleteConfirmationText}
-              autoCapitalize="characters"
-            />
-
-            <View style={styles.modalActionButtons}>
-              <Button
-                variant="secondary"
-                onPress={() => setActiveModal(null)}
-                style={{ flex: 1 }}
-              >
-                Vazgeç
-              </Button>
-              <Button
-                variant="danger"
-                onPress={handleDeleteAccount}
-                loading={isDeletingAccount}
-                style={{ flex: 1.2 }}
-              >
-                Hesabı Sil
-              </Button>
-            </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1930,7 +2834,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
+    backgroundColor: colors.background,
   },
   headerRow: {
     flexDirection: 'row',
@@ -1946,16 +2850,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.cardBorder,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.text,
     letterSpacing: 0.3,
   },
   container: {
@@ -1964,7 +2868,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 20,
+    paddingBottom: 24,
     gap: Spacing.three,
   },
   center: {
@@ -1975,7 +2879,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   errorText: {
-    color: '#ef4444',
+    color: colors.danger,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -1984,9 +2888,9 @@ const styles = StyleSheet.create({
   userCard: {
     padding: 16,
     borderRadius: 24,
-    backgroundColor: '#101524',
+    backgroundColor: colors.cardBg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.cardBorder,
     gap: 14,
   },
   userCardTopRow: {
@@ -1998,16 +2902,16 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.purpleBg,
     borderWidth: 2,
-    borderColor: '#3b82f6',
+    borderColor: colors.purpleLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.text,
   },
   userInfo: {
     flex: 1,
@@ -2022,7 +2926,7 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.text,
   },
   levelBadge: {
     paddingHorizontal: 8,
@@ -2035,21 +2939,21 @@ const styles = StyleSheet.create({
   },
   emailText: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: colors.textMuted,
   },
   dateSubtext: {
     fontSize: 11,
-    color: '#64748b',
+    color: colors.textDim,
     marginTop: 1,
   },
 
   // RPG Kartı
   rpgCard: {
-    backgroundColor: '#0c101c',
+    backgroundColor: colors.cardBgInner,
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.purpleBorder,
     gap: 10,
   },
   rpgTopRow: {
@@ -2060,7 +2964,7 @@ const styles = StyleSheet.create({
   rpgLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#64748b',
+    color: colors.textDim,
     letterSpacing: 0.8,
   },
   rpgTitleRow: {
@@ -2072,33 +2976,33 @@ const styles = StyleSheet.create({
   rpgLevelTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.text,
   },
   rpgLevelBadge: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    backgroundColor: colors.purpleBg,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: colors.purpleBorder,
   },
   rpgLevelBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#60a5fa',
+    color: colors.purpleLight,
   },
   rpgStreakPill: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: colors.dangerBg,
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.25)',
+    borderColor: colors.dangerBorder,
   },
   rpgStreakText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#f87171',
+    color: '#F87171',
   },
   rpgProgressSection: {
     gap: 6,
@@ -2111,23 +3015,23 @@ const styles = StyleSheet.create({
   rpgProgressLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#64748b',
+    color: colors.textDim,
     letterSpacing: 0.5,
   },
   rpgProgressValue: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#94a3b8',
+    color: colors.textMuted,
   },
   rpgProgressBarTrack: {
     height: 8,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#1E2538',
     borderRadius: 4,
     overflow: 'hidden',
   },
   rpgProgressBarFill: {
     height: '100%',
-    backgroundColor: '#3b82f6',
+    backgroundColor: colors.purpleLight,
     borderRadius: 4,
   },
   rpgBottomRow: {
@@ -2139,74 +3043,91 @@ const styles = StyleSheet.create({
   rpgNextText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748b',
+    color: colors.textDim,
   },
   rpgTotalXpText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#f59e0b',
+    color: colors.amberLight,
   },
 
-  // ─── 3'lü Özet İstatistik Kutuları (Görseldeki Yaş / Boy / Kilo) ───
-  statBoxesRow: {
+  // ─── Bu Ayki Özetin Kart Bölümü (Fotoğraftaki Tasarım) ───
+  monthlySummarySection: {
+    marginTop: 18,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  monthlySummaryTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textDim,
+    marginBottom: 14,
+    paddingHorizontal: 2,
+  },
+  monthlySummaryStatsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 2,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    justifyContent: 'space-between',
   },
-  statBoxLabel: {
+  monthlySummaryStatCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  monthlySummaryStatLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#94a3b8',
+    color: colors.textMuted,
+    marginTop: 6,
     marginBottom: 4,
   },
-  statBoxValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#ffffff',
+  monthlySummaryValWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
   },
-  statBoxUnit: {
-    fontSize: 12,
+  monthlySummaryStatNumber: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: colors.text,
+  },
+  monthlySummaryStatUnit: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#94a3b8',
+    color: colors.text,
+  },
+  monthlySummaryDivider: {
+    width: 1,
+    height: 42,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
 
   // ─── AYAR KARTLARI & PILL BİLEŞENLERİ ───
   sectionTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#e2e8f0',
+    color: colors.text,
     letterSpacing: 0.3,
     marginTop: 6,
     marginBottom: 2,
   },
   groupCard: {
-    backgroundColor: '#101524',
+    backgroundColor: colors.cardBg,
     borderRadius: 24,
     padding: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.cardBorder,
     gap: 8,
   },
   dangerCard: {
-    borderColor: 'rgba(239, 68, 68, 0.25)',
+    borderColor: colors.dangerBorder,
     backgroundColor: '#150f14',
   },
   itemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     borderRadius: 20,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -2214,8 +3135,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   destructiveItemContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    borderColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: colors.dangerBg,
+    borderColor: colors.dangerBorder,
   },
   itemLeft: {
     flexDirection: 'row',
@@ -2227,12 +3148,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   destructiveIconWrapper: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: colors.dangerBg,
   },
   textWrapper: {
     flex: 1,
@@ -2240,14 +3161,14 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#ffffff',
+    color: colors.text,
   },
   destructiveTitle: {
-    color: '#ef4444',
+    color: colors.danger,
   },
   itemSubtitle: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: colors.textMuted,
     marginTop: 2,
   },
   itemRight: {
@@ -2256,69 +3177,177 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   badge: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    backgroundColor: colors.purpleBg,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: colors.purpleBorder,
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#60a5fa',
+    color: colors.purpleLight,
   },
   footerText: {
     fontSize: 11,
-    color: '#475569',
+    color: colors.textDim,
     textAlign: 'center',
     marginTop: 10,
     marginBottom: 6,
   },
 
   // ─── MODAL BOTTOM SHEETS ───
-  modalBackdrop: {
+  modalRootContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
   },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+  },
+  modalBackdropTap: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+  },
+  modalBackdropTapInner: {
+    ...StyleSheet.absoluteFill,
+  },
+  modalDragHandleZone: {
+    width: '100%',
+    paddingTop: 8,
+    paddingBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalSheet: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0C101C',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
     paddingBottom: 36,
     maxHeight: '90%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderTopColor: colors.purpleLight,
+    shadowColor: colors.purple,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  sheetBottomExtension: {
+    position: 'absolute',
+    bottom: -1000,
+    left: -1.5,
+    right: -1.5,
+    height: 1000,
+    backgroundColor: '#0C101C',
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
   },
   modalHandle: {
-    width: 40,
+    width: 44,
     height: 4,
-    backgroundColor: '#475569',
     borderRadius: 2,
+    backgroundColor: colors.purpleLight,
+    shadowColor: colors.purpleLight,
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  modalCloseButtonRed: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 2,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#ffffff',
-    marginBottom: 6,
+    color: colors.text,
   },
   modalDesc: {
-    fontSize: 13,
-    color: '#94a3b8',
-    lineHeight: 18,
-    marginBottom: 16,
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 16,
+    marginTop: 3,
   },
   modalSubheading: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#64748b',
+    color: colors.textDim,
     letterSpacing: 0.8,
     marginTop: 14,
     marginBottom: 8,
+  },
+  neonCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 1.2,
+    borderColor: 'rgba(244, 63, 94, 0.35)',
+    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  neonCancelBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FB7185',
+    letterSpacing: 0.3,
+  },
+  neonSaveBtn: {
+    flex: 1.3,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 1.2,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  neonSaveBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#10B981',
+    letterSpacing: 0.3,
+  },
+  neonDangerBtn: {
+    flex: 1.3,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 1.2,
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  neonDangerBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#EF4444',
+    letterSpacing: 0.3,
   },
   genderRow: {
     flexDirection: 'row',
@@ -2330,27 +3359,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     paddingVertical: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.cardBorder,
   },
   genderCardActiveMale: {
-    borderColor: '#3b82f6',
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    borderColor: colors.purpleLight,
+    backgroundColor: colors.purpleBg,
   },
   genderCardActiveFemale: {
-    borderColor: '#ec4899',
+    borderColor: '#EC4899',
     backgroundColor: 'rgba(236, 72, 153, 0.12)',
   },
   genderText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: colors.textMuted,
   },
   genderTextActive: {
-    color: '#ffffff',
+    color: colors.text,
   },
   metricInputRow: {
     flexDirection: 'row',
@@ -2368,18 +3397,18 @@ const styles = StyleSheet.create({
   labelUnit: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#64748b',
+    color: colors.textDim,
   },
   metricTextInput: {
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
     fontSize: 16,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.text,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.cardBorder,
     textAlign: 'center',
   },
   pillOptionsRow: {
@@ -2391,21 +3420,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.cardBorder,
   },
   smallPillActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    backgroundColor: colors.purple,
+    borderColor: colors.purpleLight,
   },
   smallPillText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: colors.textMuted,
   },
   smallPillTextActive: {
-    color: '#ffffff',
+    color: colors.text,
   },
   modalActionButtons: {
     flexDirection: 'row',
@@ -2416,14 +3445,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     padding: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.cardBorder,
   },
   pickerCardActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.cardBorderHover,
   },
   pickerIconWrap: {
     width: 40,
@@ -2435,11 +3465,11 @@ const styles = StyleSheet.create({
   pickerCardTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#cbd5e1',
+    color: colors.text,
   },
   pickerCardDesc: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textDim,
     marginTop: 3,
     lineHeight: 16,
   },
@@ -2449,16 +3479,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: colors.cardBorder,
   },
   switchTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+    color: colors.text,
   },
   switchSubtitle: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textDim,
     marginTop: 2,
   },
   modalRadioItem: {
@@ -2467,81 +3497,337 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 14,
     borderRadius: 14,
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.cardBorder,
   },
   modalRadioItemActive: {
-    borderColor: '#3b82f6',
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderColor: colors.purpleLight,
+    backgroundColor: colors.purpleBg,
   },
   modalRadioText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: colors.textMuted,
   },
   modalRadioTextActive: {
-    color: '#ffffff',
+    color: colors.text,
   },
   checkmarkText: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#3b82f6',
+    color: colors.purpleLight,
   },
   feedbackInput: {
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     borderRadius: 14,
     padding: 14,
-    color: '#ffffff',
+    color: colors.text,
     fontSize: 14,
     minHeight: 100,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.cardBorder,
   },
   aboutRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: colors.cardBorder,
   },
   aboutLabel: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: colors.textMuted,
   },
   aboutVal: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#ffffff',
+    color: colors.text,
   },
   accountDetailBox: {
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     padding: 12,
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.cardBorder,
   },
   accountDetailLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748b',
+    color: colors.textDim,
     textTransform: 'uppercase',
   },
   accountDetailVal: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+    color: colors.text,
     marginTop: 2,
   },
   modalInput: {
-    backgroundColor: '#161E33',
+    backgroundColor: colors.itemBg,
     borderRadius: 14,
     padding: 14,
-    color: '#ffffff',
+    color: colors.text,
     fontSize: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.cardBorder,
+  },
+});
+
+const themeModalStyles = StyleSheet.create({
+  themeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardBgInner,
+    borderRadius: 16,
+    borderWidth: 1.2,
+    borderColor: colors.cardBorder,
+    padding: 12,
+    gap: 12,
+  },
+  themeCardSelected: {
+    backgroundColor: colors.purpleBg,
+    borderColor: colors.purpleBorder,
+  },
+  themeIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  themeInfoCol: {
+    flex: 1,
+    marginRight: 6,
+  },
+  themeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
+  },
+  themeTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  themeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+    borderWidth: 1,
+  },
+  themeBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  themeSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 16,
+  },
+  previewContainer: {
+    flexShrink: 0,
+    marginLeft: 6,
+    marginRight: -4,
+  },
+  previewDarkBox: {
+    width: 38,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#080B14',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    padding: 3,
+    justifyContent: 'space-between',
+  },
+  previewDarkHeader: {
+    height: 3.5,
+    width: '60%',
+    backgroundColor: '#8B5CF6',
+    borderRadius: 1.5,
+  },
+  previewDarkLine1: {
+    height: 2.5,
+    width: '80%',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 1,
+  },
+  previewDarkLine2: {
+    height: 2.5,
+    width: '45%',
+    backgroundColor: '#10B981',
+    borderRadius: 1,
+  },
+  previewLightBox: {
+    width: 38,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    padding: 3,
+    justifyContent: 'space-between',
+  },
+  previewLightHeader: {
+    height: 3.5,
+    width: '60%',
+    backgroundColor: '#334155',
+    borderRadius: 1.5,
+  },
+  previewLightLine1: {
+    height: 2.5,
+    width: '80%',
+    backgroundColor: '#94A3B8',
+    borderRadius: 1,
+  },
+  previewLightLine2: {
+    height: 2.5,
+    width: '45%',
+    backgroundColor: '#64748B',
+    borderRadius: 1,
+  },
+  previewSplitBox: {
+    width: 38,
+    height: 28,
+    borderRadius: 6,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.35)',
+  },
+  previewSplitLeft: {
+    flex: 1,
+    backgroundColor: '#080B14',
+    padding: 3,
+    justifyContent: 'space-between',
+  },
+  previewSplitRight: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    padding: 3,
+    justifyContent: 'space-between',
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterSelected: {
+    borderColor: colors.purple,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.purpleLight,
+  },
+  tipBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  tipIcon: {
+    fontSize: 16,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 17,
+  },
+});
+
+const unitsModalStyles = StyleSheet.create({
+  groupBlock: {
+    marginBottom: 14,
+  },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+    paddingHorizontal: 2,
+  },
+  groupTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textDim,
+    letterSpacing: 0.8,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  unitBtn: {
+    flex: 1,
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cardBgInner,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  unitBtnSelected: {
+    backgroundColor: colors.purpleBg,
+    borderColor: colors.purpleBorder,
+  },
+  unitBtnSymbol: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.textDim,
+  },
+  unitBtnSymbolSelected: {
+    color: colors.purpleLight,
+  },
+  unitBtnName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  unitBtnNameSelected: {
+    color: colors.text,
+  },
+  unitBtnCheck: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.purpleLight,
+    marginLeft: 2,
+  },
+  actionBox: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  saveBtnGreen: {
+    width: '100%',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: colors.emeraldBg,
+    borderWidth: 1.2,
+    borderColor: colors.emeraldBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnGreenText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.emeraldLight,
   },
 });

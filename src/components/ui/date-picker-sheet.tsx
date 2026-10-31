@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
-import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatTrDate } from '@/lib/rpe';
 
 export type DatePickerSheetProps = {
@@ -19,19 +19,41 @@ export type DatePickerSheetProps = {
   onClose: () => void;
 };
 
+function CloseIcon({ size = 14, color = '#EF4444' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M6 18L18 6M6 6l12 12" />
+    </Svg>
+  );
+}
+
+function CalendarIcon({ size = 18, color = '#C084FC' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </Svg>
+  );
+}
+
 // Son 14 günü hızlı seçim için listele
-function generateRecentDays(): { date: string; label: string }[] {
-  const days: { date: string; label: string }[] = [];
+function generateRecentDays(): { date: string; label: string; isToday: boolean; isYesterday: boolean }[] {
+  const days: { date: string; label: string; isToday: boolean; isYesterday: boolean }[] = [];
   const now = new Date();
 
   for (let i = 0; i < 14; i++) {
     const d = new Date();
     d.setDate(now.getDate() - i);
     const iso = d.toISOString().slice(0, 10);
-    let label = formatTrDate(iso);
-    if (i === 0) label = `Bugün (${label})`;
-    else if (i === 1) label = `Dün (${label})`;
-    days.push({ date: iso, label });
+    const dateFormatted = formatTrDate(iso);
+    let label = dateFormatted;
+    if (i === 0) label = `Bugün · ${dateFormatted}`;
+    else if (i === 1) label = `Dün · ${dateFormatted}`;
+    days.push({
+      date: iso,
+      label,
+      isToday: i === 0,
+      isYesterday: i === 1,
+    });
   }
 
   return days;
@@ -58,110 +80,256 @@ export function DatePickerSheet({
       transparent
       animationType="slide"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View style={styles.sheet}>
-              <View style={styles.header}>
-                <Text style={styles.title}>Tarih Seçin</Text>
-                <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.closeText}>Kapat</Text>
-                </TouchableOpacity>
-              </View>
+      <View style={styles.modalRootContainer}>
+        {/* Karartılmış Arka Plan (Dokunulduğunda Kapatır) */}
+        <Pressable style={styles.modalBackdropTap} onPress={onClose} />
 
-              <ScrollView style={styles.list}>
-                {recentDays.map((item) => {
-                  const isSelected = item.date === selected || item.date === value;
-                  return (
-                    <TouchableOpacity
-                      key={item.date}
-                      style={[styles.dayItem, isSelected && styles.selectedDayItem]}
-                      onPress={() => handleSelect(item.date)}
-                    >
-                      <Text
-                        style={[
-                          styles.dayText,
-                          isSelected && styles.selectedDayText,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                      {isSelected ? (
-                        <Text style={styles.checkmark}>✓</Text>
-                      ) : null}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+        {/* Alttan Açılan Modern Cyber Dark Pano */}
+        <View style={styles.modalSheet}>
+          {/* Üst Tutamaç */}
+          <View style={styles.modalHandle} />
+
+          {/* Başlık ve Kırmızı Çarpı Butonu */}
+          <View style={styles.modalHeaderRow}>
+            <View style={styles.modalHeaderIconWrap}>
+              <CalendarIcon size={18} color="#C084FC" />
             </View>
-          </TouchableWithoutFeedback>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.modalTitle}>Tarih Seçin</Text>
+              <Text style={styles.modalDesc}>Antrenman seansı için tarih belirleyin</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.modalCloseButtonRed}
+              onPress={onClose}
+              hitSlop={10}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Kapat"
+            >
+              <CloseIcon size={14} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Gün Seçenekleri Listesi */}
+          <ScrollView
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {recentDays.map((item) => {
+              const isSelected = item.date === selected || item.date === value;
+              return (
+                <TouchableOpacity
+                  key={item.date}
+                  style={[
+                    styles.dayItem,
+                    isSelected && styles.selectedDayItem,
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => handleSelect(item.date)}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    {item.isToday ? (
+                      <View style={styles.badgeToday}>
+                        <Text style={styles.badgeTodayText}>Bugün</Text>
+                      </View>
+                    ) : item.isYesterday ? (
+                      <View style={styles.badgeYesterday}>
+                        <Text style={styles.badgeYesterdayText}>Dün</Text>
+                      </View>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.dayText,
+                        isSelected && styles.selectedDayText,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </View>
+
+                  {isSelected ? (
+                    <View style={styles.checkmarkBadge}>
+                      <Text style={styles.checkmark}>✓</Text>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Sonsuz Alt Uzantı Eteği (Pano yukarı çekildiğinde alt sınırın görünmemesini sağlar) */}
+          <View style={styles.sheetBottomExtension} pointerEvents="none" />
         </View>
-      </TouchableWithoutFeedback>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  modalRootContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  sheet: {
-    backgroundColor: Colors.light.background,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.five,
-    maxHeight: '60%',
+  modalBackdropTap: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
-  header: {
+  modalSheet: {
+    backgroundColor: '#0C101C',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 36,
+    maxHeight: '70%',
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderTopColor: '#C084FC',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  sheetBottomExtension: {
+    position: 'absolute',
+    bottom: -1000,
+    left: -1.5,
+    right: -1.5,
+    height: 1000,
+    backgroundColor: '#0C101C',
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+  },
+  modalHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#C084FC',
+    shadowColor: '#C084FC',
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.two,
-    borderBottomWidth: 1,
-    borderBottomColor: AppColors.border,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  title: {
-    fontSize: Typography.heading,
-    fontWeight: '700',
-    color: Colors.light.text,
+  modalHeaderIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.14)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  closeText: {
-    fontSize: Typography.label,
-    fontWeight: '600',
-    color: AppColors.primary,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  modalDesc: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  modalCloseButtonRed: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   list: {
-    paddingHorizontal: Spacing.four,
+    maxHeight: 380,
+  },
+  listContent: {
+    gap: 8,
+    paddingBottom: 10,
   },
   dayItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.three,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.backgroundElement,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#121829',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   selectedDayItem: {
-    backgroundColor: AppColors.primaryMuted,
-    marginHorizontal: -Spacing.four,
-    paddingHorizontal: Spacing.four,
+    borderColor: 'rgba(139, 92, 246, 0.55)',
+    backgroundColor: 'rgba(139, 92, 246, 0.16)',
   },
   dayText: {
-    fontSize: Typography.body,
-    color: Colors.light.text,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#CBD5E1',
   },
   selectedDayText: {
-    fontWeight: '700',
-    color: AppColors.primary,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  badgeToday: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  badgeTodayText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#34D399',
+  },
+  badgeYesterday: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(56, 189, 248, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+  },
+  badgeYesterdayText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#38BDF8',
+  },
+  checkmarkBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(139, 92, 246, 0.25)',
+    borderWidth: 1,
+    borderColor: '#C084FC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkmark: {
-    fontSize: Typography.heading,
-    color: AppColors.primary,
-    fontWeight: '700',
+    fontSize: 12,
+    color: '#C084FC',
+    fontWeight: '900',
   },
 });

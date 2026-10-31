@@ -1220,31 +1220,34 @@ function AllImprovementsBottomSheetModal({
 
             {/* Modal Header */}
             <View style={styles.modalHeader}>
-              <View {...panResponder.panHandlers} style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={styles.modalOverline}>Hypertrophy-X</Text>
-                <Text style={styles.modalTitle}>Tüm Güç Artışları</Text>
-                <Text style={styles.modalSubtitle}>
-                  {"Tüm egzersizlerdeki ilerlemeler (2'li gruplar)"}
-                </Text>
+              <View {...panResponder.panHandlers} style={styles.modalHeaderLeft}>
+                <View style={styles.modalHeaderIconWrap}>
+                  <TrendingUpIcon size={18} color={C.violet} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Tüm Güç Artışları</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Aşağı sürükleyerek kapatabilirsiniz
+                  </Text>
+                </View>
               </View>
-              {/* Geçmiş Sayfasındaki CalCloseBtn İle Birebir Kırmızı Kapatma Butonu */}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.modalCloseButtonRed,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.92 }] },
-                ]}
+
+              <TouchableOpacity
                 onPress={closeSheet}
+                style={styles.modalCloseButtonRed}
                 hitSlop={10}
+                activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel="Kapat"
               >
                 <CloseIcon size={14} color="#EF4444" />
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </View>
 
           {/* 2'li Gruplar Halinde Alt Alta Sıralanmış Liste */}
           <ScrollView
+            style={{ flex: 1 }}
             contentContainerStyle={styles.modalScrollContent}
             showsVerticalScrollIndicator={true}
             bounces={true}
@@ -1278,6 +1281,9 @@ function AllImprovementsBottomSheetModal({
               ))
             )}
           </ScrollView>
+
+          {/* Sonsuz Alt Uzantı Eteği (Pano yukarı çekildiğinde alt sınırın görünmemesini sağlar) */}
+          <View style={styles.sheetBottomExtension} pointerEvents="none" />
         </Animated.View>
       </View>
     </Modal>
@@ -3170,13 +3176,16 @@ export default function ProgressScreen() {
                 <Text style={styles.modalOverline}>İlerleme Analizi</Text>
                 <Text style={styles.modalTitle}>Egzersiz Seç</Text>
               </View>
-              <Pressable
-                style={styles.modalCloseButton}
+              <TouchableOpacity
+                style={styles.modalCloseButtonRed}
                 onPress={() => setShowExerciseModal(false)}
                 hitSlop={10}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
               >
-                <CloseIcon size={18} color={C.text} />
-              </Pressable>
+                <CloseIcon size={14} color="#EF4444" />
+              </TouchableOpacity>
             </View>
 
             {/* Egzersiz Arama Çubuğu */}
@@ -3224,6 +3233,9 @@ export default function ProgressScreen() {
                 })
               )}
             </ScrollView>
+
+            {/* Sonsuz Alt Uzantı Eteği */}
+            <View style={styles.sheetBottomExtension} pointerEvents="none" />
           </View>
         </View>
       </Modal>
@@ -4422,40 +4434,81 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   modalSheet: {
-    backgroundColor: C.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: '#0C101C',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderTopColor: C.violet,
     height: '74%',
-    overflow: 'hidden',
+    shadowColor: C.primaryDeep,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  sheetBottomExtension: {
+    position: 'absolute',
+    bottom: -1000,
+    left: -1.5,
+    right: -1.5,
+    height: 1000,
+    backgroundColor: '#0C101C',
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
   },
   modalDragZone: {
     width: '100%',
-    backgroundColor: C.surface,
+    backgroundColor: 'transparent',
   },
   modalDragHandleZone: {
     width: '100%',
     paddingTop: 10,
-    paddingBottom: 6,
+    paddingBottom: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalDragHandle: {
-    width: 42,
-    height: 4.5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.violet,
+    shadowColor: C.violet,
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
     alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    paddingRight: 10,
+  },
+  modalHeaderIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalOverline: {
     color: C.violet,
@@ -4467,22 +4520,22 @@ const styles = StyleSheet.create({
     color: C.text,
     fontSize: 18,
     fontWeight: '800',
-    marginTop: 2,
   },
   modalSubtitle: {
     color: C.muted,
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
+    lineHeight: 16,
   },
   modalCloseButton: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: C.border,
   },
   modalCloseButtonRed: {
     width: 32,

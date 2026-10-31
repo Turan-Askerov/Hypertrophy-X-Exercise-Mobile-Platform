@@ -28,6 +28,7 @@ export type User = {
   gender: string;
   height: number;
   weight: number;
+  target_weight?: number | null;
   fitness_level: string;
   goal: string;
   days_per_week: number;
@@ -56,6 +57,7 @@ export type UserProfile = {
   gender?: string | null;
   height?: number | null;
   weight?: number | null;
+  target_weight?: number | null;
   fitness_level?: string | null;
   goal?: string | null;
   days_per_week?: number | null;
