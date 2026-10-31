@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 
-import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { AppColors, Spacing } from '@/constants/theme';
 
 export type ConfirmDialogProps = {
   visible: boolean;
@@ -52,6 +52,7 @@ export function ConfirmDialog({
                   style={[styles.button, styles.cancelButton]}
                   onPress={onCancel}
                   disabled={busy}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.cancelText}>{cancelText}</Text>
                 </TouchableOpacity>
@@ -63,14 +64,22 @@ export function ConfirmDialog({
                   ]}
                   onPress={onConfirm}
                   disabled={busy}
+                  activeOpacity={0.7}
                 >
                   {busy ? (
                     <ActivityIndicator
                       size="small"
-                      color={destructive ? '#fff' : '#fff'}
+                      color={destructive ? '#FB7185' : '#fff'}
                     />
                   ) : (
-                    <Text style={styles.confirmText}>{confirmText}</Text>
+                    <Text
+                      style={[
+                        styles.confirmText,
+                        destructive && styles.destructiveText,
+                      ]}
+                    >
+                      {confirmText}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -85,67 +94,78 @@ export function ConfirmDialog({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.four,
   },
   content: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 360,
     backgroundColor: '#0F1528',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderRadius: 20,
+    borderWidth: 1.5,
     borderColor: 'rgba(139, 92, 246, 0.35)',
-    padding: Spacing.four,
-    gap: Spacing.two,
+    padding: 22,
+    gap: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 15,
   },
   title: {
-    fontSize: Typography.heading,
-    fontWeight: '700',
-    color: Colors.light.text,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: -0.2,
   },
   message: {
-    fontSize: Typography.body,
-    color: Colors.light.textSecondary,
+    fontSize: 14,
+    color: '#94A3B8',
     lineHeight: 22,
-    marginBottom: Spacing.two,
+    marginBottom: 6,
   },
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: Spacing.two,
+    gap: 10,
+    marginTop: 6,
   },
   button: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Radius.sm,
-    minWidth: 84,
+    height: 42,
+    paddingHorizontal: 18,
+    borderRadius: 13,
+    minWidth: 92,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelButton: {
-    backgroundColor: Colors.light.backgroundElement,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   cancelText: {
-    fontSize: Typography.label,
-    fontWeight: '600',
-    color: Colors.light.text,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#94A3B8',
   },
   confirmButton: {
     backgroundColor: AppColors.primary,
   },
   destructiveButton: {
-    backgroundColor: AppColors.danger,
+    backgroundColor: 'rgba(244, 63, 94, 0.10)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(244, 63, 94, 0.40)',
   },
   confirmText: {
-    fontSize: Typography.label,
-    fontWeight: '600',
+    fontSize: 13.5,
+    fontWeight: '700',
     color: '#fff',
+  },
+  destructiveText: {
+    color: '#FB7185',
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
 });

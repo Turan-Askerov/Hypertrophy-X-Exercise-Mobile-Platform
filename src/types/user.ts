@@ -98,7 +98,20 @@ export type EmailConfirmRequest = {
   code: string;
 };
 
+export type RequestDeleteAccountRequest = {
+  password: string;
+};
+
+export type RequestDeleteAccountResponse = {
+  success: boolean;
+  token: string;
+  masked_email: string;
+  message: string;
+};
+
 export type DeleteAccountRequest = {
   password: string;
-  confirmation: string;
+  token?: string;
+  code?: string;
+  confirmation?: string;
 };

@@ -1,10 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Animated,
+  Dimensions,
   Easing,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Platform,
@@ -118,6 +118,51 @@ function HelpIcon({ color = colors.emeraldLight, size = 22 }: { color?: string; 
   );
 }
 
+// ─── Otomatik Dinamik Klavye Kaydırma Hesaplama Fonksiyonu ───
+function calculateAutoKeyboardShift(params: {
+  keyboardScreenY?: number;
+  keyboardHeight: number;
+  containerLayoutY: number;
+  containerHeight: number;
+  sheetHeight: number;
+  statusBarInset?: number;
+}): number {
+  const {
+    keyboardScreenY = 0,
+    keyboardHeight,
+    containerLayoutY,
+    containerHeight,
+    sheetHeight,
+    statusBarInset = 44,
+  } = params;
+
+  if (keyboardHeight <= 0) return 0;
+
+  const screenH = Dimensions.get('screen').height;
+  const windowH = Dimensions.get('window').height;
+  const baseScreenHeight = Math.max(screenH, windowH);
+
+  // 1. Android / Sistem Otomatik Boyutlandırma Kontrolü
+  const isAlreadyResizedBySystem = containerHeight <= baseScreenHeight - (keyboardHeight * 0.7);
+  if (isAlreadyResizedBySystem) {
+    return 0;
+  }
+
+  // 2. Ekran Geometrisi
+  const actualKeyboardTop =
+    keyboardScreenY > 0 && keyboardScreenY < baseScreenHeight
+      ? keyboardScreenY
+      : baseScreenHeight - keyboardHeight;
+
+  const containerScreenBottom = containerLayoutY + containerHeight;
+  const overlap = Math.max(0, containerScreenBottom - actualKeyboardTop);
+  if (overlap <= 0) return 0;
+
+  // 3. Tavan Güvenliği
+  const maxAllowedShift = Math.max(0, containerHeight - sheetHeight - statusBarInset);
+  return Math.min(overlap, maxAllowedShift);
+}
+
 // ─── Sürüklenebilir Genel Geri Bildirim Alt Panosu ───
 function FeedbackBottomSheetModal({
   visible,
@@ -141,15 +186,26 @@ function FeedbackBottomSheetModal({
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Kapsayıcı render yüksekliği ve konumu
+  const [containerHeight, setContainerHeight] = useState(() => Dimensions.get('window').height);
+  const [containerLayoutY, setContainerLayoutY] = useState(0);
+
   const estimatedSheetHeight = 440;
   const [sheetHeight, setSheetHeight] = useState(estimatedSheetHeight);
 
   const [translateY] = useState(() => new Animated.Value(estimatedSheetHeight));
   const [backdropAnim] = useState(() => new Animated.Value(0));
+  const [keyboardShiftAnim] = useState(() => new Animated.Value(0));
+
+  const combinedTranslateY = useMemo(
+    () => Animated.subtract(translateY, keyboardShiftAnim),
+    [translateY, keyboardShiftAnim]
+  );
 
   const openSheet = useCallback(() => {
     translateY.setValue(sheetHeight || estimatedSheetHeight);
     backdropAnim.setValue(0);
+    keyboardShiftAnim.setValue(0);
 
     Animated.parallel([
       Animated.timing(backdropAnim, {
@@ -168,7 +224,7 @@ function FeedbackBottomSheetModal({
         useNativeDriver: false,
       }),
     ]).start();
-  }, [backdropAnim, estimatedSheetHeight, sheetHeight, translateY]);
+  }, [backdropAnim, estimatedSheetHeight, keyboardShiftAnim, sheetHeight, translateY]);
 
   const closeSheet = useCallback(() => {
     Keyboard.dismiss();
@@ -186,19 +242,77 @@ function FeedbackBottomSheetModal({
         easing: Easing.out(Easing.quad),
         useNativeDriver: false,
       }),
+      Animated.timing(keyboardShiftAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
     ]).start(({ finished }) => {
       if (finished) {
         setText('');
+        keyboardShiftAnim.setValue(0);
         onClose();
       }
     });
-  }, [backdropAnim, estimatedSheetHeight, onClose, sheetHeight, translateY]);
+  }, [backdropAnim, estimatedSheetHeight, keyboardShiftAnim, onClose, sheetHeight, translateY]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible) {
       openSheet();
     }
   }, [visible, openSheet]);
+
+  // Klavye Dinamik Takipçi & Otomatik Hesaplama (Klavye Açıldığında Panoyu Klavyenin Üzerine Taşır)
+  useEffect(() => {
+    if (!visible) {
+      keyboardShiftAnim.setValue(0);
+      return;
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (e: any) => {
+      const kHeight = e?.endCoordinates?.height || 0;
+      const kScreenY = e?.endCoordinates?.screenY;
+      const duration = e?.duration || 220;
+
+      const targetShift = calculateAutoKeyboardShift({
+        keyboardScreenY: kScreenY,
+        keyboardHeight: kHeight,
+        containerLayoutY,
+        containerHeight,
+        sheetHeight,
+        statusBarInset: 44,
+      });
+
+      Animated.timing(keyboardShiftAnim, {
+        toValue: targetShift,
+        duration: Platform.OS === 'ios' ? Math.max(160, duration) : 180,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const onHide = (e: any) => {
+      const duration = e?.duration || 200;
+      Animated.timing(keyboardShiftAnim, {
+        toValue: 0,
+        duration: Platform.OS === 'ios' ? Math.max(140, duration) : 180,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const subShow = Keyboard.addListener(showEvent, onShow);
+    const subHide = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [containerHeight, containerLayoutY, keyboardShiftAnim, sheetHeight, visible]);
 
   const panResponder = useMemo(
     () =>
@@ -274,106 +388,125 @@ function FeedbackBottomSheetModal({
       onRequestClose={closeSheet}
       statusBarTranslucent
     >
-      <View style={styles.modalRootContainer}>
+      <View
+        style={styles.modalRootContainer}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          const y = e.nativeEvent.layout.y;
+          if (h > 0 && Math.abs(h - containerHeight) > 2) {
+            setContainerHeight(h);
+            setContainerLayoutY(y);
+          }
+        }}
+      >
         {/* Karartılmış Arka Plan (Dokunulduğunda Kapatır) */}
         <Animated.View style={[styles.modalBackdrop, { opacity: backdropAnim }]}>
-          <Pressable style={styles.modalBackdropTapInner} onPress={closeSheet} />
+          <Pressable
+            style={styles.modalBackdropTapInner}
+            onPress={() => {
+              Keyboard.dismiss();
+              closeSheet();
+            }}
+          />
         </Animated.View>
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ width: '100%' }}
+        <Animated.View
+          style={[
+            styles.modalSheet,
+            {
+              transform: [{ translateY: combinedTranslateY }],
+            },
+          ]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && Math.abs(h - sheetHeight) > 2) {
+              setSheetHeight(h);
+            }
+          }}
         >
-          <Animated.View
-            style={[
-              styles.modalSheet,
-              {
-                transform: [{ translateY }],
-              },
-            ]}
-            onLayout={(e) => {
-              const h = e.nativeEvent.layout.height;
-              if (h > 0 && Math.abs(h - sheetHeight) > 2) {
-                setSheetHeight(h);
-              }
-            }}
-          >
-            {/* Sürükleme Tutamaç Alanı */}
-            <View {...panResponder.panHandlers} style={styles.modalDragHandleZone}>
-              <View style={[styles.modalHandle, { backgroundColor: accentColor, shadowColor: accentColor }]} />
-            </View>
+          {/* Sürükleme Tutamaç Alanı */}
+          <View {...panResponder.panHandlers} style={styles.modalDragHandleZone}>
+            <View style={[styles.modalHandle, { backgroundColor: accentColor, shadowColor: accentColor }]} />
+          </View>
 
-            {/* Başlık Satırı */}
-            <View style={styles.modalHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, paddingRight: 8 }}>
-                <View style={[styles.modalHeaderIconWrap, { borderColor: `${accentColor}40`, backgroundColor: `${accentColor}18` }]}>
-                  {icon}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>{title}</Text>
-                  <Text style={styles.modalDesc}>{subtitle}</Text>
-                </View>
+          {/* Başlık Satırı */}
+          <View style={styles.modalHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, paddingRight: 8 }}>
+              <View style={[styles.modalHeaderIconWrap, { borderColor: `${accentColor}40`, backgroundColor: `${accentColor}18` }]}>
+                {icon}
               </View>
-
-              <TouchableOpacity
-                style={styles.modalCloseButtonRed}
-                onPress={closeSheet}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>{title}</Text>
+                <Text style={styles.modalDesc}>{subtitle}</Text>
+              </View>
             </View>
 
-            {/* Metin Giriş Alanı */}
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.feedbackInput}
-                multiline
-                numberOfLines={5}
-                placeholder={placeholder}
-                placeholderTextColor={colors.textDim}
-                value={text}
-                onChangeText={setText}
-                maxLength={600}
-                textAlignVertical="top"
-                autoFocus
-              />
-              <Text style={styles.charCounter}>{text.length} / 600</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.modalCloseButtonRed}
+              onPress={() => {
+                Keyboard.dismiss();
+                closeSheet();
+              }}
+              hitSlop={10}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Kapat"
+            >
+              <CloseIcon size={14} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
 
-            {/* Aksiyon Butonları */}
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.neonCancelBtn}
-                onPress={closeSheet}
-                activeOpacity={0.7}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.neonCancelBtnText}>Vazgeç</Text>
-              </TouchableOpacity>
+          {/* Metin Giriş Alanı */}
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.feedbackInput}
+              multiline
+              numberOfLines={5}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textDim}
+              value={text}
+              onChangeText={setText}
+              maxLength={600}
+              textAlignVertical="top"
+              autoFocus
+              keyboardAppearance="dark"
+              selectionColor={accentColor}
+            />
+            <Text style={styles.charCounter}>{text.length} / 600</Text>
+          </View>
 
-              <TouchableOpacity
-                style={[
-                  styles.neonSaveBtn,
-                  (!text.trim() || isSubmitting) && { opacity: 0.5 },
-                ]}
-                onPress={handleSubmit}
-                activeOpacity={0.7}
-                disabled={!text.trim() || isSubmitting}
-              >
-                <Text style={styles.neonSaveBtnText}>
-                  {isSubmitting ? 'Gönderiliyor...' : 'Gönder'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+          {/* Aksiyon Butonları */}
+          <View style={styles.modalActionButtons}>
+            <TouchableOpacity
+              style={styles.neonCancelBtn}
+              onPress={() => {
+                Keyboard.dismiss();
+                closeSheet();
+              }}
+              activeOpacity={0.7}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.neonCancelBtnText}>Vazgeç</Text>
+            </TouchableOpacity>
 
-            {/* Sonsuz Alt Uzantı Eteği */}
-            <View style={styles.sheetBottomExtension} pointerEvents="none" />
-          </Animated.View>
-        </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={[
+                styles.neonSaveBtn,
+                (!text.trim() || isSubmitting) && { opacity: 0.5 },
+              ]}
+              onPress={handleSubmit}
+              activeOpacity={0.7}
+              disabled={!text.trim() || isSubmitting}
+            >
+              <Text style={styles.neonSaveBtnText}>
+                {isSubmitting ? 'Gönderiliyor...' : 'Gönder'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Sonsuz Alt Uzantı Eteği */}
+          <View style={styles.sheetBottomExtension} pointerEvents="none" />
+        </Animated.View>
       </View>
     </Modal>
   );

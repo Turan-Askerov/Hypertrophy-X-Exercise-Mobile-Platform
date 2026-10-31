@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -149,6 +149,32 @@ export default function BugReportDetailsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
 
+  // ─── Klavye ve Scroll Yönetimi ───
+  const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const h = e.endCoordinates ? e.endCoordinates.height : 0;
+      setKeyboardHeight(h);
+      // Klavye açıldığında text box ve butonun görünür kalması için scroll'u en alta kaydır
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   // Fotoğraf / Video Seçme
   const handlePickMedia = async () => {
     try {
@@ -226,9 +252,16 @@ export default function BugReportDetailsScreen() {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
+            ref={scrollRef}
             style={styles.container}
-            contentContainerStyle={styles.contentContainer}
+            contentContainerStyle={[
+              styles.contentContainer,
+              keyboardHeight > 0 && {
+                paddingBottom: Platform.OS === 'android' ? keyboardHeight + 36 : 140,
+              },
+            ]}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             {/* 1. BÖLÜM: Medya / Ekran Görüntüsü veya Kaydı Ekleme */}
@@ -381,6 +414,12 @@ export default function BugReportDetailsScreen() {
                   maxLength={500}
                   textAlignVertical="top"
                   selectionColor={colors.purple}
+                  keyboardAppearance="dark"
+                  onFocus={() => {
+                    setTimeout(() => {
+                      scrollRef.current?.scrollToEnd({ animated: true });
+                    }, 120);
+                  }}
                 />
               </View>
             </View>

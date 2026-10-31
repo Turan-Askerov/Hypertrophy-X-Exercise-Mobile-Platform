@@ -7,6 +7,7 @@ import type {
   DeleteAccountRequest,
   EmailConfirmRequest,
   EmailUpdateRequest,
+  RequestDeleteAccountRequest,
   User,
   UserProfile,
 } from '@/types/user';
@@ -48,6 +49,11 @@ export function useUser() {
       usersApi.confirmChangePassword(data),
   });
 
+  const deleteAccountReqMutation = useMutation({
+    mutationFn: (data: RequestDeleteAccountRequest) =>
+      usersApi.requestDeleteAccount(data),
+  });
+
   const deleteAccountMutation = useMutation({
     mutationFn: (data: DeleteAccountRequest) => usersApi.deleteAccount(data),
   });
@@ -67,6 +73,8 @@ export function useUser() {
     isRequestingPassword: changePasswordReqMutation.isPending,
     confirmChangePassword: changePasswordConfirmMutation.mutateAsync,
     isConfirmingPassword: changePasswordConfirmMutation.isPending,
+    requestDeleteAccount: deleteAccountReqMutation.mutateAsync,
+    isRequestingDeleteAccount: deleteAccountReqMutation.isPending,
     deleteAccount: deleteAccountMutation.mutateAsync,
     isDeletingAccount: deleteAccountMutation.isPending,
   };

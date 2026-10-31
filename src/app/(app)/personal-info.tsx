@@ -1229,19 +1229,9 @@ export default function PersonalInfoScreen() {
               bounces={false}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled={true}
               contentContainerStyle={{ paddingBottom: 6 }}
             >
-              {/* Menü açıkken dışarı dokunulduğunda menüyü kapatan ve arka planı koruyan görünmez kalkan */}
-              {(activeDropdown !== null || isDurationOpen) && (
-                <Pressable
-                  style={[StyleSheet.absoluteFill, { zIndex: 100 }]}
-                  onPress={() => {
-                    if (activeDropdown !== null) closeDropdown();
-                    if (isDurationOpen) closeDuration();
-                  }}
-                />
-              )}
-
               {/* Cinsiyet Seçimi (Yumuşak Geçişli Animasyon) */}
               <Text style={styles.modalSubheading}>CİNSİYET</Text>
               <View style={styles.genderRow} pointerEvents={isMenuTouchGuard ? 'none' : 'auto'}>
@@ -1274,18 +1264,18 @@ export default function PersonalInfoScreen() {
                 </Animated.View>
               </View>
 
-              {/* Yaş, Boy, Kilo Kutuları */}
+              {/* Biyometrik Ölçümler 4'lü Kart Sırası (Yaş, Boy, Kilo, Hedef Kilo) */}
               <Text style={styles.modalSubheading}>BİYOMETRİK ÖLÇÜMLER</Text>
               <View style={styles.metricInputRow} pointerEvents={isMenuTouchGuard ? 'none' : 'auto'}>
-                {/* Yaş Input */}
+                {/* 1. Yaş Input */}
                 <View style={styles.metricInputCol}>
                   <View style={styles.inputLabelRow}>
-                    <View style={[styles.inputNeonDot, { backgroundColor: colors.amber }]} />
-                    <Text style={[styles.label, { color: colors.amberLight }]}>Yaş</Text>
+                    <View style={[styles.inputNeonDot, { backgroundColor: colors.purpleLight }]} />
+                    <Text style={[styles.label, { color: colors.purpleLight }]}>Yaş</Text>
                     <Text style={styles.labelUnit}>(yıl)</Text>
                   </View>
                   <TextInput
-                    style={[styles.metricTextInput, styles.inputAmber]}
+                    style={[styles.metricTextInput, styles.inputPurple]}
                     value={formAge}
                     onChangeText={setFormAge}
                     keyboardType="number-pad"
@@ -1297,7 +1287,7 @@ export default function PersonalInfoScreen() {
                   />
                 </View>
 
-                {/* Boy Input */}
+                {/* 2. Boy Input */}
                 <View style={styles.metricInputCol}>
                   <View style={styles.inputLabelRow}>
                     <View style={[styles.inputNeonDot, { backgroundColor: colors.cyan }]} />
@@ -1309,7 +1299,7 @@ export default function PersonalInfoScreen() {
                     value={formHeight}
                     onChangeText={setFormHeight}
                     keyboardType="decimal-pad"
-                    placeholder="178"
+                    placeholder="180"
                     placeholderTextColor={colors.textDim}
                     maxLength={5}
                     returnKeyType="done"
@@ -1317,10 +1307,10 @@ export default function PersonalInfoScreen() {
                   />
                 </View>
 
-                {/* Kilo Input */}
+                {/* 3. Kilo Input */}
                 <View style={styles.metricInputCol}>
                   <View style={styles.inputLabelRow}>
-                    <View style={[styles.inputNeonDot, { backgroundColor: colors.emerald }]} />
+                    <View style={[styles.inputNeonDot, { backgroundColor: colors.emeraldLight }]} />
                     <Text style={[styles.label, { color: colors.emeraldLight }]}>Kilo</Text>
                     <Text style={styles.labelUnit}>(kg)</Text>
                   </View>
@@ -1329,7 +1319,27 @@ export default function PersonalInfoScreen() {
                     value={formWeight}
                     onChangeText={setFormWeight}
                     keyboardType="decimal-pad"
-                    placeholder="76.5"
+                    placeholder="80"
+                    placeholderTextColor={colors.textDim}
+                    maxLength={5}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                </View>
+
+                {/* 4. Hedef Kilo Input */}
+                <View style={styles.metricInputCol}>
+                  <View style={styles.inputLabelRow}>
+                    <View style={[styles.inputNeonDot, { backgroundColor: colors.amberLight }]} />
+                    <Text style={[styles.label, { color: colors.amberLight }]}>Hedef</Text>
+                    <Text style={styles.labelUnit}>(kg)</Text>
+                  </View>
+                  <TextInput
+                    style={[styles.metricTextInput, styles.inputAmber]}
+                    value={formTargetWeight}
+                    onChangeText={setFormTargetWeight}
+                    keyboardType="decimal-pad"
+                    placeholder="75"
                     placeholderTextColor={colors.textDim}
                     maxLength={5}
                     returnKeyType="done"
@@ -1338,156 +1348,47 @@ export default function PersonalInfoScreen() {
                 </View>
               </View>
 
-              {/* Hedef Kilo Input (Altyapı hazırlandı, DB aktif olana kadar uyarılı) */}
-              <View style={styles.targetWeightInputWrap} pointerEvents={isMenuTouchGuard ? 'none' : 'auto'}>
-                <View style={styles.inputLabelRow}>
-                  <View style={[styles.inputNeonDot, { backgroundColor: colors.amber }]} />
-                  <Text style={[styles.label, { color: colors.amberLight }]}>Hedef Kilo</Text>
-                  <Text style={styles.labelUnit}>(kg - Henüz veritabanında aktif değil)</Text>
-                </View>
-                <TextInput
-                  style={styles.targetWeightTextInput}
-                  value={formTargetWeight}
-                  onChangeText={setFormTargetWeight}
-                  keyboardType="decimal-pad"
-                  placeholder="Hedef kilonuzu girin (Örn: 75)"
-                  placeholderTextColor={colors.textDim}
-                  maxLength={5}
-                  returnKeyType="done"
-                  onSubmitEditing={Keyboard.dismiss}
-                />
-              </View>
-
               {/* 3. BÖLÜM: ANTRENMAN TERCİHLERİ */}
               <Text style={styles.modalSubheading}>ANTRENMAN TERCİHLERİ</Text>
 
-              {/* Ana Hedef & Antrenman Seviyesi Seçim Kutuları (2 Sütun) + Ön Plana YUKARI Açılan Liste */}
-              <View style={{ position: 'relative', zIndex: 500, elevation: 30 }}>
-                {/* Ana Hedef Ön Plana ve YUKARI Açılan Animasyonlu Liste */}
-                {activeDropdown === 'goal' && (
-                  <Animated.View style={[styles.dropdownFloatingOverlay, dropdownAnimatedStyle]}>
-                    <View style={styles.dropdownFloatingHeader}>
-                      <Text style={styles.dropdownHeaderTitle}>Hedefinizi Seçin</Text>
-                      <ChevronUpIcon size={14} color={colors.cyan} />
-                    </View>
-                    <ScrollView
-                      nestedScrollEnabled
-                      showsVerticalScrollIndicator={false}
-                      bounces={false}
-                      style={styles.dropdownScrollView}
-                      contentContainerStyle={{ paddingVertical: 2 }}
-                    >
-                      {GOAL_CHOICES.map((item, idx) => {
-                        const isSelected = formGoal.toLowerCase() === item.key.toLowerCase();
-                        return (
-                          <React.Fragment key={item.key}>
-                            <TouchableOpacity
-                              style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
-                              onPress={() => {
-                                setFormGoal(item.key);
-                                closeDropdown();
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.dropdownMenuTitle, isSelected && { color: colors.cyan }]}>
-                                  {item.label}
-                                </Text>
-                                <Text style={styles.dropdownMenuDesc}>{item.desc}</Text>
-                              </View>
-                              {isSelected && <CheckCircleFill size={16} color={colors.cyan} />}
-                            </TouchableOpacity>
-                            {idx < GOAL_CHOICES.length - 1 && <View style={styles.dropdownDivider} />}
-                          </React.Fragment>
-                        );
-                      })}
-                    </ScrollView>
-                  </Animated.View>
-                )}
+              <View style={styles.prefTwoColsRow}>
+                {/* Ana Hedef Kutusu */}
+                <TouchableOpacity
+                  style={[styles.prefBoxCol, activeDropdown === 'goal' && styles.prefBoxColActive]}
+                  onPress={() => toggleDropdown('goal')}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.prefBoxLabel}>Ana Hedef</Text>
+                    <Text style={styles.prefBoxValue} numberOfLines={1}>
+                      {formatGoal(formGoal)}
+                    </Text>
+                  </View>
+                  {activeDropdown === 'goal' ? (
+                    <ChevronUpIcon size={16} color={colors.cyan} />
+                  ) : (
+                    <ChevronDownIcon size={16} color={colors.textMuted} />
+                  )}
+                </TouchableOpacity>
 
-                {/* Antrenman Seviyesi Ön Plana ve YUKARI Açılan Animasyonlu Liste */}
-                {activeDropdown === 'level' && (
-                  <Animated.View style={[styles.dropdownFloatingOverlay, dropdownAnimatedStyle]}>
-                    <View style={styles.dropdownFloatingHeader}>
-                      <Text style={styles.dropdownHeaderTitle}>Antrenman Seviyenizi Seçin</Text>
-                      <ChevronUpIcon size={14} color={colors.cyan} />
-                    </View>
-                    <ScrollView
-                      nestedScrollEnabled
-                      showsVerticalScrollIndicator={false}
-                      bounces={false}
-                      style={styles.dropdownScrollView}
-                      contentContainerStyle={{ paddingVertical: 2 }}
-                    >
-                      {LEVEL_CHOICES.map((item, idx) => {
-                        const isSelected = formFitnessLevel.toLowerCase() === item.key.toLowerCase();
-                        return (
-                          <React.Fragment key={item.key}>
-                            <TouchableOpacity
-                              style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
-                              onPress={() => {
-                                setFormFitnessLevel(item.key);
-                                closeDropdown();
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.dropdownMenuTitle, isSelected && { color: colors.cyan }]}>
-                                  {item.label}
-                                </Text>
-                                <Text style={styles.dropdownMenuDesc}>{item.desc}</Text>
-                              </View>
-                              {isSelected && <CheckCircleFill size={16} color={colors.cyan} />}
-                            </TouchableOpacity>
-                            {idx < LEVEL_CHOICES.length - 1 && <View style={styles.dropdownDivider} />}
-                          </React.Fragment>
-                        );
-                      })}
-                    </ScrollView>
-                  </Animated.View>
-                )}
-
-                <View style={styles.prefTwoColsRow}>
-                  {/* Ana Hedef Kutusu */}
-                  <TouchableOpacity
-                    style={[styles.prefBoxCol, activeDropdown === 'goal' && styles.prefBoxColActive]}
-                    onPress={() => toggleDropdown('goal')}
-                    activeOpacity={0.7}
-                    disabled={isDurationOpen}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.prefBoxLabel}>Ana Hedef</Text>
-                      <Text style={styles.prefBoxValue} numberOfLines={1}>
-                        {formatGoal(formGoal)}
-                      </Text>
-                    </View>
-                    {activeDropdown === 'goal' ? (
-                      <ChevronUpIcon size={16} color={colors.cyan} />
-                    ) : (
-                      <ChevronDownIcon size={16} color={colors.textMuted} />
-                    )}
-                  </TouchableOpacity>
-
-                  {/* Antrenman Seviyesi Kutusu */}
-                  <TouchableOpacity
-                    style={[styles.prefBoxCol, activeDropdown === 'level' && styles.prefBoxColActive]}
-                    onPress={() => toggleDropdown('level')}
-                    activeOpacity={0.7}
-                    disabled={isDurationOpen}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.prefBoxLabel}>Antrenman Seviyesi</Text>
-                      <Text style={styles.prefBoxValue} numberOfLines={1}>
-                        {formatFitnessLevel(formFitnessLevel)}
-                      </Text>
-                    </View>
-                    {activeDropdown === 'level' ? (
-                      <ChevronUpIcon size={16} color={colors.cyan} />
-                    ) : (
-                      <ChevronDownIcon size={16} color={colors.textMuted} />
-                    )}
-                  </TouchableOpacity>
-                </View>
+                {/* Antrenman Seviyesi Kutusu */}
+                <TouchableOpacity
+                  style={[styles.prefBoxCol, activeDropdown === 'level' && styles.prefBoxColActive]}
+                  onPress={() => toggleDropdown('level')}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.prefBoxLabel}>Antrenman Seviyesi</Text>
+                    <Text style={styles.prefBoxValue} numberOfLines={1}>
+                      {formatFitnessLevel(formFitnessLevel)}
+                    </Text>
+                  </View>
+                  {activeDropdown === 'level' ? (
+                    <ChevronUpIcon size={16} color={colors.cyan} />
+                  ) : (
+                    <ChevronDownIcon size={16} color={colors.textMuted} />
+                  )}
+                </TouchableOpacity>
               </View>
 
               {/* Haftalık Hedef (Haftalık Hedef Kartlarını Neon Mor Rengi İle Değiştir: 2, 3, 4, 5, 6) */}
@@ -1516,19 +1417,160 @@ export default function PersonalInfoScreen() {
               {/* 4. BÖLÜM: İSTEĞE BAĞLI BİLGİLER */}
               <Text style={styles.modalSubheading}>İSTEĞE BAĞLI BİLGİLER</Text>
 
-              {/* Ortalama Süre: Üzerine basınca YUKARI VE ÖN PLANA açılan animasyonlu liste */}
-              <View style={{ position: 'relative', zIndex: 600, elevation: 32 }}>
-                {isDurationOpen && (
-                  <Animated.View style={[styles.durationUpwardFloatingOverlay, durationAnimatedStyle]}>
-                    <View style={styles.durationUpwardHeader}>
-                      <Text style={styles.durationUpwardTitle}>Ortalama Seans Süresi Seçin</Text>
-                      <ChevronUpIcon size={14} color={colors.cyan} />
+              {/* Ortalama Süre Tetikleyici Kartı */}
+              <TouchableOpacity
+                style={[
+                  styles.durationTriggerCard,
+                  isDurationOpen && styles.durationTriggerCardActive,
+                ]}
+                onPress={toggleDuration}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.durationTriggerLabel}>Ortalama antrenman süresi</Text>
+                  <View style={styles.durationTriggerValueRow}>
+                    <Text style={styles.durationTriggerMainVal}>{formSessionTimeMins} dk</Text>
+                    <Text style={styles.durationTriggerHint}>
+                      Önerileri kişiselleştirmek için kullanılır
+                    </Text>
+                  </View>
+                </View>
+                {isDurationOpen ? (
+                  <ChevronUpIcon size={18} color={colors.cyan} />
+                ) : (
+                  <ChevronDownIcon size={18} color={colors.textMuted} />
+                )}
+              </TouchableOpacity>
+
+              {/* Aksiyon Butonu: YALNIZCA KAYDET (Eski şık neon transparan cam görünüm) */}
+              <View style={styles.modalActionButtons} pointerEvents={isMenuTouchGuard ? 'none' : 'auto'}>
+                <TouchableOpacity
+                  style={[styles.neonSaveBtnOnly, isUpdatingProfile && { opacity: 0.65 }]}
+                  onPress={handleSave}
+                  activeOpacity={0.7}
+                  disabled={isUpdatingProfile}
+                >
+                  <Text style={styles.neonSaveBtnText}>
+                    {isUpdatingProfile ? 'Kaydediliyor...' : 'Kaydet'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            {/* ─── YÜZEN AÇILIR MENÜ KATMANI (Sheet Seviyesinde, Başlığın ve Formun Üzerine Sabit ve Kaydırılabilir) ─── */}
+            {(activeDropdown !== null || isDurationOpen) && (
+              <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+                {/* Şeffaf Karartmalı Arka Plan Kapatıcı Katman */}
+                <Pressable
+                  style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.55)' }]}
+                  onPress={() => {
+                    if (activeDropdown !== null) closeDropdown();
+                    if (isDurationOpen) closeDuration();
+                  }}
+                />
+
+                {/* Ana Hedef Seçim Kartı */}
+                {activeDropdown === 'goal' && (
+                  <Animated.View style={[styles.floatingSheetCard, dropdownAnimatedStyle]}>
+                    <View style={styles.dropdownFloatingHeader}>
+                      <Text style={styles.dropdownHeaderTitle}>Hedefinizi Seçin</Text>
+                      <TouchableOpacity onPress={closeDropdown} hitSlop={10}>
+                        <CloseIcon size={14} color={colors.textMuted} />
+                      </TouchableOpacity>
                     </View>
                     <ScrollView
-                      nestedScrollEnabled
-                      showsVerticalScrollIndicator={false}
+                      showsVerticalScrollIndicator={true}
                       bounces={false}
-                      style={styles.durationScrollView}
+                      keyboardShouldPersistTaps="handled"
+                      style={styles.floatingSheetCardScrollView}
+                      contentContainerStyle={{ paddingVertical: 2 }}
+                    >
+                      {GOAL_CHOICES.map((item, idx) => {
+                        const isSelected = formGoal.toLowerCase() === item.key.toLowerCase();
+                        return (
+                          <React.Fragment key={item.key}>
+                            <TouchableOpacity
+                              style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
+                              onPress={() => {
+                                setFormGoal(item.key);
+                                closeDropdown();
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <View style={{ flex: 1, paddingRight: 6 }}>
+                                <Text style={[styles.dropdownMenuTitle, isSelected && { color: colors.cyan }]}>
+                                  {item.label}
+                                </Text>
+                                <Text style={styles.dropdownMenuDesc}>{item.desc}</Text>
+                              </View>
+                              {isSelected && <CheckCircleFill size={16} color={colors.cyan} />}
+                            </TouchableOpacity>
+                            {idx < GOAL_CHOICES.length - 1 && <View style={styles.dropdownDivider} />}
+                          </React.Fragment>
+                        );
+                      })}
+                    </ScrollView>
+                  </Animated.View>
+                )}
+
+                {/* Antrenman Seviyesi Seçim Kartı */}
+                {activeDropdown === 'level' && (
+                  <Animated.View style={[styles.floatingSheetCard, dropdownAnimatedStyle]}>
+                    <View style={styles.dropdownFloatingHeader}>
+                      <Text style={styles.dropdownHeaderTitle}>Antrenman Seviyenizi Seçin</Text>
+                      <TouchableOpacity onPress={closeDropdown} hitSlop={10}>
+                        <CloseIcon size={14} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView
+                      showsVerticalScrollIndicator={true}
+                      bounces={false}
+                      keyboardShouldPersistTaps="handled"
+                      style={styles.floatingSheetCardScrollView}
+                      contentContainerStyle={{ paddingVertical: 2 }}
+                    >
+                      {LEVEL_CHOICES.map((item, idx) => {
+                        const isSelected = formFitnessLevel.toLowerCase() === item.key.toLowerCase();
+                        return (
+                          <React.Fragment key={item.key}>
+                            <TouchableOpacity
+                              style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
+                              onPress={() => {
+                                setFormFitnessLevel(item.key);
+                                closeDropdown();
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <View style={{ flex: 1, paddingRight: 6 }}>
+                                <Text style={[styles.dropdownMenuTitle, isSelected && { color: colors.cyan }]}>
+                                  {item.label}
+                                </Text>
+                                <Text style={styles.dropdownMenuDesc}>{item.desc}</Text>
+                              </View>
+                              {isSelected && <CheckCircleFill size={16} color={colors.cyan} />}
+                            </TouchableOpacity>
+                            {idx < LEVEL_CHOICES.length - 1 && <View style={styles.dropdownDivider} />}
+                          </React.Fragment>
+                        );
+                      })}
+                    </ScrollView>
+                  </Animated.View>
+                )}
+
+                {/* Ortalama Süre Seçim Kartı */}
+                {isDurationOpen && (
+                  <Animated.View style={[styles.floatingSheetCard, durationAnimatedStyle]}>
+                    <View style={styles.dropdownFloatingHeader}>
+                      <Text style={styles.dropdownHeaderTitle}>Ortalama Seans Süresi Seçin</Text>
+                      <TouchableOpacity onPress={closeDuration} hitSlop={10}>
+                        <CloseIcon size={14} color={colors.cyan} />
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView
+                      showsVerticalScrollIndicator={true}
+                      bounces={false}
+                      keyboardShouldPersistTaps="handled"
+                      style={styles.floatingSheetCardScrollView}
                       contentContainerStyle={{ paddingVertical: 2 }}
                     >
                       {[30, 45, 60, 75, 90, 120].map((mins, idx) => {
@@ -1570,48 +1612,8 @@ export default function PersonalInfoScreen() {
                     </ScrollView>
                   </Animated.View>
                 )}
-
-                {/* Ortalama Süre Tetikleyici Kartı */}
-                <TouchableOpacity
-                  style={[
-                    styles.durationTriggerCard,
-                    isDurationOpen && styles.durationTriggerCardActive,
-                  ]}
-                  onPress={toggleDuration}
-                  activeOpacity={0.7}
-                  disabled={activeDropdown !== null}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.durationTriggerLabel}>Ortalama antrenman süresi</Text>
-                    <View style={styles.durationTriggerValueRow}>
-                      <Text style={styles.durationTriggerMainVal}>{formSessionTimeMins} dk</Text>
-                      <Text style={styles.durationTriggerHint}>
-                        Önerileri kişiselleştirmek için kullanılır
-                      </Text>
-                    </View>
-                  </View>
-                  {isDurationOpen ? (
-                    <ChevronUpIcon size={18} color={colors.cyan} />
-                  ) : (
-                    <ChevronDownIcon size={18} color={colors.textMuted} />
-                  )}
-                </TouchableOpacity>
               </View>
-
-              {/* Aksiyon Butonu: YALNIZCA KAYDET (Eski şık neon transparan cam görünüm) */}
-              <View style={styles.modalActionButtons} pointerEvents={isMenuTouchGuard ? 'none' : 'auto'}>
-                <TouchableOpacity
-                  style={[styles.neonSaveBtnOnly, isUpdatingProfile && { opacity: 0.65 }]}
-                  onPress={handleSave}
-                  activeOpacity={0.7}
-                  disabled={isUpdatingProfile}
-                >
-                  <Text style={styles.neonSaveBtnText}>
-                    {isUpdatingProfile ? 'Kaydediliyor...' : 'Kaydet'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+            )}
 
             {/* Sonsuz Alt Uzantı Eteği (Pano yukarı kaydığında veya çekildiğinde alt sınırın görünmemesini sağlar) */}
             <View style={styles.sheetBottomExtension} pointerEvents="none" />
@@ -1911,20 +1913,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 20,
   },
-  targetWeightInputWrap: {
-    marginTop: 12,
-  },
-  targetWeightTextInput: {
-    height: 44,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    color: colors.text,
-    fontSize: 13.5,
-    fontWeight: '600',
-    borderWidth: 1.2,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
-    backgroundColor: 'rgba(245, 158, 11, 0.05)',
-  },
   modalRootContainer: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -2056,40 +2044,41 @@ const styles = StyleSheet.create({
   },
   metricInputRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   metricInputCol: {
     flex: 1,
+    minWidth: 0,
   },
   inputLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     marginBottom: 6,
   },
   inputNeonDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.textMuted,
   },
   labelUnit: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: colors.textDim,
     fontWeight: '400',
   },
   metricTextInput: {
     backgroundColor: colors.itemBg,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    borderRadius: 13,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
     color: colors.text,
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 15.5,
+    fontWeight: '800',
     borderWidth: 1.5,
     textAlign: 'center',
   },
@@ -2104,6 +2093,10 @@ const styles = StyleSheet.create({
   inputEmerald: {
     borderColor: 'rgba(16, 185, 129, 0.35)',
     backgroundColor: 'rgba(16, 185, 129, 0.05)',
+  },
+  inputPurple: {
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    backgroundColor: 'rgba(168, 85, 247, 0.05)',
   },
   /* ─── Antrenman Tercihleri & Seçiciler ─── */
   prefTwoColsRow: {
@@ -2138,33 +2131,36 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#F8FAFC',
   },
-  dropdownFloatingOverlay: {
+  floatingSheetCard: {
     position: 'absolute',
-    bottom: '100%',
-    left: 0,
-    right: 0,
-    marginBottom: 8,
-    maxHeight: 195,
+    left: 16,
+    right: 16,
+    top: 55,
+    maxHeight: 310,
     zIndex: 9999,
-    elevation: 35,
+    elevation: 40,
     backgroundColor: '#0D1222',
     borderWidth: 1.5,
-    borderColor: 'rgba(56, 189, 248, 0.4)',
-    borderRadius: 16,
-    padding: 8,
+    borderColor: 'rgba(56, 189, 248, 0.45)',
+    borderRadius: 18,
+    padding: 10,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.85,
+    shadowRadius: 24,
+  },
+  floatingSheetCardScrollView: {
+    maxHeight: 255,
   },
   dropdownFloatingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 6,
-    paddingBottom: 6,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 4,
   },
   dropdownHeaderTitle: {
     fontSize: 11,
@@ -2174,29 +2170,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     paddingHorizontal: 2,
   },
-  dropdownScrollView: {
-    maxHeight: 145,
-  },
   dropdownMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 9,
+    paddingVertical: 7,
     paddingHorizontal: 8,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   dropdownMenuItemActive: {
     backgroundColor: 'rgba(56, 189, 248, 0.1)',
   },
   dropdownMenuTitle: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '700',
     color: '#F8FAFC',
   },
   dropdownMenuDesc: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: 1,
   },
   dropdownDivider: {
     height: 1,
@@ -2246,55 +2239,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 0.3,
   },
-
-  /* ─── Ortalama Süre (Yukarı ve Ön Plana Açılır Liste) ─── */
-  durationUpwardFloatingOverlay: {
-    position: 'absolute',
-    bottom: '100%',
-    left: 0,
-    right: 0,
-    marginBottom: 8,
-    maxHeight: 195,
-    zIndex: 9999,
-    elevation: 35,
-    backgroundColor: '#0D1222',
-    borderWidth: 1.5,
-    borderColor: 'rgba(56, 189, 248, 0.4)',
-    borderRadius: 16,
-    padding: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 18,
-  },
-  durationUpwardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 6,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  durationUpwardTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.cyan,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  durationScrollView: {
-    maxHeight: 145,
-  },
-  durationUpwardHint: {
-    fontSize: 11,
-    color: colors.textDim,
-  },
   durationOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 8,
     borderRadius: 8,
   },

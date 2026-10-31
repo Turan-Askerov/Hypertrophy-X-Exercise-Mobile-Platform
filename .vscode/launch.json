@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/turan/Desktop/hypertrophy-mobile",
-      "program": "/home/turan/Desktop/hypertrophy-mobile/build/Debug/outDebug",
+      "cwd": "/home/turan/Desktop/Hypertrophy-X-v4.0-mobile",
+      "program": "/home/turan/Desktop/Hypertrophy-X-v4.0-mobile/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

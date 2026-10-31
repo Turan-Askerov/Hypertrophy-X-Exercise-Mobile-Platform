@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
@@ -1813,6 +1814,8 @@ export default function ProfileScreen() {
     error,
     refetch,
     updateProfile,
+    requestDeleteAccount,
+    isRequestingDeleteAccount,
     deleteAccount,
     isDeletingAccount,
   } = useUser();
@@ -1848,11 +1851,22 @@ export default function ProfileScreen() {
     | null
   >(null);
 
-  // Tehlikeli Bölge State
+  // Hesap Silme (Şifre & OTP Doğrulama) State'leri
+  const [deleteStep, setDeleteStep] = useState<'password' | 'code'>('password');
   const [deletePassword, setDeletePassword] = useState('');
-  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [deleteOtpCode, setDeleteOtpCode] = useState('');
+  const [deleteOtpToken, setDeleteOtpToken] = useState('');
+  const [deleteMaskedEmail, setDeleteMaskedEmail] = useState('');
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const resetDeleteModalState = useCallback(() => {
+    setDeletePassword('');
+    setDeleteOtpCode('');
+    setDeleteOtpToken('');
+    setDeleteMaskedEmail('');
+    setDeleteStep('password');
+  }, []);
 
   // RPG & XP Durumu
   const rpgState = useMemo(() => calculateRpgState(workouts), [workouts]);
@@ -1975,36 +1989,59 @@ export default function ProfileScreen() {
     }
   };
 
-  // Hesabı Kalıcı Olarak Silme İşlemi
-  const handleDeleteAccount = async () => {
-    if (!deletePassword) {
-      Alert.alert('Uyarı', 'Hesabı silmek için mevcut şifrenizi girmelisiniz.');
+  // 1. Adım: Şifre ile E-postaya OTP Doğrulama Kodu İsteme
+  const handleRequestDeleteOtp = async () => {
+    Keyboard.dismiss();
+    const cleanPassword = deletePassword.trim();
+    if (!cleanPassword) {
+      Alert.alert('Eksik Bilgi', 'Hesabınızı silmek için lütfen mevcut şifrenizi girin.');
       return;
     }
-    if (deleteConfirmationText.trim() !== 'HESABIMI KALICI OLARAK SİL') {
+
+    try {
+      const res = await requestDeleteAccount({
+        password: cleanPassword,
+      });
+      setDeleteOtpToken(res.token);
+      setDeleteMaskedEmail(res.masked_email || user?.email || 'kayıtlı e-posta adresinize');
+      setDeleteStep('code');
       Alert.alert(
-        'Uyarı',
-        "Lütfen onaylamak için tam olarak 'HESABIMI KALICI OLARAK SİL' yazın."
+        'Doğrulama Kodu Gönderildi',
+        res.message || `${res.masked_email || 'Kayıtlı e-posta'} adresinize 6 haneli güvenlik kodu gönderildi.`
       );
+    } catch (err: any) {
+      const msg = err?.message || 'Mevcut şifreniz doğrulanamadı veya güvenlik kodu gönderilemedi.';
+      Alert.alert('Hata', msg);
+    }
+  };
+
+  // 2. Adım: OTP Kodu ve Şifre ile Hesabı Kalıcı Olarak Silme
+  const handleDeleteAccount = async () => {
+    Keyboard.dismiss();
+    const cleanCode = deleteOtpCode.trim();
+    if (cleanCode.length !== 6) {
+      Alert.alert('Geçersiz Kod', 'Lütfen e-postanıza gönderilen 6 haneli güvenlik kodunu girin.');
       return;
     }
 
     try {
       const res = await deleteAccount({
-        password: deletePassword,
-        confirmation: deleteConfirmationText.trim(),
+        password: deletePassword.trim(),
+        token: deleteOtpToken,
+        code: cleanCode,
       });
-      Alert.alert('Hesap Silindi', res.message, [
+      Alert.alert('Hesap Silindi', res.message || 'Hesabınız ve tüm verileriniz başarıyla silindi.', [
         {
           text: 'Tamam',
           onPress: () => {
+            resetDeleteModalState();
             setActiveModal(null);
             signOut();
           },
         },
       ]);
     } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Hesap silinemedi.');
+      Alert.alert('Hata', err?.message || 'Doğrulama kodu geçersiz veya hesap silinemedi.');
     }
   };
 
@@ -2314,8 +2351,7 @@ export default function ProfileScreen() {
             title="Hesabı Kalıcı Olarak Sil"
             subtitle="Tüm verilerinizi ve geçmişinizi kalıcı olarak siler"
             onPress={() => {
-              setDeletePassword('');
-              setDeleteConfirmationText('');
+              resetDeleteModalState();
               setActiveModal('deleteAccount');
             }}
           />
@@ -2706,116 +2742,187 @@ export default function ProfileScreen() {
         onClose={() => setActiveModal(null)}
       />
 
-      {/* 9. HESAP SİLME MODALI (TEHLİKELİ BÖLGE) */}
-      <Modal visible={activeModal === 'deleteAccount'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
-        <View style={styles.modalRootContainer}>
+      {/* 9. HESAP SİLME KÜÇÜK PENCERESİ (MERKEZİ DİYALOG) */}
+      <Modal
+        visible={activeModal === 'deleteAccount'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          resetDeleteModalState();
+          setActiveModal(null);
+        }}
+        statusBarTranslucent
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.dialogOverlay}
+        >
           <Pressable
             style={styles.modalBackdropTap}
             onPress={() => {
               Keyboard.dismiss();
+              resetDeleteModalState();
               setActiveModal(null);
             }}
           />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ width: '100%' }}
-          >
-            <View style={[styles.modalSheet, { borderColor: colors.danger, borderTopColor: colors.danger }]}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.danger, shadowColor: colors.danger }]} />
-              <View style={styles.modalHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 8 }}>
-                  <TrashIcon size={20} color={colors.danger} />
-                  <Text style={[styles.modalTitle, { color: colors.danger, marginBottom: 0 }]}>
-                    Hesabı Kalıcı Olarak Sil
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.modalCloseButtonRed}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setActiveModal(null);
-                  }}
-                  hitSlop={10}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Kapat"
-                >
-                  <CloseIcon size={14} color="#EF4444" />
-                </TouchableOpacity>
+
+          <View style={styles.deleteDialogCard}>
+            <View style={styles.deleteDialogHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 8 }}>
+                <TrashIcon size={20} color={colors.purpleLight} />
+                <Text style={styles.deleteDialogTitle}>
+                  Hesabı Kalıcı Olarak Sil
+                </Text>
               </View>
-
-              <Text style={styles.modalDesc}>
-                Bu işlem kesinlikle geri alınamaz. Antrenman geçmişiniz, programlarınız ve tüm
-                verileriniz sistemden tamamen silinecektir. Devam etmek için şifrenizi girin ve
-                onay kutusuna büyük harflerle{' '}
-                <Text style={{ fontWeight: '800', color: colors.text }}>
-                  HESABIMI KALICI OLARAK SİL
-                </Text>{' '}
-                yazın.
-              </Text>
-
-              <TextInput
-                style={[styles.modalInput, { borderColor: colors.dangerBorder }]}
-                placeholder="Mevcut Şifreniz"
-                placeholderTextColor={colors.textDim}
-                value={deletePassword}
-                onChangeText={setDeletePassword}
-                secureTextEntry
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-              />
-
-              <TextInput
-                style={[
-                  styles.modalInput,
-                  {
-                    marginTop: Spacing.two,
-                    borderColor:
-                      deleteConfirmationText.trim() === 'HESABIMI KALICI OLARAK SİL'
-                        ? colors.emeraldLight
-                        : colors.dangerBorder,
-                  },
-                ]}
-                placeholder="HESABIMI KALICI OLARAK SİL"
-                placeholderTextColor={colors.textDim}
-                value={deleteConfirmationText}
-                onChangeText={setDeleteConfirmationText}
-                autoCapitalize="characters"
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-              />
-
-              <View style={styles.modalActionButtons}>
-                <TouchableOpacity
-                  style={styles.neonCancelBtn}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setActiveModal(null);
-                  }}
-                  activeOpacity={0.7}
-                  disabled={isDeletingAccount}
-                >
-                  <Text style={styles.neonCancelBtnText}>Vazgeç</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.neonDangerBtn, isDeletingAccount && { opacity: 0.6 }]}
-                  onPress={handleDeleteAccount}
-                  activeOpacity={0.7}
-                  disabled={isDeletingAccount}
-                >
-                  <Text style={styles.neonDangerBtnText}>
-                    {isDeletingAccount ? 'Siliniyor...' : 'Hesabı Sil'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={[styles.sheetBottomExtension, { borderColor: colors.danger }]} pointerEvents="none" />
+              <TouchableOpacity
+                style={styles.modalCloseButtonRed}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  resetDeleteModalState();
+                  setActiveModal(null);
+                }}
+                hitSlop={10}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
+              >
+                <CloseIcon size={14} color="#EF4444" />
+              </TouchableOpacity>
             </View>
-          </KeyboardAvoidingView>
-        </View>
+
+            {deleteStep === 'password' ? (
+              <>
+                <Text style={styles.modalDesc}>
+                  Bu işlem kesinlikle geri alınamaz. Antrenman geçmişiniz, programlarınız ve tüm
+                  verileriniz kalıcı olarak silinecektir. Devam etmek için mevcut şifrenizi girerek
+                  kayıtlı e-posta adresinize güvenlik kodu talep edin.
+                </Text>
+
+                <TextInput
+                  style={[styles.modalInput, { borderColor: 'rgba(139, 92, 246, 0.35)' }]}
+                  placeholder="Mevcut Şifreniz"
+                  placeholderTextColor={colors.textDim}
+                  value={deletePassword}
+                  onChangeText={setDeletePassword}
+                  secureTextEntry
+                  returnKeyType="done"
+                  onSubmitEditing={handleRequestDeleteOtp}
+                  keyboardAppearance="dark"
+                />
+
+                <View style={styles.modalActionButtons}>
+                  <TouchableOpacity
+                    style={styles.neonCancelBtn}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      resetDeleteModalState();
+                      setActiveModal(null);
+                    }}
+                    activeOpacity={0.7}
+                    disabled={isRequestingDeleteAccount}
+                  >
+                    <Text style={styles.neonCancelBtnText}>Vazgeç</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.neonPurpleBtn,
+                      (!deletePassword.trim() || isRequestingDeleteAccount) && { opacity: 0.6 },
+                    ]}
+                    onPress={handleRequestDeleteOtp}
+                    activeOpacity={0.7}
+                    disabled={!deletePassword.trim() || isRequestingDeleteAccount}
+                  >
+                    {isRequestingDeleteAccount ? (
+                      <ActivityIndicator size="small" color="#C084FC" />
+                    ) : (
+                      <Text style={styles.neonPurpleBtnText}>Kodu Gönder</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalDesc}>
+                  Hesabınızı kalıcı olarak silmek için{' '}
+                  <Text style={{ fontWeight: '700', color: colors.cyan }}>
+                    {deleteMaskedEmail}
+                  </Text>{' '}
+                  adresinize gönderilen 6 haneli güvenlik kodunu girin.
+                </Text>
+
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    {
+                      borderColor:
+                        deleteOtpCode.trim().length === 6
+                          ? colors.emeraldLight
+                          : 'rgba(139, 92, 246, 0.35)',
+                      textAlign: 'center',
+                      fontSize: 22,
+                      fontWeight: '800',
+                      letterSpacing: 6,
+                    },
+                  ]}
+                  placeholder="000000"
+                  placeholderTextColor={colors.textDim}
+                  value={deleteOtpCode}
+                  onChangeText={(t) => setDeleteOtpCode(t.replace(/[^0-9]/g, '').slice(0, 6))}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  returnKeyType="done"
+                  onSubmitEditing={handleDeleteAccount}
+                  keyboardAppearance="dark"
+                />
+
+                <TouchableOpacity
+                  style={{ alignSelf: 'center', paddingVertical: 4 }}
+                  onPress={() => setDeleteStep('password')}
+                  disabled={isDeletingAccount}
+                  hitSlop={8}
+                >
+                  <Text style={{ fontSize: 12, color: colors.purpleLight, fontWeight: '600' }}>
+                    Şifreyi Değiştir veya Kodu Tekrar İste
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.modalActionButtons}>
+                  <TouchableOpacity
+                    style={styles.neonCancelBtn}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      resetDeleteModalState();
+                      setActiveModal(null);
+                    }}
+                    activeOpacity={0.7}
+                    disabled={isDeletingAccount}
+                  >
+                    <Text style={styles.neonCancelBtnText}>Vazgeç</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.neonDangerBtn,
+                      (deleteOtpCode.trim().length !== 6 || isDeletingAccount) && { opacity: 0.6 },
+                    ]}
+                    onPress={handleDeleteAccount}
+                    activeOpacity={0.7}
+                    disabled={deleteOtpCode.trim().length !== 6 || isDeletingAccount}
+                  >
+                    {isDeletingAccount ? (
+                      <ActivityIndicator size="small" color="#EF4444" />
+                    ) : (
+                      <Text style={styles.neonDangerBtnText}>Hesabı Kalıcı Olarak Sil</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* 12. ÇIKIŞ ONAYI DİYALOĞU */}
+      {/* 10. ÇIKIŞ ONAYI DİYALOĞU */}
       <ConfirmDialog
         visible={logoutConfirmVisible}
         title="Oturumu Kapat"
@@ -3573,6 +3680,55 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1,
     borderColor: colors.cardBorder,
+  },
+  dialogOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.four,
+  },
+  deleteDialogCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#0C101C',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    padding: 20,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 18,
+    elevation: 20,
+  },
+  deleteDialogHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 2,
+  },
+  deleteDialogTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: -0.2,
+  },
+  neonPurpleBtn: {
+    flex: 1.3,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 1.2,
+    borderColor: 'rgba(139, 92, 246, 0.45)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  neonPurpleBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#C084FC',
+    letterSpacing: 0.3,
   },
 });
 

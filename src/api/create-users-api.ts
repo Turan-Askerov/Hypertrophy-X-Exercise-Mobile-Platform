@@ -6,6 +6,8 @@ import type {
   EmailConfirmRequest,
   EmailUpdateRequest,
   EmailUpdateResponse,
+  RequestDeleteAccountRequest,
+  RequestDeleteAccountResponse,
   User,
   UserProfile,
 } from "../types/user.ts";
@@ -73,6 +75,19 @@ export function createUsersApi(client: ApiCaller) {
     );
   }
 
+  function requestDeleteAccount(
+    data: RequestDeleteAccountRequest
+  ): Promise<RequestDeleteAccountResponse> {
+    return client.call<RequestDeleteAccountResponse>(
+      "/api/user/delete-account/request",
+      {
+        method: "POST",
+        body: data,
+        auth: true,
+      }
+    );
+  }
+
   function deleteAccount(
     data: DeleteAccountRequest
   ): Promise<{ success: boolean; message: string }> {
@@ -93,6 +108,7 @@ export function createUsersApi(client: ApiCaller) {
     confirmEmailUpdate,
     requestChangePassword,
     confirmChangePassword,
+    requestDeleteAccount,
     deleteAccount,
   };
 }

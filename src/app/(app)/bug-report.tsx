@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -14,7 +14,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -285,6 +284,25 @@ export default function BugReportScreen() {
   const router = useRouter();
   const [description, setDescription] = useState('');
   const [faqModalVisible, setFaqModalVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const h = e.endCoordinates ? e.endCoordinates.height : 0;
+      setKeyboardHeight(h);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleNext = () => {
     if (!description.trim()) {
@@ -344,43 +362,56 @@ export default function BugReportScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.body}>
-            {/* Geniş Metin Giriş Alanı */}
-            <View style={styles.inputCard}>
-              <TextInput
-                style={styles.textArea}
-                multiline
-                placeholder="Bulduğunuz hataları bildirin..."
-                placeholderTextColor={colors.textDim}
-                value={description}
-                onChangeText={setDescription}
-                maxLength={1200}
-                textAlignVertical="top"
-                selectionColor={colors.purple}
-                autoFocus
-              />
-              <View style={styles.charCounterRow}>
-                <Text style={styles.charCounterText}>
-                  {description.length} / 1200
-                </Text>
-              </View>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            styles.scrollContent,
+            keyboardHeight > 0 && {
+              paddingBottom: Platform.OS === 'android' ? Math.min(keyboardHeight, 260) : 20,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          {/* Geniş Metin Giriş Alanı */}
+          <View style={styles.inputCard}>
+            <TextInput
+              style={styles.textArea}
+              multiline
+              placeholder="Bulduğunuz hataları bildirin..."
+              placeholderTextColor={colors.textDim}
+              value={description}
+              onChangeText={setDescription}
+              maxLength={1200}
+              textAlignVertical="top"
+              selectionColor={colors.purple}
+              keyboardAppearance="dark"
+              autoFocus
+            />
+            <View style={styles.charCounterRow}>
+              <Text style={styles.charCounterText}>
+                {description.length} / 1200
+              </Text>
             </View>
-
-            {/* Alt Kısım: Sıkça Sorulan Sorular Bağlantı Çubuğu (Hevy Görselindeki gibi) */}
-            <TouchableOpacity
-              style={styles.faqLinkRow}
-              activeOpacity={0.75}
-              onPress={() => setFaqModalVisible(true)}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.faqLinkTitle}>Sıkça Sorulan Sorular</Text>
-                <Text style={styles.faqLinkSubtitle}>Sorunuza hemen yanıt alın.</Text>
-              </View>
-              <ChevronRightIcon size={18} color={colors.cyan} />
-            </TouchableOpacity>
           </View>
-        </TouchableWithoutFeedback>
+
+          {/* Alt Kısım: Sıkça Sorulan Sorular Bağlantı Çubuğu (Hevy Görselindeki gibi) */}
+          <TouchableOpacity
+            style={styles.faqLinkRow}
+            activeOpacity={0.75}
+            onPress={() => {
+              Keyboard.dismiss();
+              setFaqModalVisible(true);
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.faqLinkTitle}>Sıkça Sorulan Sorular</Text>
+              <Text style={styles.faqLinkSubtitle}>Sorunuza hemen yanıt alın.</Text>
+            </View>
+            <ChevronRightIcon size={18} color={colors.cyan} />
+          </TouchableOpacity>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* SSS Alt Panosu */}
@@ -447,6 +478,13 @@ const styles = StyleSheet.create({
     width: '50%',
     backgroundColor: colors.purple,
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
+    justifyContent: 'space-between',
+  },
   body: {
     flex: 1,
     paddingHorizontal: 16,
@@ -456,6 +494,7 @@ const styles = StyleSheet.create({
   },
   inputCard: {
     flex: 1,
+    minHeight: 220,
     backgroundColor: colors.cardBg,
     borderRadius: 16,
     borderWidth: 1,
