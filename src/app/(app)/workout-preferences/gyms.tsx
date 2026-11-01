@@ -1,14 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
+  Keyboard,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -19,6 +22,7 @@ import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 
 import { useExpertData } from '@/hooks/use-expert';
+import { ModernSwitch } from '@/components/ui/modern-switch';
 import type { Gym, GymEquipmentCatalogItem } from '@/types/expert';
 
 // ─── Cyber Dark Renk Paleti ───
@@ -61,7 +65,7 @@ const colors = {
   dangerBorder: 'rgba(239, 68, 68, 0.35)',
 };
 
-// ─── İkonlar (bug-report.tsx standardı) ───
+// ─── İkonlar ───
 function BackIcon({ color = '#F8FAFC', size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
@@ -144,11 +148,357 @@ function TrashIcon({ color = colors.danger, size = 15 }: { color?: string; size?
   );
 }
 
-function CloseIcon({ color = '#EF4444', size = 14 }: { color?: string; size?: number }) {
+// ─── Sürüklenebilir & Modern Alttan Çıkan Salon Formu Panosu ───
+interface GymFormBottomSheetProps {
+  visible: boolean;
+  editingGym: Gym | null;
+  catalogEquipment: GymEquipmentCatalogItem[];
+  groupedEquipment: Record<string, GymEquipmentCatalogItem[]>;
+  gymCount: number;
+  onClose: () => void;
+  onSave: (data: { name: string; equipment: string[]; is_default: boolean }) => Promise<void>;
+  isSaving: boolean;
+}
+
+function GymFormBottomSheet({
+  visible,
+  editingGym,
+  catalogEquipment,
+  groupedEquipment,
+  gymCount,
+  onClose,
+  onSave,
+  isSaving,
+}: GymFormBottomSheetProps) {
+  const estimatedSheetHeight = 650;
+  const [sheetHeight, setSheetHeight] = useState(estimatedSheetHeight);
+
+  // Form State'leri
+  const [gymName, setGymName] = useState(editingGym ? editingGym.name : '');
+  const [isDefault, setIsDefault] = useState(
+    editingGym ? editingGym.is_default : gymCount === 0
+  );
+  const [selectedEquipment, setSelectedEquipment] = useState<string[]>(
+    editingGym ? [...editingGym.equipment] : catalogEquipment.map((e) => e.id)
+  );
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [translateY] = useState(() => new Animated.Value(estimatedSheetHeight));
+  const [backdropAnim] = useState(() => new Animated.Value(0));
+
+  const openSheet = useCallback(() => {
+    translateY.setValue(sheetHeight || estimatedSheetHeight);
+    backdropAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        damping: 24,
+        mass: 0.8,
+        stiffness: 220,
+        restDisplacementThreshold: 0.1,
+        restSpeedThreshold: 0.1,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [backdropAnim, estimatedSheetHeight, sheetHeight, translateY]);
+
+  const closeSheet = useCallback(() => {
+    Keyboard.dismiss();
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: sheetHeight || estimatedSheetHeight,
+        duration: 220,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: false,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        onClose();
+      }
+    });
+  }, [backdropAnim, estimatedSheetHeight, onClose, sheetHeight, translateY]);
+
+  useEffect(() => {
+    if (visible) {
+      openSheet();
+    }
+  }, [visible, openSheet]);
+
+  // PanResponder ile aşağı sürükleyerek kapatma
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 3,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => gestureState.dy > 3,
+        onPanResponderGrant: () => {
+          translateY.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            translateY.setValue(gestureState.dy);
+            const fade = Math.max(0.2, 1 - gestureState.dy / (sheetHeight * 1.1));
+            backdropAnim.setValue(fade);
+          } else {
+            translateY.setValue(gestureState.dy * 0.15);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const shouldDismiss = gestureState.dy > 80 || gestureState.vy > 0.45;
+          if (shouldDismiss) {
+            closeSheet();
+          } else {
+            Animated.parallel([
+              Animated.spring(translateY, {
+                toValue: 0,
+                damping: 22,
+                mass: 0.8,
+                stiffness: 240,
+                useNativeDriver: false,
+              }),
+              Animated.timing(backdropAnim, {
+                toValue: 1,
+                duration: 160,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: false,
+              }),
+            ]).start();
+          }
+        },
+      }),
+    [backdropAnim, closeSheet, sheetHeight, translateY]
+  );
+
+  const toggleEquipmentItem = (id: string) => {
+    setSelectedEquipment((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllEquipment = () => {
+    setSelectedEquipment(catalogEquipment.map((e) => e.id));
+  };
+
+  const clearAllEquipment = () => {
+    setSelectedEquipment([]);
+  };
+
+  const handleSubmit = async () => {
+    const trimmed = gymName.trim();
+    if (trimmed.length < 2 || trimmed.length > 80) {
+      setFormError('Salon adı 2 ile 80 karakter arasında olmalıdır.');
+      return;
+    }
+
+    try {
+      await onSave({
+        name: trimmed,
+        equipment: selectedEquipment,
+        is_default: isDefault,
+      });
+      closeSheet();
+    } catch (err: any) {
+      setFormError(err?.message || 'Salon kaydedilirken bir hata oluştu.');
+    }
+  };
+
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M6 18L18 6M6 6l12 12" />
-    </Svg>
+    <Modal
+      visible={visible}
+      animationType="none"
+      transparent
+      onRequestClose={closeSheet}
+      statusBarTranslucent
+    >
+      <View style={modalStyles.modalRootContainer}>
+        {/* Karartmalı Arka Plan */}
+        <Animated.View style={[modalStyles.modalBackdropTap, { opacity: backdropAnim }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
+        </Animated.View>
+
+        {/* Alttan Sürüklenerek Kapatılabilen Pano */}
+        <Animated.View
+          style={[
+            modalStyles.modalSheet,
+            {
+              transform: [{ translateY }],
+            },
+          ]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && Math.abs(h - sheetHeight) > 10) {
+              setSheetHeight(h);
+            }
+          }}
+        >
+          {/* Sürükleme Tutamaç Alanı (PanResponder buraya bağlıdır) */}
+          <View {...panResponder.panHandlers} style={modalStyles.dragZone}>
+            <View style={modalStyles.modalHandle} />
+            <View style={modalStyles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={modalStyles.modalTitle}>
+                  {editingGym ? 'Salon Kaydını Düzenle' : 'Yeni Salon Ekle'}
+                </Text>
+                <Text style={modalStyles.modalDesc}>
+                  Salondaki ekipman ve istasyon olanaklarını yapılandırın.
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <ScrollView
+            style={modalStyles.modalScroll}
+            contentContainerStyle={modalStyles.modalScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {formError && (
+              <View style={modalStyles.errorBox}>
+                <Text style={modalStyles.errorText}>{formError}</Text>
+              </View>
+            )}
+
+            {/* Salon Adı */}
+            <View style={modalStyles.fieldGroup}>
+              <Text style={modalStyles.fieldLabel}>SALON ADI</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="Örn: BESYO, MacFit, Ev..."
+                placeholderTextColor={colors.textDim}
+                value={gymName}
+                onChangeText={(val) => {
+                  setGymName(val);
+                  if (formError) setFormError(null);
+                }}
+                maxLength={80}
+                selectionColor={colors.purple}
+              />
+            </View>
+
+            {/* Varsayılan Yap Switch (Modern Animasyonlu) */}
+            <View style={modalStyles.switchCard}>
+              <View style={modalStyles.switchInfo}>
+                <Text style={modalStyles.switchTitle}>Varsayılan Antrenman Merkezi</Text>
+                <Text style={modalStyles.switchSubtitle}>
+                  Program taslaklarında öncelikli olarak bu salonun imkânları kullanılır.
+                </Text>
+              </View>
+              <ModernSwitch value={isDefault} onValueChange={setIsDefault} />
+            </View>
+
+            {/* Ekipman Seçimi (Modern Yeşil Anahtarlar ile) */}
+            <View style={modalStyles.equipmentSection}>
+              <View style={modalStyles.equipmentSectionHeader}>
+                <Text style={modalStyles.equipmentSectionTitle}>
+                  SALONDA BULUNAN MAKİNE VE İSTASYONLAR ({selectedEquipment.length})
+                </Text>
+                <View style={modalStyles.batchActionRow}>
+                  <TouchableOpacity
+                    onPress={selectAllEquipment}
+                    style={modalStyles.batchBtn}
+                    hitSlop={6}
+                  >
+                    <Text style={modalStyles.batchBtnText}>Tümünü Seç</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={clearAllEquipment}
+                    style={modalStyles.batchBtn}
+                    hitSlop={6}
+                  >
+                    <Text style={modalStyles.batchBtnText}>Tümünü Kaldır</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {Object.entries(groupedEquipment).map(([groupName, items]) => (
+                <View key={groupName} style={modalStyles.groupBlock}>
+                  <View style={modalStyles.groupBlockHeader}>
+                    <Text style={modalStyles.groupBlockTitle}>{groupName}</Text>
+                    <Text style={modalStyles.groupBlockCount}>{items.length} Ekipman</Text>
+                  </View>
+
+                  <View style={modalStyles.groupItemsList}>
+                    {items.map((item) => {
+                      const isChecked = selectedEquipment.includes(item.id);
+                      return (
+                        <View key={item.id} style={modalStyles.switchRow}>
+                          <View style={modalStyles.switchTextCol}>
+                            <Text style={modalStyles.switchItemLabel}>{item.label}</Text>
+                            <Text
+                              style={[
+                                modalStyles.switchItemStatus,
+                                isChecked
+                                  ? modalStyles.statusActive
+                                  : modalStyles.statusInactive,
+                              ]}
+                            >
+                              {isChecked ? 'Var' : 'Yok'}
+                            </Text>
+                          </View>
+
+                          {/* Modern Yumuşak Animasyonlu Yeşil Anahtar */}
+                          <ModernSwitch
+                            value={isChecked}
+                            onValueChange={() => toggleEquipmentItem(item.id)}
+                          />
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+
+          {/* Diğer Sayfaların Panosuyla Birebir Butonlar (Profile / Units Standardı) */}
+          <View style={modalStyles.modalActionButtons}>
+            <TouchableOpacity
+              style={modalStyles.neonCancelBtn}
+              onPress={closeSheet}
+              disabled={isSaving}
+              activeOpacity={0.7}
+            >
+              <Text style={modalStyles.neonCancelBtnText}>Vazgeç</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[modalStyles.neonSaveBtn, isSaving && { opacity: 0.6 }]}
+              onPress={handleSubmit}
+              disabled={isSaving}
+              activeOpacity={0.7}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#10B981" />
+              ) : (
+                <>
+                  <CheckIcon size={16} color="#10B981" />
+                  <Text style={modalStyles.neonSaveBtnText}>
+                    {editingGym ? 'Salonu Güncelle' : 'Salonu Kaydet'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Alt Taşma Uzantısı */}
+          <View style={modalStyles.sheetBottomExtension} pointerEvents="none" />
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
@@ -192,82 +542,35 @@ export default function GymsScreen() {
     return groups;
   }, [catalogEquipment]);
 
-  // Form State
+  // Modal State
   const [modalVisible, setModalVisible] = useState(false);
+  const [modalKey, setModalKey] = useState(0);
   const [editingGym, setEditingGym] = useState<Gym | null>(null);
-  const [gymName, setGymName] = useState('');
-  const [isDefault, setIsDefault] = useState(false);
-  const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
-  const [formError, setFormError] = useState<string | null>(null);
 
   const openAddModal = () => {
     setEditingGym(null);
-    setGymName('');
-    setIsDefault(gyms.length === 0);
-    // Varsayılan olarak tüm katalogdaki ekipmanları açık başlat
-    setSelectedEquipment(catalogEquipment.map((e) => e.id));
-    setFormError(null);
+    setModalKey((prev) => prev + 1);
     setModalVisible(true);
   };
 
   const openEditModal = (gym: Gym) => {
     setEditingGym(gym);
-    setGymName(gym.name);
-    setIsDefault(gym.is_default);
-    setSelectedEquipment([...gym.equipment]);
-    setFormError(null);
+    setModalKey((prev) => prev + 1);
     setModalVisible(true);
   };
 
-  const closeModal = () => {
-    setModalVisible(false);
-    setEditingGym(null);
-    setGymName('');
-    setSelectedEquipment([]);
-    setFormError(null);
-  };
-
-  const toggleEquipmentItem = (id: string) => {
-    setSelectedEquipment((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const selectAllEquipment = () => {
-    setSelectedEquipment(catalogEquipment.map((e) => e.id));
-  };
-
-  const clearAllEquipment = () => {
-    setSelectedEquipment([]);
-  };
-
-  const handleSaveGym = async () => {
-    const trimmedName = gymName.trim();
-    if (trimmedName.length < 2 || trimmedName.length > 80) {
-      setFormError('Salon adı 2 ile 80 karakter arasında olmalıdır.');
-      return;
-    }
-
-    try {
-      if (editingGym) {
-        await updateGymMutation.mutateAsync({
-          gymId: editingGym.id,
-          data: {
-            name: trimmedName,
-            equipment: selectedEquipment,
-            is_default: isDefault,
-          },
-        });
-      } else {
-        await createGymMutation.mutateAsync({
-          name: trimmedName,
-          equipment: selectedEquipment,
-          is_default: isDefault,
-        });
-      }
-      closeModal();
-    } catch (err: any) {
-      setFormError(err?.message || 'Salon kaydedilirken bir hata oluştu.');
+  const handleModalSave = async (data: {
+    name: string;
+    equipment: string[];
+    is_default: boolean;
+  }) => {
+    if (editingGym) {
+      await updateGymMutation.mutateAsync({
+        gymId: editingGym.id,
+        data,
+      });
+    } else {
+      await createGymMutation.mutateAsync(data);
     }
   };
 
@@ -306,8 +609,6 @@ export default function GymsScreen() {
       ]
     );
   };
-
-  const isSaving = createGymMutation.isPending || updateGymMutation.isPending;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -428,7 +729,7 @@ export default function GymsScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          /* Salon Listesi Kartları (Web görseli 2 ile birebir uyumlu) */
+          /* Salon Listesi Kartları */
           <View style={styles.gymListContainer}>
             {gyms.map((gym) => {
               const eqCount = gym.equipment.length;
@@ -528,188 +829,18 @@ export default function GymsScreen() {
         )}
       </ScrollView>
 
-      {/* Profil Sayfası Standardında Alttan Çıkan Bottom Sheet Modal */}
-      <Modal
+      {/* Sürüklenerek Kapatılabilen Bottom Sheet Panosu */}
+      <GymFormBottomSheet
+        key={modalKey}
         visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={closeModal}
-        statusBarTranslucent
-      >
-        <View style={modalStyles.modalRootContainer}>
-          <Pressable style={modalStyles.modalBackdropTap} onPress={closeModal} />
-          <View style={modalStyles.modalSheet}>
-            {/* Tutamaç Çubuğu */}
-            <View style={modalStyles.modalHandle} />
-
-            {/* Başlık ve Kırmızı Kapatma Butonu */}
-            <View style={modalStyles.modalHeaderRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={modalStyles.modalTitle}>
-                  {editingGym ? 'Salon Kaydını Düzenle' : 'Yeni Salon Ekle'}
-                </Text>
-                <Text style={modalStyles.modalDesc}>
-                  Salondaki ekipman ve istasyon olanaklarını yapılandırın.
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={modalStyles.modalCloseButtonRed}
-                onPress={closeModal}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={modalStyles.modalScroll}
-              contentContainerStyle={modalStyles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {formError && (
-                <View style={modalStyles.errorBox}>
-                  <Text style={modalStyles.errorText}>{formError}</Text>
-                </View>
-              )}
-
-              {/* Salon Adı */}
-              <View style={modalStyles.fieldGroup}>
-                <Text style={modalStyles.fieldLabel}>SALON ADI</Text>
-                <TextInput
-                  style={modalStyles.input}
-                  placeholder="Örn: BESYO, MacFit, Ev..."
-                  placeholderTextColor={colors.textDim}
-                  value={gymName}
-                  onChangeText={(val) => {
-                    setGymName(val);
-                    if (formError) setFormError(null);
-                  }}
-                  maxLength={80}
-                  selectionColor={colors.purple}
-                />
-              </View>
-
-              {/* Varsayılan Yap Switch (Basit Yeşil Anahtar) */}
-              <View style={modalStyles.switchCard}>
-                <View style={modalStyles.switchInfo}>
-                  <Text style={modalStyles.switchTitle}>Varsayılan Antrenman Merkezi</Text>
-                  <Text style={modalStyles.switchSubtitle}>
-                    Program taslaklarında öncelikli olarak bu salonun imkânları kullanılır.
-                  </Text>
-                </View>
-                <Switch
-                  value={isDefault}
-                  onValueChange={setIsDefault}
-                  trackColor={{ false: '#242B42', true: colors.emerald }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
-
-              {/* Ekipman Seçimi (Basit Yeşil Anahtarlı İkili Seçim Listesi) */}
-              <View style={modalStyles.equipmentSection}>
-                <View style={modalStyles.equipmentSectionHeader}>
-                  <Text style={modalStyles.equipmentSectionTitle}>
-                    SALONDA BULUNAN MAKİNE VE İSTASYONLAR ({selectedEquipment.length})
-                  </Text>
-                  <View style={modalStyles.batchActionRow}>
-                    <TouchableOpacity
-                      onPress={selectAllEquipment}
-                      style={modalStyles.batchBtn}
-                      hitSlop={6}
-                    >
-                      <Text style={modalStyles.batchBtnText}>Tümünü Seç</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={clearAllEquipment}
-                      style={modalStyles.batchBtn}
-                      hitSlop={6}
-                    >
-                      <Text style={modalStyles.batchBtnText}>Tümünü Kaldır</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {Object.entries(groupedEquipment).map(([groupName, items]) => (
-                  <View key={groupName} style={modalStyles.groupBlock}>
-                    <View style={modalStyles.groupBlockHeader}>
-                      <Text style={modalStyles.groupBlockTitle}>{groupName}</Text>
-                      <Text style={modalStyles.groupBlockCount}>{items.length} Ekipman</Text>
-                    </View>
-
-                    <View style={modalStyles.groupItemsList}>
-                      {items.map((item) => {
-                        const isChecked = selectedEquipment.includes(item.id);
-                        return (
-                          <View key={item.id} style={modalStyles.switchRow}>
-                            <View style={modalStyles.switchTextCol}>
-                              <Text style={modalStyles.switchItemLabel}>{item.label}</Text>
-                              <Text
-                                style={[
-                                  modalStyles.switchItemStatus,
-                                  isChecked
-                                    ? modalStyles.statusActive
-                                    : modalStyles.statusInactive,
-                                ]}
-                              >
-                                {isChecked ? 'Var' : 'Yok'}
-                              </Text>
-                            </View>
-
-                            {/* Basit Yeşil Anahtar */}
-                            <Switch
-                              value={isChecked}
-                              onValueChange={() => toggleEquipmentItem(item.id)}
-                              trackColor={{ false: '#242B42', true: colors.emerald }}
-                              thumbColor="#FFFFFF"
-                            />
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-
-            {/* Modal Alt Aksiyon Butonları (Profile Standartı) */}
-            <View style={modalStyles.modalFooter}>
-              <TouchableOpacity
-                style={modalStyles.neonCancelBtn}
-                onPress={closeModal}
-                disabled={isSaving}
-                activeOpacity={0.7}
-              >
-                <Text style={modalStyles.neonCancelBtnText}>Vazgeç</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[modalStyles.neonSaveBtn, isSaving && { opacity: 0.6 }]}
-                onPress={handleSaveGym}
-                disabled={isSaving}
-                activeOpacity={0.7}
-              >
-                {isSaving ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <CheckIcon size={16} color="#FFFFFF" />
-                    <Text style={modalStyles.neonSaveBtnText}>
-                      {editingGym ? 'Salonu Güncelle' : 'Salonu Kaydet'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Alt Taşma Uzantısı */}
-            <View style={modalStyles.sheetBottomExtension} pointerEvents="none" />
-          </View>
-        </View>
-      </Modal>
+        editingGym={editingGym}
+        catalogEquipment={catalogEquipment}
+        groupedEquipment={groupedEquipment}
+        gymCount={gyms.length}
+        onClose={() => setModalVisible(false)}
+        onSave={handleModalSave}
+        isSaving={createGymMutation.isPending || updateGymMutation.isPending}
+      />
     </SafeAreaView>
   );
 }
@@ -1145,6 +1276,9 @@ const modalStyles = StyleSheet.create({
     borderTopWidth: 0,
     borderBottomWidth: 0,
   },
+  dragZone: {
+    paddingBottom: 4,
+  },
   modalHandle: {
     width: 44,
     height: 4,
@@ -1161,18 +1295,6 @@ const modalStyles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 12,
-  },
-  modalCloseButtonRed: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderColor: 'rgba(239, 68, 68, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 2,
   },
   modalTitle: {
     fontSize: 18,
@@ -1336,40 +1458,47 @@ const modalStyles = StyleSheet.create({
   statusInactive: {
     color: colors.textDim,
   },
-  modalFooter: {
+  modalActionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
     gap: 12,
-    paddingTop: 14,
+    marginTop: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   neonCancelBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    flex: 1,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 1.2,
+    borderColor: 'rgba(244, 63, 94, 0.35)',
+    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   neonCancelBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FB7185',
+    letterSpacing: 0.3,
   },
   neonSaveBtn: {
-    flexDirection: 'row',
+    flex: 1.3,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 1.2,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
     alignItems: 'center',
-    backgroundColor: colors.emerald,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 10,
+    justifyContent: 'center',
+    flexDirection: 'row',
     gap: 6,
   },
   neonSaveBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#10B981',
+    letterSpacing: 0.3,
   },
 });

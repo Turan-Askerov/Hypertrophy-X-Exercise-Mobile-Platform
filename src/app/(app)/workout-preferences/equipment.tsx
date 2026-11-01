@@ -5,7 +5,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -14,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 
+import { ModernSwitch } from '@/components/ui/modern-switch';
 import { useExpertData } from '@/hooks/use-expert';
 import type { GymEquipmentCatalogItem } from '@/types/expert';
 
@@ -366,11 +366,10 @@ export default function EquipmentPreferencesScreen() {
                             {isChecked ? 'Var' : 'Yok'}
                           </Text>
                         </View>
-                        <Switch
+                        <ModernSwitch
                           value={isChecked}
                           onValueChange={() => toggleEquipmentSwitch(item.id)}
-                          trackColor={{ false: '#242B42', true: colors.emerald }}
-                          thumbColor="#FFFFFF"
+                          activeColor={colors.emerald}
                         />
                       </View>
                     );

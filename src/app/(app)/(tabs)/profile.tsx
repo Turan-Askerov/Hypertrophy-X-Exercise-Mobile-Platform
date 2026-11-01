@@ -2285,7 +2285,7 @@ export default function ProfileScreen() {
         <View style={styles.groupCard}>
           <SettingItem
             icon={<DumbbellIcon color={colors.cyan} />}
-            title="Antrenman Tercihi"
+            title="Antrenman Tercihleri"
             subtitle="Kayıtlı salonlar, hareketler ve ekipmanlar"
             onPress={() => router.push('/(app)/workout-preferences' as any)}
           />
