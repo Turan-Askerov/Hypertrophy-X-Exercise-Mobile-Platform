@@ -7,6 +7,12 @@ export interface ModernSwitchProps {
   disabled?: boolean;
   activeColor?: string;
   inactiveColor?: string;
+  activeTrackBg?: string;
+  inactiveTrackBg?: string;
+  activeBorderColor?: string;
+  inactiveBorderColor?: string;
+  activeThumbColor?: string;
+  inactiveThumbColor?: string;
 }
 
 export function ModernSwitch({
@@ -14,7 +20,13 @@ export function ModernSwitch({
   onValueChange,
   disabled = false,
   activeColor = '#10B981',
-  inactiveColor = '#1A2235',
+  inactiveColor = '#64748B',
+  activeTrackBg = 'rgba(16, 185, 129, 0.10)',
+  inactiveTrackBg = 'rgba(255, 255, 255, 0.03)',
+  activeBorderColor,
+  inactiveBorderColor = 'rgba(255, 255, 255, 0.12)',
+  activeThumbColor,
+  inactiveThumbColor,
 }: ModernSwitchProps) {
   const [anim] = useState(() => new Animated.Value(value ? 1 : 0));
 
@@ -28,19 +40,28 @@ export function ModernSwitch({
     }).start();
   }, [value, anim]);
 
+  const resolvedActiveBorder = activeBorderColor ?? activeColor;
+  const resolvedActiveThumb = activeThumbColor ?? activeColor;
+  const resolvedInactiveThumb = inactiveThumbColor ?? inactiveColor;
+
   const trackBg = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [inactiveColor, activeColor],
+    outputRange: [inactiveTrackBg, activeTrackBg],
   });
 
   const borderColor = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(255, 255, 255, 0.12)', 'rgba(52, 211, 153, 0.5)'],
+    outputRange: [inactiveBorderColor, resolvedActiveBorder],
+  });
+
+  const thumbBg = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [resolvedInactiveThumb, resolvedActiveThumb],
   });
 
   const translateX = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [3, 23],
+    outputRange: [2.5, 22.5],
   });
 
   return (
@@ -65,6 +86,7 @@ export function ModernSwitch({
           style={[
             styles.thumb,
             {
+              backgroundColor: thumbBg,
               transform: [{ translateX }],
             },
           ]}
@@ -79,18 +101,17 @@ const styles = StyleSheet.create({
     width: 48,
     height: 28,
     borderRadius: 14,
-    borderWidth: 1.2,
+    borderWidth: 1.4,
     justifyContent: 'center',
   },
   thumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.45,
     shadowRadius: 3,
-    elevation: 4,
+    elevation: 3,
   },
 });
