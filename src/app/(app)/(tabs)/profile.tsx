@@ -1828,9 +1828,7 @@ export default function ProfileScreen() {
   const [language, setLanguage] = useState<'Türkçe' | 'English'>('Türkçe');
 
   // Antrenman Tercihleri
-  const [defaultRestSec, setDefaultRestSec] = useState<number>(90);
   const [restTimerSound, setRestTimerSound] = useState<boolean>(true);
-  const [autoStartTimer, setAutoStartTimer] = useState<boolean>(true);
 
   // Bildirimler
   const [workoutReminders, setWorkoutReminders] = useState<boolean>(true);
@@ -1842,7 +1840,6 @@ export default function ProfileScreen() {
     | 'fitnessLevel'
     | 'goal'
     | 'notifications'
-    | 'workout'
     | 'units'
     | 'language'
     | 'theme'
@@ -2289,9 +2286,8 @@ export default function ProfileScreen() {
           <SettingItem
             icon={<DumbbellIcon color={colors.cyan} />}
             title="Antrenman Tercihi"
-            subtitle="Dinlenme sayacı ve otomatik başlatma"
-            valueBadge={`${defaultRestSec} sn`}
-            onPress={() => setActiveModal('workout')}
+            subtitle="Kayıtlı salonlar, hareketler ve ekipmanlar"
+            onPress={() => router.push('/(app)/workout-preferences' as any)}
           />
           <SettingItem
             icon={<ScaleIcon color={colors.purpleLight} />}
@@ -2497,92 +2493,6 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
-
-            <View style={styles.sheetBottomExtension} pointerEvents="none" />
-          </View>
-        </View>
-      </Modal>
-
-      {/* 3. ANTRENMAN AYARLARI MODALI */}
-      <Modal visible={activeModal === 'workout'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
-        <View style={styles.modalRootContainer}>
-          <Pressable style={styles.modalBackdropTap} onPress={() => setActiveModal(null)} />
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeaderRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={styles.modalTitle}>Antrenman Tercihleri</Text>
-                <Text style={styles.modalDesc}>Varsayılan dinlenme ve sayaç bildirimlerini yapılandırın.</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.modalCloseButtonRed}
-                onPress={() => setActiveModal(null)}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalSubheading}>VARSAYILAN DİNLENME SÜRESİ</Text>
-            <View style={styles.pillOptionsRow}>
-              {[60, 90, 120, 180].map((sec) => (
-                <TouchableOpacity
-                  key={sec}
-                  style={[styles.smallPill, defaultRestSec === sec && styles.smallPillActive]}
-                  onPress={() => setDefaultRestSec(sec)}
-                >
-                  <Text style={[styles.smallPillText, defaultRestSec === sec && styles.smallPillTextActive]}>
-                    {sec < 60 ? `${sec}sn` : `${sec / 60}dk`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.switchTitle}>Dinlenme Sayacı Sesi</Text>
-                <Text style={styles.switchSubtitle}>Süre bittiğinde bip sesi çal</Text>
-              </View>
-              <Switch
-                value={restTimerSound}
-                onValueChange={setRestTimerSound}
-                trackColor={{ false: '#1E2538', true: colors.purple }}
-                thumbColor="#ffffff"
-              />
-            </View>
-
-            <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.switchTitle}>Otomatik Sayacı Başlat</Text>
-                <Text style={styles.switchSubtitle}>Set onaylandığında sayacı otomatik başlat</Text>
-              </View>
-              <Switch
-                value={autoStartTimer}
-                onValueChange={setAutoStartTimer}
-                trackColor={{ false: '#1E2538', true: colors.purple }}
-                thumbColor="#ffffff"
-              />
-            </View>
-
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.neonCancelBtn}
-                onPress={() => setActiveModal(null)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.neonCancelBtnText}>Vazgeç</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.neonSaveBtn}
-                onPress={() => setActiveModal(null)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.neonSaveBtnText}>Kaydet</Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.sheetBottomExtension} pointerEvents="none" />

@@ -414,7 +414,7 @@ export default function PersonalInfoScreen() {
   const { bmi, bmiCategory, bmr } = useMemo(() => {
     const effectiveHeight = height || 180;
     const effectiveWeight = weight || 80;
-    const effectiveAge = age || 22;
+    const effectiveAge = age || 20;
 
     const heightM = effectiveHeight / 100;
     const bmiVal = effectiveWeight / (heightM * heightM);
@@ -972,7 +972,7 @@ export default function PersonalInfoScreen() {
               <View style={[styles.roundIconBox, styles.purpleRoundIcon]}>
                 <UserMiniIcon size={18} color={colors.purpleLight} />
               </View>
-              <Text style={styles.rowLabel}>Ad Soyad</Text>
+              <Text style={styles.rowLabel}>Kullanıcı Adı</Text>
             </View>
             <Text style={styles.rowValue}>{user?.username || 'Turan'}</Text>
           </View>
