@@ -25,6 +25,12 @@ export interface ExercisePreferenceCatalogItem {
   weighted?: boolean;
 }
 
+export interface DetailedMuscleCatalogItem {
+  id: string;
+  label: string;
+  ui_group?: string;
+}
+
 export interface TargetMuscles {
   primary_goal?: string;
   priority_muscles?: string[];
@@ -34,7 +40,7 @@ export interface TargetMuscles {
 
 export interface ExpertCatalog {
   primary_goals: Record<string, string>;
-  detailed_muscles: string[];
+  detailed_muscles: DetailedMuscleCatalogItem[];
   gym_equipment: GymEquipmentCatalogItem[];
   exercise_preferences: ExercisePreferenceCatalogItem[];
   max_priority_muscles: number;

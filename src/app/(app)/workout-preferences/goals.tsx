@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 
 import { useExpertData } from '@/hooks/use-expert';
+import type { DetailedMuscleCatalogItem } from '@/types/expert';
 
 // ─── Cyber Dark Renk Paleti ───
 const colors = {
@@ -100,32 +101,73 @@ function UserGoalIcon({ color = colors.cyanLight, size = 18 }: { color?: string;
   );
 }
 
-const DEFAULT_MUSCLES = [
-  'Göğüs',
-  'Latissimus (Kanat)',
-  'Üst Sırt',
-  'Trapez',
-  'Bel / Omurga Erektörleri',
-  'Ön Omuz',
-  'Yan Omuz',
-  'Arka Omuz',
-  'Rotator Cuff',
-  'Biceps',
-  'Triceps',
-  'Quadriceps',
-  'Hamstring',
-  'Gluteus',
-  'Calf',
-  'Adductors',
-  'Bilek Kasları',
-  'Core',
+function ZapIcon({ color = colors.purpleLight, size = 13 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+        d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
+      />
+    </Svg>
+  );
+}
+
+const DEFAULT_DETAILED_MUSCLES: DetailedMuscleCatalogItem[] = [
+  { id: 'chest', label: 'Göğüs', ui_group: 'Göğüs' },
+  { id: 'lats', label: 'Latissimus (Kanat)', ui_group: 'Sırt' },
+  { id: 'upper_back', label: 'Üst Sırt', ui_group: 'Sırt' },
+  { id: 'traps', label: 'Trapez', ui_group: 'Sırt' },
+  { id: 'spinal_erectors', label: 'Bel / Omurga Erektörleri', ui_group: 'Sırt' },
+  { id: 'front_delts', label: 'Ön Omuz', ui_group: 'Omuz' },
+  { id: 'side_delts', label: 'Yan Omuz', ui_group: 'Omuz' },
+  { id: 'rear_delts', label: 'Arka Omuz', ui_group: 'Omuz' },
+  { id: 'rotator_cuff', label: 'Rotator Cuff', ui_group: 'Omuz' },
+  { id: 'biceps', label: 'Biceps', ui_group: 'Biceps' },
+  { id: 'triceps', label: 'Triceps', ui_group: 'Triceps' },
+  { id: 'quadriceps', label: 'Quadriceps', ui_group: 'Bacak' },
+  { id: 'hamstrings', label: 'Hamstring', ui_group: 'Bacak' },
+  { id: 'glutes', label: 'Gluteus', ui_group: 'Bacak' },
+  { id: 'calves', label: 'Calf', ui_group: 'Bacak' },
+  { id: 'adductors', label: 'Adductors', ui_group: 'Bacak' },
+  { id: 'forearms', label: 'Bilek Kasları', ui_group: 'Bilek' },
+  { id: 'core', label: 'Core', ui_group: 'Core' },
 ];
 
 export default function GoalsScreen() {
   const router = useRouter();
   const { expertData, isLoading, isRefetching, refetch, saveGoalsMutation } = useExpertData();
 
-  const muscleList = expertData?.catalog?.detailed_muscles || DEFAULT_MUSCLES;
+  // Katalogdaki kas gruplarını normalize et (nesne veya string desteği)
+  const rawCatalogMuscles = expertData?.catalog?.detailed_muscles;
+  const muscles: DetailedMuscleCatalogItem[] = useMemo(() => {
+    if (Array.isArray(rawCatalogMuscles) && rawCatalogMuscles.length > 0) {
+      return rawCatalogMuscles.map((item: any) => {
+        if (typeof item === 'string') {
+          const found = DEFAULT_DETAILED_MUSCLES.find((d) => d.id === item || d.label === item);
+          return found || { id: item, label: item };
+        }
+        return {
+          id: item.id || item.label,
+          label: item.label || item.id,
+          ui_group: item.ui_group || '',
+        };
+      });
+    }
+    return DEFAULT_DETAILED_MUSCLES;
+  }, [rawCatalogMuscles]);
+
+  // ID -> Label Sözlüğü
+  const muscleLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    muscles.forEach((m) => map.set(m.id, m.label));
+    DEFAULT_DETAILED_MUSCLES.forEach((m) => {
+      if (!map.has(m.id)) map.set(m.id, m.label);
+    });
+    return map;
+  }, [muscles]);
+
   const primaryGoals = expertData?.catalog?.primary_goals || {
     hypertrophy: 'Kas kazanımı (Bulk)',
     recomp: 'Yeniden yapılanma (Recomp)',
@@ -135,7 +177,20 @@ export default function GoalsScreen() {
 
   const currentGoalData = expertData?.target_muscles || {};
   const currentGoalKey = currentGoalData.primary_goal || 'hypertrophy';
-  const currentMuscles = currentGoalData.priority_muscles || [];
+
+  // Sunucudan gelen priority_muscles değerlerini id olarak normalize et
+  const currentMuscles = useMemo(() => {
+    const rawList = currentGoalData.priority_muscles || [];
+    return rawList.map((val) => {
+      const byId = DEFAULT_DETAILED_MUSCLES.find((m) => m.id === val);
+      if (byId) return byId.id;
+      const byLabel = DEFAULT_DETAILED_MUSCLES.find(
+        (m) => m.label.toLowerCase() === String(val).toLowerCase()
+      );
+      return byLabel ? byLabel.id : String(val);
+    });
+  }, [currentGoalData.priority_muscles]);
+
   const currentNote = currentGoalData.priority_note || '';
 
   // Yerel Taslak State
@@ -148,17 +203,17 @@ export default function GoalsScreen() {
   const priorityNote = draftNote ?? currentNote;
 
   // Kas Seç / Çıkar (Maksimum 3)
-  const toggleMuscle = (muscle: string) => {
+  const toggleMuscle = (muscleId: string) => {
     Keyboard.dismiss();
     const current = draftMuscles ?? currentMuscles;
-    if (current.includes(muscle)) {
-      setDraftMuscles(current.filter((m) => m !== muscle));
+    if (current.includes(muscleId)) {
+      setDraftMuscles(current.filter((m) => m !== muscleId));
     } else {
       if (current.length >= 3) {
         Alert.alert('Sınır Aşıldı', 'En fazla 3 hedef kas seçebilirsiniz.');
         return;
       }
-      setDraftMuscles([...current, muscle]);
+      setDraftMuscles([...current, muscleId]);
     }
   };
 
@@ -274,6 +329,48 @@ export default function GoalsScreen() {
           </View>
         </View>
 
+        {/* Aktif Hedefler Panosu (Web Görseli 1 standardı) */}
+        {selectedMuscles.length > 0 && (
+          <View style={styles.activeGoalsCard}>
+            <View style={styles.activeGoalsHeader}>
+              <Text style={styles.activeGoalsTitle}>Öncelikli Hedef Panosu</Text>
+              <View style={styles.activeGoalsBadge}>
+                <Text style={styles.activeGoalsBadgeText}>{selectedMuscles.length} Aktif Hedef</Text>
+              </View>
+            </View>
+
+            <View style={styles.activeGoalsRow}>
+              {selectedMuscles.map((muscleId) => {
+                const label = muscleLabelMap.get(muscleId) || muscleId;
+                return (
+                  <View key={muscleId} style={styles.activeGoalItem}>
+                    <View style={styles.activeGoalTop}>
+                      <Text style={styles.activeGoalName} numberOfLines={1}>
+                        {label}
+                      </Text>
+                      <View style={styles.activeGoalPill}>
+                        <Text style={styles.activeGoalPillText}>Aktif</Text>
+                      </View>
+                    </View>
+                    <View style={styles.activeGoalModTag}>
+                      <Text style={styles.activeGoalModTagText}>
+                        Öncelikli Hareket Modifikasyonu
+                      </Text>
+                    </View>
+                    <View style={styles.activeGoalBottom}>
+                      <Text style={styles.activeGoalSub}>Eşit Hipertrofi</Text>
+                      <View style={styles.equalPriorityTag}>
+                        <ZapIcon size={11} color={colors.purpleLight} />
+                        <Text style={styles.equalPriorityText}>Eşit Öncelik</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {/* Kas Grupları Başlığı */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>KAS GRUPLARI LİSTESİ (MAKSİMUM 3)</Text>
@@ -288,17 +385,17 @@ export default function GoalsScreen() {
         ) : (
           /* Kas Grupları Grid Izgarası (Web Görseli 8 standardı) */
           <View style={styles.muscleGrid}>
-            {muscleList.map((muscle) => {
-              const isSelected = selectedMuscles.includes(muscle);
+            {muscles.map((muscle) => {
+              const isSelected = selectedMuscles.includes(muscle.id);
 
               return (
                 <TouchableOpacity
-                  key={muscle}
+                  key={muscle.id}
                   style={[
                     styles.muscleCard,
                     isSelected && styles.muscleCardSelected,
                   ]}
-                  onPress={() => toggleMuscle(muscle)}
+                  onPress={() => toggleMuscle(muscle.id)}
                   activeOpacity={0.7}
                 >
                   <Text
@@ -308,7 +405,7 @@ export default function GoalsScreen() {
                     ]}
                     numberOfLines={1}
                   >
-                    {muscle}
+                    {muscle.label}
                   </Text>
 
                   <View
@@ -503,6 +600,111 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: colors.textDim,
+  },
+  activeGoalsCard: {
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.28)',
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
+  },
+  activeGoalsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeGoalsTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  activeGoalsBadge: {
+    backgroundColor: colors.emeraldBg,
+    borderWidth: 1,
+    borderColor: colors.emeraldBorder,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  activeGoalsBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.emeraldLight,
+  },
+  activeGoalsRow: {
+    gap: 8,
+  },
+  activeGoalItem: {
+    backgroundColor: colors.cardBgInner,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+  },
+  activeGoalTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeGoalName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: colors.purpleLight,
+  },
+  activeGoalPill: {
+    backgroundColor: colors.emeraldBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activeGoalPillText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: colors.emeraldLight,
+  },
+  activeGoalModTag: {
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  activeGoalModTagText: {
+    fontSize: 10,
+    color: colors.cyanLight,
+    fontWeight: '600',
+  },
+  activeGoalBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  activeGoalSub: {
+    fontSize: 11,
+    color: colors.textDim,
+  },
+  equalPriorityTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.purpleBg,
+    borderWidth: 1,
+    borderColor: colors.purpleBorder,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  equalPriorityText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.purpleLight,
   },
   sectionHeader: {
     flexDirection: 'row',

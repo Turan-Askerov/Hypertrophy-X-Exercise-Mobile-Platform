@@ -218,7 +218,25 @@ export default function WorkoutPreferencesScreen() {
   const preferredExerciseIds = expertData?.preferred_exercise_ids || [];
   const avoidExerciseIds = expertData?.avoid_exercise_ids || [];
   const preferredEquipment = expertData?.preferred_equipment || [];
-  const targetMuscles = expertData?.target_muscles?.priority_muscles || [];
+  const targetMuscles = React.useMemo(
+    () => expertData?.target_muscles?.priority_muscles || [],
+    [expertData?.target_muscles?.priority_muscles]
+  );
+  const detailedMusclesCatalog = React.useMemo(
+    () => expertData?.catalog?.detailed_muscles || [],
+    [expertData?.catalog?.detailed_muscles]
+  );
+
+  const targetMusclesLabel = React.useMemo(() => {
+    if (targetMuscles.length === 0) return 'Maksimum 3 odak kas grubu seç';
+    const map = new Map<string, string>();
+    detailedMusclesCatalog.forEach((m: any) => {
+      if (typeof m === 'object' && m.id && m.label) {
+        map.set(m.id, m.label);
+      }
+    });
+    return targetMuscles.map((id) => map.get(id) || id).join(', ');
+  }, [targetMuscles, detailedMusclesCatalog]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -339,11 +357,7 @@ export default function WorkoutPreferencesScreen() {
               iconBg={colors.emeraldBg}
               iconBorder={colors.emeraldBorder}
               title="Öncelikli Hedef Kaslar"
-              subtitle={
-                targetMuscles.length > 0
-                  ? targetMuscles.join(', ')
-                  : 'Maksimum 3 odak kas grubu seç'
-              }
+              subtitle={targetMusclesLabel}
               badge={`${targetMuscles.length}/3`}
               badgeColor="emerald"
               isLast

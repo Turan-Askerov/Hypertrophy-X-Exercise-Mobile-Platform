@@ -2,9 +2,9 @@ import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -78,6 +78,19 @@ function PlusIcon({ color = colors.cyanLight, size = 18 }: { color?: string; siz
   );
 }
 
+function BuildingIcon({ color = colors.cyan, size = 22 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M3 21h18M3 7v14M21 7v14M9 21V11M15 21V11M9 7h6M12 3l9 4H3l9-4z"
+      />
+    </Svg>
+  );
+}
+
 function StarIcon({ color = colors.emeraldLight, size = 14 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke={color}>
@@ -131,10 +144,10 @@ function TrashIcon({ color = colors.danger, size = 15 }: { color?: string; size?
   );
 }
 
-function CloseIcon({ color = colors.textDim, size = 20 }: { color?: string; size?: number }) {
+function CloseIcon({ color = '#EF4444', size = 14 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M6 18L18 6M6 6l12 12" />
     </Svg>
   );
 }
@@ -152,6 +165,7 @@ export default function GymsScreen() {
   } = useExpertData();
 
   const gyms = expertData?.gyms || [];
+  const defaultGym = gyms.find((g) => g.is_default);
   const catalogEquipment = useMemo(
     () => expertData?.catalog?.gym_equipment || [],
     [expertData?.catalog?.gym_equipment]
@@ -190,7 +204,7 @@ export default function GymsScreen() {
     setEditingGym(null);
     setGymName('');
     setIsDefault(gyms.length === 0);
-    // Varsayılan olarak tüm katalogdaki ekipmanları işaretli başlat
+    // Varsayılan olarak tüm katalogdaki ekipmanları açık başlat
     setSelectedEquipment(catalogEquipment.map((e) => e.id));
     setFormError(null);
     setModalVisible(true);
@@ -336,17 +350,63 @@ export default function GymsScreen() {
           />
         }
       >
-        {/* Başlık ve Açıklama Panosu */}
+        {/* Şıklaştırılmış Salon ve Ekipman Kaynakları Panosu */}
         <View style={styles.subHeaderCard}>
-          <Text style={styles.subHeaderTitle}>Salon ve Ekipman Kaynakları</Text>
-          <Text style={styles.subHeaderDesc}>
-            Varsayılan salon, özel ekipman tercihi belirlenmediğinde antrenman programı motorunun
-            birincil ekipman kaynağıdır. Birden fazla salon ekleyip dilediğini varsayılan yapabilirsin.
-          </Text>
-          <View style={styles.badgeRow}>
-            <View style={styles.gymCountBadge}>
-              <Text style={styles.gymCountBadgeText}>{gyms.length} Kayıtlı Salon</Text>
+          {/* Kart Üst Başlık Alanı */}
+          <View style={styles.subHeaderTopRow}>
+            <View style={styles.subHeaderIconBox}>
+              <BuildingIcon size={22} color={colors.cyanLight} />
             </View>
+            <View style={styles.subHeaderTitleCol}>
+              <View style={styles.subHeaderHeadingRow}>
+                <Text style={styles.subHeaderTitle}>Salon ve Ekipman Kaynakları</Text>
+                <View style={styles.gymCountBadge}>
+                  <Text style={styles.gymCountBadgeText}>{gyms.length} Kayıtlı</Text>
+                </View>
+              </View>
+              <Text style={styles.subHeaderDesc}>
+                Varsayılan salon, özel ekipman tercihi boş olduğunda antrenman programı motorunun
+                birincil ekipman kaynağıdır.
+              </Text>
+            </View>
+          </View>
+
+          {/* İstatistik Gösterge Izgarası (3 Kolonlu) */}
+          <View style={styles.statGrid}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>TOPLAM SALON</Text>
+              <Text style={styles.statValue}>{gyms.length}</Text>
+              <Text style={styles.statSub}>Kayıtlı Mekân</Text>
+            </View>
+
+            <View style={[styles.statBox, styles.statBoxMiddle]}>
+              <Text style={styles.statLabel}>VARSAYILAN</Text>
+              <Text style={styles.statValueGreen} numberOfLines={1}>
+                {defaultGym?.name || 'Seçilmedi'}
+              </Text>
+              <Text style={styles.statSubGreen}>
+                {defaultGym ? '★ Birincil Merkez' : 'Tanımlanmadı'}
+              </Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>EKİPMAN HAVUZU</Text>
+              <Text style={styles.statValueCyan}>
+                {defaultGym ? `${defaultGym.equipment.length}` : 'Katalog'}
+              </Text>
+              <Text style={styles.statSub}>
+                {defaultGym ? 'Makine & İstasyon' : 'Tüm Olanaklar'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Bilgi / İpucu Şeridi */}
+          <View style={styles.tipBanner}>
+            <Text style={styles.tipText}>
+              <Text style={styles.tipBold}>💡 Salon Yönetimi: </Text>
+              Antrenman yaptığın yeri tek dokunuşla &quot;Varsayılan Yap&quot;arak programını o salonun
+              olanaklarına göre anında optimize edebilirsin.
+            </Text>
           </View>
         </View>
 
@@ -468,29 +528,39 @@ export default function GymsScreen() {
         )}
       </ScrollView>
 
-      {/* Salon Ekle / Düzenle Modal */}
+      {/* Profil Sayfası Standardında Alttan Çıkan Bottom Sheet Modal */}
       <Modal
         visible={modalVisible}
-        transparent
         animationType="slide"
+        transparent
         onRequestClose={closeModal}
+        statusBarTranslucent
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={modalStyles.overlay}
-        >
-          <View style={modalStyles.modalContainer}>
-            {/* Modal Header */}
-            <View style={modalStyles.modalHeader}>
-              <Text style={modalStyles.modalTitle}>
-                {editingGym ? 'Salon Kaydını Düzenle' : 'Yeni Salon Ekle'}
-              </Text>
+        <View style={modalStyles.modalRootContainer}>
+          <Pressable style={modalStyles.modalBackdropTap} onPress={closeModal} />
+          <View style={modalStyles.modalSheet}>
+            {/* Tutamaç Çubuğu */}
+            <View style={modalStyles.modalHandle} />
+
+            {/* Başlık ve Kırmızı Kapatma Butonu */}
+            <View style={modalStyles.modalHeaderRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={modalStyles.modalTitle}>
+                  {editingGym ? 'Salon Kaydını Düzenle' : 'Yeni Salon Ekle'}
+                </Text>
+                <Text style={modalStyles.modalDesc}>
+                  Salondaki ekipman ve istasyon olanaklarını yapılandırın.
+                </Text>
+              </View>
               <TouchableOpacity
+                style={modalStyles.modalCloseButtonRed}
                 onPress={closeModal}
-                style={modalStyles.closeBtn}
                 hitSlop={10}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
               >
-                <CloseIcon size={20} color={colors.textMuted} />
+                <CloseIcon size={14} color="#EF4444" />
               </TouchableOpacity>
             </View>
 
@@ -523,7 +593,7 @@ export default function GymsScreen() {
                 />
               </View>
 
-              {/* Varsayılan Yap Switch */}
+              {/* Varsayılan Yap Switch (Basit Yeşil Anahtar) */}
               <View style={modalStyles.switchCard}>
                 <View style={modalStyles.switchInfo}>
                   <Text style={modalStyles.switchTitle}>Varsayılan Antrenman Merkezi</Text>
@@ -534,12 +604,12 @@ export default function GymsScreen() {
                 <Switch
                   value={isDefault}
                   onValueChange={setIsDefault}
-                  trackColor={{ false: '#334155', true: colors.emerald }}
+                  trackColor={{ false: '#242B42', true: colors.emerald }}
                   thumbColor="#FFFFFF"
                 />
               </View>
 
-              {/* Ekipman Seçimi */}
+              {/* Ekipman Seçimi (Basit Yeşil Anahtarlı İkili Seçim Listesi) */}
               <View style={modalStyles.equipmentSection}>
                 <View style={modalStyles.equipmentSectionHeader}>
                   <Text style={modalStyles.equipmentSectionTitle}>
@@ -574,32 +644,29 @@ export default function GymsScreen() {
                       {items.map((item) => {
                         const isChecked = selectedEquipment.includes(item.id);
                         return (
-                          <TouchableOpacity
-                            key={item.id}
-                            style={[
-                              modalStyles.eqItemRow,
-                              isChecked && modalStyles.eqItemRowChecked,
-                            ]}
-                            onPress={() => toggleEquipmentItem(item.id)}
-                            activeOpacity={0.7}
-                          >
-                            <Text
-                              style={[
-                                modalStyles.eqItemLabel,
-                                isChecked && modalStyles.eqItemLabelChecked,
-                              ]}
-                            >
-                              {item.label}
-                            </Text>
-                            <View
-                              style={[
-                                modalStyles.checkbox,
-                                isChecked && modalStyles.checkboxChecked,
-                              ]}
-                            >
-                              {isChecked && <CheckIcon size={12} color="#FFFFFF" />}
+                          <View key={item.id} style={modalStyles.switchRow}>
+                            <View style={modalStyles.switchTextCol}>
+                              <Text style={modalStyles.switchItemLabel}>{item.label}</Text>
+                              <Text
+                                style={[
+                                  modalStyles.switchItemStatus,
+                                  isChecked
+                                    ? modalStyles.statusActive
+                                    : modalStyles.statusInactive,
+                                ]}
+                              >
+                                {isChecked ? 'Var' : 'Yok'}
+                              </Text>
                             </View>
-                          </TouchableOpacity>
+
+                            {/* Basit Yeşil Anahtar */}
+                            <Switch
+                              value={isChecked}
+                              onValueChange={() => toggleEquipmentItem(item.id)}
+                              trackColor={{ false: '#242B42', true: colors.emerald }}
+                              thumbColor="#FFFFFF"
+                            />
+                          </View>
                         );
                       })}
                     </View>
@@ -608,35 +675,40 @@ export default function GymsScreen() {
               </View>
             </ScrollView>
 
-            {/* Modal Alt Aksiyon Butonları */}
+            {/* Modal Alt Aksiyon Butonları (Profile Standartı) */}
             <View style={modalStyles.modalFooter}>
               <TouchableOpacity
-                style={modalStyles.cancelBtn}
+                style={modalStyles.neonCancelBtn}
                 onPress={closeModal}
                 disabled={isSaving}
+                activeOpacity={0.7}
               >
-                <Text style={modalStyles.cancelBtnText}>Vazgeç</Text>
+                <Text style={modalStyles.neonCancelBtnText}>Vazgeç</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[modalStyles.saveBtn, isSaving && { opacity: 0.6 }]}
+                style={[modalStyles.neonSaveBtn, isSaving && { opacity: 0.6 }]}
                 onPress={handleSaveGym}
                 disabled={isSaving}
+                activeOpacity={0.7}
               >
                 {isSaving ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
                     <CheckIcon size={16} color="#FFFFFF" />
-                    <Text style={modalStyles.saveBtnText}>
+                    <Text style={modalStyles.neonSaveBtnText}>
                       {editingGym ? 'Salonu Güncelle' : 'Salonu Kaydet'}
                     </Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
+
+            {/* Alt Taşma Uzantısı */}
+            <View style={modalStyles.sheetBottomExtension} pointerEvents="none" />
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -695,38 +767,136 @@ const styles = StyleSheet.create({
   },
   subHeaderCard: {
     backgroundColor: colors.cardBg,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
     padding: 16,
-    gap: 6,
+    gap: 14,
+    shadowColor: colors.purple,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  subHeaderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  subHeaderIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  subHeaderTitleCol: {
+    flex: 1,
+    gap: 4,
+  },
+  subHeaderHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   subHeaderTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 15.5,
+    fontWeight: '800',
     color: colors.text,
+    letterSpacing: -0.2,
   },
   subHeaderDesc: {
     fontSize: 12,
     color: colors.textMuted,
     lineHeight: 17,
   },
-  badgeRow: {
-    flexDirection: 'row',
-    marginTop: 6,
-  },
   gymCountBadge: {
     backgroundColor: colors.purpleBg,
     borderWidth: 1,
     borderColor: colors.purpleBorder,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 8,
   },
   gymCountBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     color: colors.purpleLight,
+  },
+  statGrid: {
+    flexDirection: 'row',
+    backgroundColor: colors.cardBgInner,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  statBox: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  statBoxMiddle: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  statLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.textDim,
+    letterSpacing: 0.4,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  statValueGreen: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.emeraldLight,
+  },
+  statValueCyan: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.cyanLight,
+  },
+  statSub: {
+    fontSize: 10,
+    color: colors.textDim,
+  },
+  statSubGreen: {
+    fontSize: 10,
+    color: colors.emeraldLight,
+    fontWeight: '600',
+  },
+  tipBanner: {
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.22)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  tipText: {
+    fontSize: 11.5,
+    color: colors.textMuted,
+    lineHeight: 16,
+  },
+  tipBold: {
+    color: colors.purpleLight,
+    fontWeight: '700',
   },
   loadingBox: {
     paddingVertical: 40,
@@ -934,43 +1104,93 @@ const styles = StyleSheet.create({
 });
 
 const modalStyles = StyleSheet.create({
-  overlay: {
+  modalRootContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
-  modalContainer: {
-    backgroundColor: colors.cardBg,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    maxHeight: '90%',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+  modalBackdropTap: {
+    ...StyleSheet.absoluteFill,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  modalSheet: {
+    backgroundColor: '#0C101C',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '90%',
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderTopColor: colors.purpleLight,
+    shadowColor: colors.purple,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  sheetBottomExtension: {
+    position: 'absolute',
+    bottom: -1000,
+    left: -1.5,
+    right: -1.5,
+    height: 1000,
+    backgroundColor: '#0C101C',
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+  },
+  modalHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.purpleLight,
+    shadowColor: colors.purpleLight,
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  modalCloseButtonRed: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 2,
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.text,
   },
-  closeBtn: {
-    padding: 4,
+  modalDesc: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 16,
+    marginTop: 3,
   },
   modalScroll: {
     flexGrow: 0,
   },
   modalScrollContent: {
-    padding: 20,
-    gap: 16,
+    paddingVertical: 10,
+    gap: 14,
   },
   errorBox: {
     backgroundColor: colors.dangerBg,
@@ -1030,6 +1250,7 @@ const modalStyles = StyleSheet.create({
   },
   equipmentSection: {
     gap: 12,
+    marginTop: 4,
   },
   equipmentSectionHeader: {
     flexDirection: 'row',
@@ -1053,7 +1274,7 @@ const modalStyles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   batchBtnText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     color: colors.cyanLight,
   },
@@ -1084,73 +1305,69 @@ const modalStyles = StyleSheet.create({
     color: colors.textDim,
   },
   groupItemsList: {
-    padding: 8,
-    gap: 4,
+    padding: 6,
+    gap: 2,
   },
-  eqItemRow: {
+  switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
     paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 8,
   },
-  eqItemRowChecked: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-  },
-  eqItemLabel: {
-    fontSize: 13,
-    color: colors.textMuted,
+  switchTextCol: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,
   },
-  eqItemLabelChecked: {
+  switchItemLabel: {
+    fontSize: 13,
     color: colors.text,
     fontWeight: '600',
   },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: colors.textDim,
-    alignItems: 'center',
-    justifyContent: 'center',
+  switchItemStatus: {
+    fontSize: 10.5,
+    marginTop: 2,
   },
-  checkboxChecked: {
-    backgroundColor: colors.purple,
-    borderColor: colors.purple,
+  statusActive: {
+    color: colors.emeraldLight,
+    fontWeight: '700',
+  },
+  statusInactive: {
+    color: colors.textDim,
   },
   modalFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
-  cancelBtn: {
+  neonCancelBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  cancelBtnText: {
+  neonCancelBtnText: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.textMuted,
   },
-  saveBtn: {
+  neonSaveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.emerald,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 10,
     gap: 6,
   },
-  saveBtnText: {
+  neonSaveBtnText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',

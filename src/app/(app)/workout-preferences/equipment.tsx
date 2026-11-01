@@ -369,7 +369,7 @@ export default function EquipmentPreferencesScreen() {
                         <Switch
                           value={isChecked}
                           onValueChange={() => toggleEquipmentSwitch(item.id)}
-                          trackColor={{ false: '#334155', true: colors.purple }}
+                          trackColor={{ false: '#242B42', true: colors.emerald }}
                           thumbColor="#FFFFFF"
                         />
                       </View>
@@ -830,7 +830,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   statusActive: {
-    color: colors.purpleLight,
+    color: colors.emeraldLight,
+    fontWeight: '700',
   },
   statusInactive: {
     color: colors.textDim,
