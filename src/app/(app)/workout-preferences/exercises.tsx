@@ -1,13 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Keyboard,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -25,6 +27,7 @@ const colors = {
   cardBgInner: '#0C101C',
   itemBg: '#121829',
   cardBorder: 'rgba(255, 255, 255, 0.08)',
+  divider: 'rgba(255, 255, 255, 0.06)',
   text: '#F8FAFC',
   textMuted: '#94A3B8',
   textDim: '#64748B',
@@ -33,32 +36,52 @@ const colors = {
   purple: '#8B5CF6',
   purpleLight: '#C084FC',
   purpleBg: 'rgba(139, 92, 246, 0.14)',
+  purpleActiveBg: 'rgba(139, 92, 246, 0.28)',
   purpleBorder: 'rgba(139, 92, 246, 0.35)',
+  purpleActiveBorder: 'rgba(139, 92, 246, 0.60)',
 
-  // Cyan
-  cyan: '#38BDF8',
-  cyanLight: '#7DD3FC',
-  cyanBg: 'rgba(56, 189, 248, 0.12)',
-  cyanBorder: 'rgba(56, 189, 248, 0.35)',
-
-  // Emerald / Yeşil
+  // Emerald / Neon Yeşil
   emerald: '#10B981',
   emeraldLight: '#34D399',
-  emeraldBg: 'rgba(16, 185, 129, 0.14)',
-  emeraldBorder: 'rgba(16, 185, 129, 0.35)',
+  emeraldBg: 'rgba(16, 185, 129, 0.12)',
+  emeraldBorder: '#10B981',
 
   // Amber / Turuncu
   amber: '#F59E0B',
-  amberBg: 'rgba(245, 158, 11, 0.14)',
-  amberBorder: 'rgba(245, 158, 11, 0.35)',
+  amberBg: 'rgba(245, 158, 11, 0.12)',
+  amberBorder: 'rgba(245, 158, 11, 0.40)',
 
-  // Rose / Kırmızı
+  // Rose / Kırmızı (Önerilmesin)
   danger: '#EF4444',
-  dangerBg: 'rgba(239, 68, 68, 0.12)',
-  dangerBorder: 'rgba(239, 68, 68, 0.35)',
+  dangerLight: '#F87171',
+  dangerBg: 'rgba(239, 68, 68, 0.16)',
+  dangerBorder: 'rgba(239, 68, 68, 0.50)',
 };
 
-// ─── İkonlar (bug-report.tsx standardı) ───
+// Kanonik kas grubu sıralaması (Görseldeki sıra: Triceps, Biceps, Calf, Sırt...)
+const CANONICAL_GROUP_ORDER: Record<string, number> = {
+  triceps: 1,
+  biceps: 2,
+  calf: 3,
+  kalf: 3,
+  sırt: 4,
+  back: 4,
+  göğüs: 5,
+  chest: 5,
+  omuz: 6,
+  shoulder: 6,
+  bacak: 7,
+  leg: 7,
+  quadriceps: 8,
+  hamstring: 9,
+  gluteus: 10,
+  karın: 11,
+  core: 11,
+  'ön kol': 12,
+  forearms: 12,
+};
+
+// ─── Genel İkonlar ───
 function BackIcon({ color = '#F8FAFC', size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
@@ -67,31 +90,27 @@ function BackIcon({ color = '#F8FAFC', size = 20 }: { color?: string; size?: num
   );
 }
 
-function SearchIcon({ color = colors.textDim, size = 16 }: { color?: string; size?: number }) {
+function BarChartIcon({ color = colors.purpleLight, size = 22 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="11" cy="11" r="8" stroke={color} strokeWidth="2" />
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35" />
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.4"
+        d="M6 19v-5M12 19v-10M18 19v-14"
+      />
     </Svg>
   );
 }
 
-function StarIcon({
-  filled = false,
-  color = colors.cyanLight,
-  size = 14,
-}: {
-  filled?: boolean;
-  color?: string;
-  size?: number;
-}) {
+function StarButtonIcon({ filled = false, size = 18 }: { filled?: boolean; size?: number }) {
   return (
     <Svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill={filled ? color : 'none'}
-      stroke={color}
+      fill={filled ? '#EDE9FE' : 'none'}
+      stroke={filled ? '#EDE9FE' : '#64748B'}
     >
       <Path
         strokeLinecap="round"
@@ -103,7 +122,8 @@ function StarIcon({
   );
 }
 
-function SlashIcon({ color = colors.danger, size = 14 }: { color?: string; size?: number }) {
+function BanButtonIcon({ active = false, size = 18 }: { active?: boolean; size?: number }) {
+  const color = active ? colors.danger : '#64748B';
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="2" />
@@ -115,41 +135,476 @@ function SlashIcon({ color = colors.danger, size = 14 }: { color?: string; size?
 function ChevronDownIcon({ color = colors.textDim, size = 16 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9l6 6 6-6" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 9l6 6 6-6" />
     </Svg>
   );
 }
 
-function ChevronUpIcon({ color = colors.textDim, size = 16 }: { color?: string; size?: number }) {
+function CheckIcon({ color = colors.emerald, size = 18 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 15l-6-6-6 6" />
+      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" d="M20 6L9 17l-5-5" />
     </Svg>
   );
 }
 
-function CheckIcon({ color = '#FFFFFF', size = 15 }: { color?: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 6L9 17l-5-5" />
-    </Svg>
-  );
-}
+// ─── Kas Grubu Özel Anatomik SVG İkonları ───
 
-function ResetIcon({ color = colors.textMuted, size = 14 }: { color?: string; size?: number }) {
+// 1. Biceps: Gerçek Biceps Pozu İkonu (Flexed Bicep Pose)
+function BicepsPoseIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      {/* Kolun dirsekten bükülmesi ve pazu bombesi */}
       <Path
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="2"
-        d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16M3 21v-5h5"
+        strokeWidth="1.9"
+        d="M4 17c1-3 2.5-4.8 5-5.2 1-2 3-3.2 5.2-2.8 1.8.4 2.8 1.8 3.3 3.5 1 .3 2.5 1.2 2.5 2.7 0 1.8-1.5 2.8-3.5 2.8H4z"
+      />
+      {/* Ön kol ve yumruk */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M13.5 9c0-2.2 1.2-4 3.2-4 1.8 0 2.8 1 2.8 2.5 0 1.5-.7 2.5-1.5 3"
+      />
+      {/* Pazu zirve çizgisi (Peak) */}
+      <Path
+        strokeLinecap="round"
+        strokeWidth="1.6"
+        d="M10 12c.8-.8 1.8-1 3-.7"
       />
     </Svg>
   );
 }
 
-type FilterMode = 'all' | 'preferred' | 'avoid';
+// 2. Triceps: Arka Kol Kası İkonu
+function TricepsMuscleIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      {/* Omuzdan dirseğe uzanan arka hat */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M6 5.5c2 1 3.8 3 4.2 6 .4 3-1 6-2.2 8"
+      />
+      {/* Ön kol ve dirsek açısı */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M10.2 11.5c1.8-1 3.5-.8 5 .2 2 1.5 2.3 3.8 2.3 6.8H8"
+      />
+      {/* Triceps at nalı (horseshoe) ayrımı */}
+      <Path
+        strokeLinecap="round"
+        strokeWidth="1.7"
+        d="M8.8 8.5c1.5.8 2.2 2.2 2 4"
+      />
+    </Svg>
+  );
+}
+
+// 3. Calf: Kalf / Baldır ve Bacak İkonu
+function CalfMuscleIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      {/* Dizden baldıra, aşil tendonuna ve topuk/ayağa inen hat */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M8.5 3c.5 2.2.8 4.5.8 6.8 0 3-1.8 5-1.8 7 0 2.2 1.5 3.7 3.5 3.7h6.5c1 0 1.5-.7 1-1.4l-2.8-1.8c-.8-.5-1.2-1.2-1.2-2.3 0-2.8 1.5-5.5 1.5-8.8 0-1-.2-2.2-.5-3.2"
+      />
+      {/* Belirgin kalf kası iç kavisi (Gastrocnemius) */}
+      <Path
+        strokeLinecap="round"
+        strokeWidth="1.6"
+        d="M11 7.5c1.5 1.5 2 3.5 1.5 5.5"
+      />
+    </Svg>
+  );
+}
+
+// 4. Sırt: Geniş Kanat ve V-Taper Sırt İkonu (Lat Spread & Back Silhouette)
+function BackLatsIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      {/* Baş ve boyun */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M10 5.5a2 2 0 104 0 2 2 0 00-4 0z"
+      />
+      {/* Trapezler ve omuzlar */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M4 10l3-2.5 3 1h4l3-1 3 2.5"
+      />
+      {/* V-Taper kanat kasları (Lats) ve dar bel */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M4 10c1.5 2.5 3.5 5 4.5 8.5h7c1-3.5 3-6 4.5-8.5"
+      />
+      {/* Omurga çizgisi */}
+      <Path
+        strokeLinecap="round"
+        strokeWidth="1.6"
+        d="M12 9v9.5"
+      />
+    </Svg>
+  );
+}
+
+// 5. Göğüs: Pectoralis Göğüs Plakaları İkonu
+function ChestPecsIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      {/* Köprücük kemikleri ve boyun */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M9 4.5h6M4 8.5l4-2.5 4 1.5 4-1.5 4 2.5"
+      />
+      {/* Sol ve sağ göğüs kası kıvrımları */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M4 8.5c.5 4 2.5 6.5 6 7l2-1 2 1c3.5-.5 5.5-3 6-7"
+      />
+      {/* Göğüs kafesi orta ayrımı (Sternum) */}
+      <Path
+        strokeLinecap="round"
+        strokeWidth="1.8"
+        d="M12 7.5v6.5"
+      />
+    </Svg>
+  );
+}
+
+// 6. Omuz: Omuz Başları (Deltoids) İkonu
+function ShouldersDeltsIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      {/* Boyun */}
+      <Path strokeLinecap="round" strokeWidth="1.9" d="M10 5h4" />
+      {/* Omuz başları ve deltoid yayları */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M4 13.5c-1-2.5-.5-5.5 2-7.5l4-1h4l4 1c2.5 2 3 5 2 7.5"
+      />
+      {/* Deltoid kas ayrım çizgileri */}
+      <Path
+        strokeLinecap="round"
+        strokeWidth="1.6"
+        d="M7.5 8c1 1.5 1.5 3.5 1 5M16.5 8c-1 1.5-1.5 3.5-1 5"
+      />
+    </Svg>
+  );
+}
+
+// 7. Bacak: Quadriceps & Bacak Kası İkonu
+function LegsQuadsIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      {/* Üst bacaklar / Uyluk */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M6.5 4h11l-1 8c-.3 3-.8 6-1.5 8h-3l.5-7.5h-1L12 20H9c-.7-2-1.2-5-1.5-8l-1-8z"
+      />
+      {/* Quadriceps kas çizgisi */}
+      <Path
+        strokeLinecap="round"
+        strokeWidth="1.5"
+        d="M9.5 9c.5 1.5.5 3 0 4.5M14.5 9c-.5 1.5-.5 3 0 4.5"
+      />
+    </Svg>
+  );
+}
+
+// 8. Karın: 6-Pack Core / Abs İkonu
+function CoreAbsIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      {/* Gövde / Bel */}
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M7 4h10c.5 4-.5 8-1 12l-1 4H9l-1-4C7.5 12 6.5 8 7 4z"
+      />
+      {/* 6-Pack grid çizgileri */}
+      <Path strokeLinecap="round" strokeWidth="1.6" d="M12 4v16M8.5 9.5h7M9 14h6" />
+    </Svg>
+  );
+}
+
+// 9. Kalça: Gluteus İkonu
+function GlutesMuscleIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M5 6h14c-.5 4-1 6-2 9-1.5 4.5-4 5-5 5s-3.5-.5-5-5c-1-3-1.5-5-2-9z"
+      />
+      <Path strokeLinecap="round" strokeWidth="1.7" d="M12 6v14" />
+    </Svg>
+  );
+}
+
+// 10. Ön Kol: Forearms İkonu
+function ForearmMuscleIcon({ color = colors.purpleLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+        d="M6 18l5-12c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5l5 12c-2.5 1.5-5 2-7.5 2s-5-.5-7.5-2z"
+      />
+    </Svg>
+  );
+}
+
+// Kas Grubu İsim Eşleyicisi
+function MuscleGroupIcon({
+  group,
+  size = 20,
+  color = colors.purpleLight,
+}: {
+  group: string;
+  size?: number;
+  color?: string;
+}) {
+  const g = group.toLowerCase();
+
+  // Biceps -> Biceps Pozu
+  if (g.includes('biceps') || g.includes('pazu')) {
+    return <BicepsPoseIcon size={size} color={color} />;
+  }
+
+  // Triceps -> Triceps Arka Kol
+  if (g.includes('triceps')) {
+    return <TricepsMuscleIcon size={size} color={color} />;
+  }
+
+  // Calf / Kalf -> Baldır ve Ayak
+  if (g.includes('calf') || g.includes('kalf')) {
+    return <CalfMuscleIcon size={size} color={color} />;
+  }
+
+  // Sırt / Lats -> V-Taper Sırt & Kanat
+  if (
+    g.includes('sırt') ||
+    g.includes('back') ||
+    g.includes('lat') ||
+    g.includes('traps') ||
+    g.includes('trapez') ||
+    g.includes('skapula')
+  ) {
+    return <BackLatsIcon size={size} color={color} />;
+  }
+
+  // Göğüs / Chest -> Göğüs Kasları
+  if (g.includes('göğüs') || g.includes('chest') || g.includes('pec')) {
+    return <ChestPecsIcon size={size} color={color} />;
+  }
+
+  // Omuz / Shoulder -> Deltoid Omuz Başları
+  if (g.includes('omuz') || g.includes('shoulder') || g.includes('delt') || g.includes('rotator')) {
+    return <ShouldersDeltsIcon size={size} color={color} />;
+  }
+
+  // Bacak / Quad / Hamstring -> Uyluk / Quads
+  if (
+    g.includes('quad') ||
+    g.includes('hamstring') ||
+    g.includes('bacak') ||
+    g.includes('leg') ||
+    g.includes('alt vücut') ||
+    g.includes('adductor')
+  ) {
+    return <LegsQuadsIcon size={size} color={color} />;
+  }
+
+  // Kalça / Gluteus -> Glutes
+  if (g.includes('glute') || g.includes('kalça')) {
+    return <GlutesMuscleIcon size={size} color={color} />;
+  }
+
+  // Karın / Core / Abs -> 6-Pack Grid
+  if (g.includes('karın') || g.includes('core') || g.includes('abs')) {
+    return <CoreAbsIcon size={size} color={color} />;
+  }
+
+  // Ön Kol -> Forearms
+  if (g.includes('ön kol') || g.includes('forearm') || g.includes('bilek')) {
+    return <ForearmMuscleIcon size={size} color={color} />;
+  }
+
+  // Varsayılan
+  return <BicepsPoseIcon size={size} color={color} />;
+}
+
+// ─── Akordiyon Kart Bileşeni (Yumuşak Açılan / Kapanan Animasyonlu) ───
+interface MuscleGroupAccordionCardProps {
+  groupName: string;
+  exercises: ExercisePreferenceCatalogItem[];
+  isExpanded: boolean;
+  onToggle: () => void;
+  preferredIds: string[];
+  avoidIds: string[];
+  onTogglePreferred: (id: string) => void;
+  onToggleAvoid: (id: string) => void;
+}
+
+function MuscleGroupAccordionCard({
+  groupName,
+  exercises,
+  isExpanded,
+  onToggle,
+  preferredIds,
+  avoidIds,
+  onTogglePreferred,
+  onToggleAvoid,
+}: MuscleGroupAccordionCardProps) {
+  const [anim] = useState(() => new Animated.Value(isExpanded ? 1 : 0));
+  const [measuredHeight, setMeasuredHeight] = useState(0);
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: isExpanded ? 1 : 0,
+      duration: 280,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [isExpanded, anim]);
+
+  const chevronRotate = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
+
+  const estimatedHeight = Math.max(exercises.length * 64, 120);
+  const targetHeight = measuredHeight > 0 ? measuredHeight : estimatedHeight;
+
+  const maxHeight = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, targetHeight],
+  });
+
+  const contentOpacity = anim.interpolate({
+    inputRange: [0, 0.25, 1],
+    outputRange: [0, 0.4, 1],
+  });
+
+  return (
+    <View style={styles.groupCard}>
+      {/* Kas Grubu Başlığı (Akordiyon Aç/Kapa) */}
+      <TouchableOpacity
+        style={styles.groupHeader}
+        onPress={onToggle}
+        activeOpacity={0.7}
+      >
+        <View style={styles.groupHeaderLeft}>
+          {/* Dairesel Mor İkon Kutusu: Kasa Özel Gerçekçi İkon */}
+          <View style={styles.groupIconCircle}>
+            <MuscleGroupIcon group={groupName} size={19} color={colors.purpleLight} />
+          </View>
+
+          <View style={styles.groupTitleCol}>
+            <Text style={styles.groupNameText}>{groupName}</Text>
+            <Text style={styles.groupCountText}>{exercises.length} Hareket</Text>
+          </View>
+        </View>
+
+        <View style={styles.groupHeaderRight}>
+          <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
+            <ChevronDownIcon size={18} color={isExpanded ? colors.purpleLight : colors.textDim} />
+          </Animated.View>
+        </View>
+      </TouchableOpacity>
+
+      {/* Yumuşak Açılan / Kapanan Liste Gövdesi */}
+      <Animated.View
+        style={[
+          styles.animatedContainer,
+          {
+            maxHeight,
+            opacity: contentOpacity,
+          },
+        ]}
+      >
+        <View
+          style={styles.exerciseList}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && h !== measuredHeight) {
+              setMeasuredHeight(h);
+            }
+          }}
+        >
+          {exercises.map((exercise) => {
+            const isPref = preferredIds.includes(exercise.id);
+            const isAvoid = avoidIds.includes(exercise.id);
+
+            return (
+              <View key={exercise.id} style={styles.exerciseRow}>
+                {/* Sol: Hareket Adı */}
+                <Text style={styles.exerciseNameText} numberOfLines={2}>
+                  {exercise.name}
+                </Text>
+
+                {/* Sağ: İkili Butonlar (Yıldız / Tercih & Engelle / Önerme) */}
+                <View style={styles.actionsRow}>
+                  {/* Yıldız / Tercih Butonu */}
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      isPref && styles.actionBtnStarActive,
+                    ]}
+                    onPress={() => onTogglePreferred(exercise.id)}
+                    activeOpacity={0.7}
+                    hitSlop={4}
+                  >
+                    <StarButtonIcon filled={isPref} size={18} />
+                  </TouchableOpacity>
+
+                  {/* Engelle / Önerme Butonu */}
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      isAvoid && styles.actionBtnBanActive,
+                    ]}
+                    onPress={() => onToggleAvoid(exercise.id)}
+                    activeOpacity={0.7}
+                    hitSlop={4}
+                  >
+                    <BanButtonIcon active={isAvoid} size={18} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
 
 export default function ExercisePreferencesScreen() {
   const router = useRouter();
@@ -171,9 +626,9 @@ export default function ExercisePreferencesScreen() {
   // Yerel Taslak State
   const [draftPreferred, setDraftPreferred] = useState<string[] | null>(null);
   const [draftAvoid, setDraftAvoid] = useState<string[] | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterMode, setFilterMode] = useState<FilterMode>('all');
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  // Kullanıcı Talimatı: Sayfaya ilk girildiğinde hiçbir liste açık durumda olmasın (hepsi varsayılan olarak kapalı)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const preferredIds = useMemo(
     () => draftPreferred ?? serverPreferred,
@@ -210,25 +665,6 @@ export default function ExercisePreferencesScreen() {
     setDraftPreferred(nextPref);
   };
 
-  // Tüm Seçimleri Sıfırla
-  const handleReset = () => {
-    Alert.alert(
-      'Seçimleri Sıfırla',
-      'Tüm hareket tercihlerini ve önerme listesini sıfırlamak istediğine emin misin?',
-      [
-        { text: 'Vazgeç', style: 'cancel' },
-        {
-          text: 'Sıfırla',
-          style: 'destructive',
-          onPress: () => {
-            setDraftPreferred([]);
-            setDraftAvoid([]);
-          },
-        },
-      ]
-    );
-  };
-
   // Kaydet
   const handleSave = async () => {
     try {
@@ -238,54 +674,16 @@ export default function ExercisePreferencesScreen() {
       });
       setDraftPreferred(null);
       setDraftAvoid(null);
-      Alert.alert('Başarılı', 'Hareket tercihleriniz kaydedildi.');
+      Alert.alert('Başarılı', 'Hareket tercihleriniz başarıyla kaydedildi.');
     } catch (err: any) {
       Alert.alert('Hata', err?.message || 'Tercihler kaydedilemedi.');
     }
   };
 
-  // Akordiyon Grubu Aç/Kapa
-  const toggleGroup = (groupName: string) => {
-    setCollapsedGroups((prev) => ({
-      ...prev,
-      [groupName]: !prev[groupName],
-    }));
-  };
-
-  // Tüm Grupları Kapat/Aç
-  const toggleAllGroups = () => {
-    const areAllCollapsed = Object.values(collapsedGroups).every(Boolean);
-    const newCollapsed: Record<string, boolean> = {};
-    if (!areAllCollapsed) {
-      // Hepsini kapat
-      groupedExercises.forEach(([group]) => {
-        newCollapsed[group] = true;
-      });
-    }
-    setCollapsedGroups(newCollapsed);
-  };
-
-  // Gruplandırılmış ve Filtrelenmiş Egzersizler
-  const q = searchQuery.trim().toLowerCase();
+  // Gruplandırılmış Egzersizler (Görseldeki sıra: Triceps, Biceps, Calf, Sırt...)
   const groupsMap = new Map<string, ExercisePreferenceCatalogItem[]>();
 
   catalog.forEach((ex) => {
-    // 1. Arama filtresi
-    const matchesSearch =
-      !q ||
-      ex.name.toLowerCase().includes(q) ||
-      ex.group.toLowerCase().includes(q) ||
-      (ex.primary_muscles && ex.primary_muscles.some((m) => m.toLowerCase().includes(q)));
-
-    if (!matchesSearch) return;
-
-    // 2. Mod filtresi
-    const isPref = preferredIds.includes(ex.id);
-    const isAvoid = avoidIds.includes(ex.id);
-
-    if (filterMode === 'preferred' && !isPref) return;
-    if (filterMode === 'avoid' && !isAvoid) return;
-
     const groupName = ex.display_groups?.[0] || ex.group || 'Diğer';
     if (!groupsMap.has(groupName)) {
       groupsMap.set(groupName, []);
@@ -293,15 +691,31 @@ export default function ExercisePreferencesScreen() {
     groupsMap.get(groupName)!.push(ex);
   });
 
-  const groupedExercises = Array.from(groupsMap.entries()).sort(([a], [b]) =>
-    a.localeCompare(b, 'tr')
-  );
+  const groupedExercises = Array.from(groupsMap.entries()).sort(([a], [b]) => {
+    const orderA = CANONICAL_GROUP_ORDER[a.toLowerCase()] ?? 99;
+    const orderB = CANONICAL_GROUP_ORDER[b.toLowerCase()] ?? 99;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.localeCompare(b, 'tr');
+  });
+
+  // Akordiyon Grubu Aç/Kapa
+  const toggleGroup = (groupName: string) => {
+    Keyboard.dismiss();
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupName]: !prev[groupName],
+    }));
+  };
 
   const isSaving = saveMovementMutation.isPending;
 
+  // İlerleme yüzdesi hesaplama
+  const totalConfigured = preferredIds.length + avoidIds.length;
+  const progressPercent = catalog.length > 0 ? Math.min(100, Math.round((totalConfigured / catalog.length) * 100)) : 0;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      {/* Üst Başlık Barı (bug-report.tsx standardı) */}
+      {/* ─── Üst Başlık Barı ─── */}
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.headerBackBtn}
@@ -312,7 +726,7 @@ export default function ExercisePreferencesScreen() {
           <BackIcon size={22} color="#F8FAFC" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Hareket Tercihleri</Text>
+        <Text style={styles.headerTitle}>Hareket Tercihlerim</Text>
 
         <View style={styles.optionalPill}>
           <Text style={styles.optionalPillText}>İsteğe Bağlı</Text>
@@ -335,272 +749,115 @@ export default function ExercisePreferencesScreen() {
           />
         }
       >
-        {/* İsteğe Bağlı & Bilgilendirme Notu */}
-        <View style={styles.infoBanner}>
-          <Text style={styles.infoTitle}>Egzersiz ve Varyasyon Filtresi (İsteğe Bağlı)</Text>
-          <Text style={styles.infoDesc}>
-            Sevdiğin hareketleri <Text style={styles.textCyanBold}>&quot;Tercih Et&quot;</Text> ile önceliklendir,
-            yapmak istemediğin veya sakatlık/rahatsızlık duyduğun hareketleri{' '}
-            <Text style={styles.textDangerBold}>&quot;Önerme&quot;</Text> ile taslak dışı bırak. Hiçbir seçim
-            yapmazsan uzman sistemi tüm uygun hareketleri dengeli şekilde kullanır.
-          </Text>
-        </View>
+        {/* ─── Hero Kart: Tercih Durumum (Fotoğraftaki Yan Yana Düzen) ─── */}
+        <View style={styles.heroCard}>
+          {/* Üst Kısım: Sol (İkon + Başlık + Açıklama) ve Sağ (3 Sütunlu Sayılar) */}
+          <View style={styles.heroMainRow}>
+            {/* Sol Kısım: İkon + Başlık ve Açıklama (Asla Taşmaz) */}
+            <View style={styles.heroLeftCol}>
+              <View style={styles.heroIconBox}>
+                <BarChartIcon size={20} color={colors.purpleLight} />
+              </View>
 
-        {/* Arama ve Filtre Araç Çubuğu */}
-        <View style={styles.toolbarCard}>
-          {/* Arama Alanı */}
-          <View style={styles.searchBox}>
-            <SearchIcon size={16} color={colors.textDim} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Hareket veya kas grubu ara (Örn: Bench Press, Biceps...)"
-              placeholderTextColor={colors.textDim}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              selectionColor={colors.purple}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-                <Text style={styles.clearSearchText}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Filtre Çipleri & Sayaç */}
-          <View style={styles.filterBar}>
-            <View style={styles.filterChipsRow}>
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  filterMode === 'all' && styles.filterChipActive,
-                ]}
-                onPress={() => setFilterMode('all')}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    filterMode === 'all' && styles.filterChipTextActive,
-                  ]}
-                >
-                  Tümü
+              <View style={styles.heroTextCol}>
+                <Text style={styles.heroTitle} numberOfLines={1}>
+                  Tercih Durumum
                 </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  filterMode === 'preferred' && styles.filterChipActiveCyan,
-                ]}
-                onPress={() => setFilterMode('preferred')}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    filterMode === 'preferred' && styles.filterChipTextCyan,
-                  ]}
-                >
-                  ★ Tercihlerim ({preferredIds.length})
+                <Text style={styles.heroDesc} numberOfLines={2}>
+                  Hareket tercihlerini belirle, sana daha uygun bir plan oluşturalım.
                 </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  filterMode === 'avoid' && styles.filterChipActiveDanger,
-                ]}
-                onPress={() => setFilterMode('avoid')}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    filterMode === 'avoid' && styles.filterChipTextDanger,
-                  ]}
-                >
-                  ⛔ Önerme ({avoidIds.length})
-                </Text>
-              </TouchableOpacity>
+              </View>
             </View>
 
-            <TouchableOpacity
-              onPress={toggleAllGroups}
-              style={styles.toggleAllBtn}
-              hitSlop={6}
-            >
-              <Text style={styles.toggleAllBtnText}>Grupları Aç/Kapat</Text>
-            </TouchableOpacity>
+            {/* Sağ Kısım: 3 Sütunlu Rakamlar (Fotoğraftaki Birebir Düzen) */}
+            <View style={styles.heroStatsCol}>
+              {/* 1. Tercih (Yeşil Sayı ve Yeşil Yazı) */}
+              <View style={styles.heroStatItem}>
+                <Text style={styles.statNumEmerald}>{preferredIds.length}</Text>
+                <Text style={styles.statLabelEmerald}>Tercih</Text>
+              </View>
+
+              <View style={styles.statDivider} />
+
+              {/* 2. Önerilmesin (Kırmızı Sayı ve Kırmızı Yazı) */}
+              <View style={styles.heroStatItem}>
+                <Text style={styles.statNumDanger}>{avoidIds.length}</Text>
+                <Text style={styles.statLabelDanger}>Önerilmesin</Text>
+              </View>
+
+              <View style={styles.statDivider} />
+
+              {/* 3. Toplam (Beyaz Sayı ve Muted Yazı) */}
+              <View style={styles.heroStatItem}>
+                <Text style={styles.statNumWhite}>{totalConfigured}</Text>
+                <Text style={styles.statLabelMuted}>Toplam</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Alt Kısım: İlerleme Çubuğu ve Yan Yana Yüzde (Fotoğraftaki Düzen) */}
+          <View style={styles.progressRow}>
+            <View style={styles.progressBarTrack}>
+              <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+            </View>
+            <Text style={styles.progressPercentText}>%{progressPercent}</Text>
           </View>
         </View>
 
-        {/* Egzersiz Listesi / Grupları */}
+        {/* ─── Kas Grupları & Egzersiz Listesi ─── */}
         {isLoading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color={colors.purple} />
-            <Text style={styles.loadingText}>Egzersiz kataloğu yükleniyor...</Text>
+            <Text style={styles.loadingText}>Hareket kataloğu yükleniyor...</Text>
           </View>
         ) : groupedExercises.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Eşleşen Hareket Bulunamadı</Text>
             <Text style={styles.emptyDesc}>
-              Arama kriterlerine veya seçtiğin filtre moduna uygun hareket bulunamadı.
+              Katalogda hareket bulunamadı.
             </Text>
           </View>
         ) : (
           <View style={styles.groupsContainer}>
             {groupedExercises.map(([groupName, exercises]) => {
-              const isCollapsed = Boolean(collapsedGroups[groupName]);
-              const prefCountInGroup = exercises.filter((e) => preferredIds.includes(e.id)).length;
-              const avoidCountInGroup = exercises.filter((e) => avoidIds.includes(e.id)).length;
+              const isExpanded = Boolean(expandedGroups[groupName]);
 
               return (
-                <View key={groupName} style={styles.groupAccordion}>
-                  {/* Grup Başlığı */}
-                  <TouchableOpacity
-                    style={styles.groupHeader}
-                    onPress={() => toggleGroup(groupName)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.groupHeaderLeft}>
-                      <View style={styles.groupDot} />
-                      <Text style={styles.groupTitle}>{groupName}</Text>
-                    </View>
-
-                    <View style={styles.groupHeaderRight}>
-                      {prefCountInGroup > 0 && (
-                        <View style={styles.groupPrefBadge}>
-                          <Text style={styles.groupPrefBadgeText}>★ {prefCountInGroup}</Text>
-                        </View>
-                      )}
-                      {avoidCountInGroup > 0 && (
-                        <View style={styles.groupAvoidBadge}>
-                          <Text style={styles.groupAvoidBadgeText}>⛔ {avoidCountInGroup}</Text>
-                        </View>
-                      )}
-                      <View style={styles.groupCountBadge}>
-                        <Text style={styles.groupCountBadgeText}>{exercises.length} Hareket</Text>
-                      </View>
-                      {isCollapsed ? (
-                        <ChevronDownIcon size={16} color={colors.textDim} />
-                      ) : (
-                        <ChevronUpIcon size={16} color={colors.textDim} />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Egzersizler (Akordiyon İçeriği) */}
-                  {!isCollapsed && (
-                    <View style={styles.exerciseItemsList}>
-                      {exercises.map((exercise) => {
-                        const isPref = preferredIds.includes(exercise.id);
-                        const isAvoid = avoidIds.includes(exercise.id);
-
-                        return (
-                          <View key={exercise.id} style={styles.exerciseItemRow}>
-                            <View style={styles.exerciseInfo}>
-                              <Text style={styles.exerciseName} numberOfLines={1}>
-                                {exercise.name}
-                              </Text>
-                              <Text style={styles.exerciseMeta} numberOfLines={1}>
-                                {exercise.primary_muscles?.join(', ') || exercise.category || 'Genel'}
-                              </Text>
-                            </View>
-
-                            <View style={styles.exerciseActions}>
-                              {/* Tercih Et Butonu */}
-                              <TouchableOpacity
-                                style={[
-                                  styles.actionBtnPref,
-                                  isPref && styles.actionBtnPrefActive,
-                                ]}
-                                onPress={() => togglePreferred(exercise.id)}
-                                activeOpacity={0.7}
-                              >
-                                <StarIcon
-                                  size={13}
-                                  filled={isPref}
-                                  color={isPref ? colors.cyanLight : colors.textDim}
-                                />
-                                <Text
-                                  style={[
-                                    styles.actionBtnPrefText,
-                                    isPref && styles.actionBtnPrefTextActive,
-                                  ]}
-                                >
-                                  {isPref ? 'Tercih Edildi' : 'Tercih Et'}
-                                </Text>
-                              </TouchableOpacity>
-
-                              {/* Önerme Butonu */}
-                              <TouchableOpacity
-                                style={[
-                                  styles.actionBtnAvoid,
-                                  isAvoid && styles.actionBtnAvoidActive,
-                                ]}
-                                onPress={() => toggleAvoid(exercise.id)}
-                                activeOpacity={0.7}
-                              >
-                                <SlashIcon
-                                  size={13}
-                                  color={isAvoid ? colors.danger : colors.textDim}
-                                />
-                                <Text
-                                  style={[
-                                    styles.actionBtnAvoidText,
-                                    isAvoid && styles.actionBtnAvoidTextActive,
-                                  ]}
-                                >
-                                  {isAvoid ? 'Önerilmesin' : 'Önerme'}
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
+                <MuscleGroupAccordionCard
+                  key={groupName}
+                  groupName={groupName}
+                  exercises={exercises}
+                  isExpanded={isExpanded}
+                  onToggle={() => toggleGroup(groupName)}
+                  preferredIds={preferredIds}
+                  avoidIds={avoidIds}
+                  onTogglePreferred={togglePreferred}
+                  onToggleAvoid={toggleAvoid}
+                />
               );
             })}
           </View>
         )}
-
-        {/* Alt Kaydet ve Sıfırla Eylemleri */}
-        <View style={styles.footerActions}>
-          <TouchableOpacity
-            style={styles.resetBtn}
-            onPress={handleReset}
-            activeOpacity={0.7}
-            disabled={isSaving}
-          >
-            <ResetIcon size={14} color={colors.textMuted} />
-            <Text style={styles.resetBtnText}>Seçimleri Sıfırla</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.saveBtn, isSaving && { opacity: 0.6 }]}
-            onPress={handleSave}
-            activeOpacity={0.8}
-            disabled={isSaving}
-          >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <CheckIcon size={16} color="#FFFFFF" />
-                <Text style={styles.saveBtnText}>Tercihleri Kaydet</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Planlama Notu Kutusu */}
-        <View style={styles.planNoteCard}>
-          <Text style={styles.planNoteTitle}>Planlama Notu:</Text>
-          <Text style={styles.planNoteDesc}>
-            Bu seçimler mevcut aktif programını bozmaz. Yalnızca yeni &quot;Öneri Programı Oluştur&quot; veya
-            &quot;Taslağı Yenile&quot; işlemlerinde otomatik olarak devreye girer.
-          </Text>
-        </View>
       </ScrollView>
+
+      {/* ─── Alt Sabit Kaydet Butonu (Neon Yeşil Çerçeveli) ─── */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={[styles.neonGreenSaveBtn, isSaving && { opacity: 0.6 }]}
+          onPress={handleSave}
+          activeOpacity={0.8}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color={colors.emeraldLight} />
+          ) : (
+            <View style={styles.saveBtnContent}>
+              <CheckIcon size={18} color={colors.emeraldLight} />
+              <Text style={styles.neonGreenSaveBtnText}>Seçimleri Kaydet</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -627,17 +884,17 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   optionalPill: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: colors.amberBg,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    borderColor: colors.amberBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 3.5,
+    borderRadius: 12,
   },
   optionalPillText: {
     fontSize: 11,
@@ -650,122 +907,273 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 36,
-    gap: 16,
+    paddingBottom: 24,
+    gap: 14,
   },
-  infoBanner: {
+
+  // ─── Hero Kart: Tercih Durumum ───
+  heroCard: {
     backgroundColor: colors.cardBg,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderRadius: 14,
-    padding: 14,
-    gap: 6,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
+    gap: 12,
   },
-  infoTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.purpleLight,
-  },
-  infoDesc: {
-    fontSize: 12,
-    color: colors.textMuted,
-    lineHeight: 17,
-  },
-  textCyanBold: {
-    color: colors.cyanLight,
-    fontWeight: '700',
-  },
-  textDangerBold: {
-    color: colors.danger,
-    fontWeight: '700',
-  },
-  toolbarCard: {
-    backgroundColor: colors.cardBg,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.itemBg,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 40,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.text,
-    paddingVertical: 0,
-  },
-  clearSearchText: {
-    fontSize: 14,
-    color: colors.textDim,
-    padding: 4,
-  },
-  filterBar: {
+  heroMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
     gap: 8,
   },
-  filterChipsRow: {
+  heroLeftCol: {
+    flex: 1.15,
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: 'row',
-    gap: 6,
+    alignItems: 'center',
+    gap: 10,
+    paddingRight: 4,
   },
-  filterChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 7,
-    backgroundColor: colors.itemBg,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  filterChipActive: {
+  heroIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: colors.purpleBg,
+    borderWidth: 1,
     borderColor: colors.purpleBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  filterChipActiveCyan: {
-    backgroundColor: colors.cyanBg,
-    borderColor: colors.cyanBorder,
+  heroTextCol: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    gap: 2,
   },
-  filterChipActiveDanger: {
+  heroTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.2,
+  },
+  heroDesc: {
+    fontSize: 10.5,
+    color: colors.textMuted,
+    lineHeight: 14,
+    flexWrap: 'wrap',
+  },
+  heroStatsCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  heroStatItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 36,
+  },
+  statNumEmerald: {
+    fontSize: 16.5,
+    fontWeight: '900',
+    color: colors.emeraldLight,
+  },
+  statLabelEmerald: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: colors.emeraldLight,
+    marginTop: 2,
+  },
+  statNumDanger: {
+    fontSize: 16.5,
+    fontWeight: '900',
+    color: colors.dangerLight,
+  },
+  statLabelDanger: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: colors.dangerLight,
+    marginTop: 2,
+  },
+  statNumWhite: {
+    fontSize: 16.5,
+    fontWeight: '900',
+    color: colors.text,
+  },
+  statLabelMuted: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: colors.textDim,
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 2,
+  },
+  progressBarTrack: {
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.purpleLight,
+  },
+  progressPercentText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textDim,
+  },
+
+  // ─── Kas Grupları Akordiyon Kartları ───
+  groupsContainer: {
+    gap: 12,
+  },
+  groupCard: {
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  groupHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  groupIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.purpleBg,
+    borderWidth: 1,
+    borderColor: colors.purpleBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupTitleCol: {
+    gap: 2,
+  },
+  groupNameText: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  groupCountText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.textDim,
+  },
+  groupHeaderRight: {
+    paddingLeft: 8,
+  },
+
+  // ─── Egzersiz Listesi Animasyon Kapsayıcısı ───
+  animatedContainer: {
+    overflow: 'hidden',
+  },
+  exerciseList: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  exerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  exerciseNameText: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: colors.text,
+    paddingRight: 12,
+    lineHeight: 18,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnStarActive: {
+    backgroundColor: colors.purpleActiveBg,
+    borderColor: colors.purpleActiveBorder,
+  },
+  actionBtnBanActive: {
     backgroundColor: colors.dangerBg,
     borderColor: colors.dangerBorder,
   },
-  filterChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
+
+  // ─── Alt Sabit Kaydet Butonu (Neon Yeşil Çerçeveli) ───
+  bottomBar: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+    backgroundColor: 'rgba(8, 11, 20, 0.95)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
-  filterChipTextActive: {
-    color: colors.purpleLight,
-    fontWeight: '700',
+  neonGreenSaveBtn: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.emeraldBg,
+    borderWidth: 1.5,
+    borderColor: colors.emeraldBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.emerald,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  filterChipTextCyan: {
-    color: colors.cyanLight,
-    fontWeight: '700',
+  saveBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  filterChipTextDanger: {
-    color: colors.danger,
-    fontWeight: '700',
+  neonGreenSaveBtnText: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: colors.emeraldLight,
+    letterSpacing: 0.3,
   },
-  toggleAllBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
-  toggleAllBtnText: {
-    fontSize: 11,
-    color: colors.textDim,
-    fontWeight: '600',
-  },
+
   loadingBox: {
     paddingVertical: 40,
     alignItems: 'center',
@@ -794,220 +1202,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     textAlign: 'center',
-  },
-  groupsContainer: {
-    gap: 12,
-  },
-  groupAccordion: {
-    backgroundColor: colors.cardBg,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: colors.cardBgInner,
-  },
-  groupHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  groupDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.purpleLight,
-  },
-  groupTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  groupHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  groupPrefBadge: {
-    backgroundColor: colors.cyanBg,
-    borderWidth: 1,
-    borderColor: colors.cyanBorder,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  groupPrefBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.cyanLight,
-  },
-  groupAvoidBadge: {
-    backgroundColor: colors.dangerBg,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  groupAvoidBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.danger,
-  },
-  groupCountBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  groupCountBadgeText: {
-    fontSize: 10,
-    color: colors.textDim,
-  },
-  exerciseItemsList: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 6,
-  },
-  exerciseItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: colors.itemBg,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-    gap: 8,
-  },
-  exerciseInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  exerciseName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  exerciseMeta: {
-    fontSize: 11,
-    color: colors.textDim,
-  },
-  exerciseActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  actionBtnPref: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  actionBtnPrefActive: {
-    backgroundColor: colors.cyanBg,
-    borderColor: colors.cyanBorder,
-  },
-  actionBtnPrefText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  actionBtnPrefTextActive: {
-    color: colors.cyanLight,
-    fontWeight: '700',
-  },
-  actionBtnAvoid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  actionBtnAvoidActive: {
-    backgroundColor: colors.dangerBg,
-    borderColor: colors.dangerBorder,
-  },
-  actionBtnAvoidText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  actionBtnAvoidTextActive: {
-    color: colors.danger,
-    fontWeight: '700',
-  },
-  footerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 8,
-  },
-  resetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  resetBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  saveBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: colors.emerald,
-  },
-  saveBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  planNoteCard: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.22)',
-    borderRadius: 12,
-    padding: 12,
-    gap: 4,
-  },
-  planNoteTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.purpleLight,
-  },
-  planNoteDesc: {
-    fontSize: 11.5,
-    color: colors.textMuted,
-    lineHeight: 16,
   },
 });

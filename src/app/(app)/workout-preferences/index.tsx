@@ -271,20 +271,6 @@ export default function WorkoutPreferencesScreen() {
           />
         }
       >
-        {/* Bilgilendirme Notu */}
-        <View style={styles.infoBanner}>
-          <View style={styles.infoIconWrapper}>
-            <InfoIcon size={20} color={colors.purpleLight} />
-          </View>
-          <View style={styles.infoTextWrapper}>
-            <Text style={styles.infoTitle}>Kişiselleştirilmiş Antrenman Motoru</Text>
-            <Text style={styles.infoSubtitle}>
-              Uzman sistemi, programını oluştururken bu kaynakları kullanır. Ekipman, makine ve hareket
-              seçimleri <Text style={styles.highlightText}>isteğe bağlıdır</Text>.
-            </Text>
-          </View>
-        </View>
-
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.purple} />
@@ -365,6 +351,19 @@ export default function WorkoutPreferencesScreen() {
             />
           </View>
         )}
+        {/* Bilgilendirme Notu */}
+        <View style={styles.infoBanner}>
+          <View style={styles.infoIconWrapper}>
+            <InfoIcon size={20} color={colors.purpleLight} />
+          </View>
+          <View style={styles.infoTextWrapper}>
+            <Text style={styles.infoTitle}>Kişiselleştirilmiş Antrenman Motoru</Text>
+            <Text style={styles.infoSubtitle}>
+              Uzman sistemi, programını oluştururken bu kaynakları kullanır. Ekipman, makine ve hareket
+              seçimleri <Text style={styles.highlightText}>isteğe bağlıdır</Text>.
+            </Text>
+          </View>
+        </View>
 
         {/* Alt Açıklama Kutusu */}
         <View style={styles.footerTipCard}>
@@ -447,9 +446,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
+    flexShrink: 0,
   },
   infoTextWrapper: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     gap: 4,
   },
   infoTitle: {
@@ -461,6 +463,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     lineHeight: 17,
+    flexWrap: 'wrap',
   },
   highlightText: {
     color: colors.amber,

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
   Easing,
   Keyboard,
   Modal,
@@ -65,6 +66,10 @@ const colors = {
   dangerBorder: 'rgba(239, 68, 68, 0.35)',
 };
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = Math.min(Math.round(SCREEN_WIDTH * 0.85), 330);
+const CARD_GAP = 12;
+
 // ─── İkonlar ───
 function BackIcon({ color = '#F8FAFC', size = 20 }: { color?: string; size?: number }) {
   return (
@@ -90,6 +95,32 @@ function BuildingIcon({ color = colors.cyan, size = 22 }: { color?: string; size
         strokeLinejoin="round"
         strokeWidth="2"
         d="M3 21h18M3 7v14M21 7v14M9 21V11M15 21V11M9 7h6M12 3l9 4H3l9-4z"
+      />
+    </Svg>
+  );
+}
+
+function DumbbellIcon({ color = colors.purpleLight, size = 22 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+        d="M6 5v14M18 5v14M2 9v6M22 9v6M6 12h12"
+      />
+    </Svg>
+  );
+}
+
+function WeightsIcon({ color = colors.cyanLight, size = 20 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
+      <Path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M4 10h2v4H4v-4zM18 10h2v4h-2v-4zM6 11h12v2H6v-2zM2 11h2v2H2v-2zM20 11h2v2h-2v-2z"
       />
     </Svg>
   );
@@ -299,8 +330,8 @@ function GymFormBottomSheet({
 
   const handleSubmit = async () => {
     const trimmed = gymName.trim();
-    if (trimmed.length < 2 || trimmed.length > 80) {
-      setFormError('Salon adı 2 ile 80 karakter arasında olmalıdır.');
+    if (trimmed.length < 2 || trimmed.length > 20) {
+      setFormError('Salon adı 2 ile 20 karakter arasında olmalıdır.');
       return;
     }
 
@@ -384,7 +415,7 @@ function GymFormBottomSheet({
                   setGymName(val);
                   if (formError) setFormError(null);
                 }}
-                maxLength={80}
+                maxLength={20}
                 selectionColor={colors.purple}
               />
             </View>
@@ -546,6 +577,7 @@ export default function GymsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalKey, setModalKey] = useState(0);
   const [editingGym, setEditingGym] = useState<Gym | null>(null);
+  const [activeGymIndex, setActiveGymIndex] = useState(0);
 
   const openAddModal = () => {
     setEditingGym(null);
@@ -571,21 +603,6 @@ export default function GymsScreen() {
       });
     } else {
       await createGymMutation.mutateAsync(data);
-    }
-  };
-
-  const handleSetDefault = async (gym: Gym) => {
-    try {
-      await updateGymMutation.mutateAsync({
-        gymId: gym.id,
-        data: {
-          name: gym.name,
-          equipment: gym.equipment,
-          is_default: true,
-        },
-      });
-    } catch (err: any) {
-      Alert.alert('Hata', err?.message || 'Varsayılan salon ayarlanamadı.');
     }
   };
 
@@ -625,15 +642,7 @@ export default function GymsScreen() {
 
         <Text style={styles.headerTitle}>Kayıtlı Salonlar</Text>
 
-        <TouchableOpacity
-          style={styles.headerAddBtn}
-          onPress={openAddModal}
-          activeOpacity={0.7}
-          hitSlop={8}
-        >
-          <PlusIcon size={18} color={colors.cyanLight} />
-          <Text style={styles.headerAddBtnText}>Ekle</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRightSpacer} />
       </View>
 
       <ScrollView
@@ -651,53 +660,74 @@ export default function GymsScreen() {
           />
         }
       >
-        {/* Şıklaştırılmış Salon ve Ekipman Kaynakları Panosu */}
-        <View style={styles.subHeaderCard}>
-          {/* Kart Üst Başlık Alanı */}
-          <View style={styles.subHeaderTopRow}>
-            <View style={styles.subHeaderIconBox}>
-              <BuildingIcon size={22} color={colors.cyanLight} />
+        {/* ─── 1. SALON VE EKİPMAN KAYNAKLARI HERO KARTI (Hesap ve Güvenlik Sayfası Standardı) ─── */}
+        <View style={styles.heroCard}>
+          {/* Kart Üst Bilgisi: Sol İkon, Orta Başlık & Açıklama, Sağ Üst Rozet */}
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroIconWrap}>
+              <DumbbellIcon size={26} color={colors.purpleLight} />
             </View>
-            <View style={styles.subHeaderTitleCol}>
-              <View style={styles.subHeaderHeadingRow}>
-                <Text style={styles.subHeaderTitle}>Salon ve Ekipman Kaynakları</Text>
-                <View style={styles.gymCountBadge}>
-                  <Text style={styles.gymCountBadgeText}>{gyms.length} Kayıtlı</Text>
-                </View>
-              </View>
-              <Text style={styles.subHeaderDesc}>
-                Varsayılan salon, özel ekipman tercihi boş olduğunda antrenman programı motorunun
-                birincil ekipman kaynağıdır.
+
+            <View style={styles.heroTitleCol}>
+              <Text style={styles.heroTitle}>Salon ve Ekipman Kaynakları</Text>
+              <Text style={styles.heroDesc}>
+                Varsayılan salon, antrenman motorunun birincil ekipman kaynağıdır.
               </Text>
+            </View>
+
+            {/* Kartın Sağ Üst Köşesindeki Rozet */}
+            <View style={styles.heroBadge}>
+              <Text style={styles.heroBadgeText}>{gyms.length} Salon</Text>
             </View>
           </View>
 
-          {/* İstatistik Gösterge Izgarası (3 Kolonlu) */}
-          <View style={styles.statGrid}>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>TOPLAM SALON</Text>
-              <Text style={styles.statValue}>{gyms.length}</Text>
-              <Text style={styles.statSub}>Kayıtlı Mekân</Text>
+          <View style={styles.heroDivider} />
+
+          {/* 3'lü İstatistik Alanı (Hesap ve Güvenlik heroStatsRow Standardı) */}
+          <View style={styles.heroStatsRow}>
+            {/* 1. TOPLAM SALON */}
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatLabel}>TOPLAM</Text>
+              <View style={styles.heroStatContentRow}>
+                <BuildingIcon size={20} color={colors.purpleLight} />
+                <Text style={styles.heroStatValueText}>
+                  {gyms.length} <Text style={styles.heroStatUnitText}>mekân</Text>
+                </Text>
+              </View>
             </View>
 
-            <View style={[styles.statBox, styles.statBoxMiddle]}>
-              <Text style={styles.statLabel}>VARSAYILAN</Text>
-              <Text style={styles.statValueGreen} numberOfLines={1}>
-                {defaultGym?.name || 'Seçilmedi'}
-              </Text>
-              <Text style={styles.statSubGreen}>
-                {defaultGym ? '★ Birincil Merkez' : 'Tanımlanmadı'}
-              </Text>
+            <View style={styles.heroStatDivider} />
+
+            {/* 2. VARSAYILAN SALON */}
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatLabel}>VARSAYILAN</Text>
+              <View style={styles.heroStatContentRow}>
+                <StarIcon size={19} color={colors.emeraldLight} />
+                <Text
+                  style={[
+                    styles.heroStatValueText,
+                    { color: colors.emeraldLight, flex: 1 },
+                    !defaultGym && styles.heroStatValueDim,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {defaultGym?.name || 'Seçilmedi'}
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>EKİPMAN HAVUZU</Text>
-              <Text style={styles.statValueCyan}>
-                {defaultGym ? `${defaultGym.equipment.length}` : 'Katalog'}
-              </Text>
-              <Text style={styles.statSub}>
-                {defaultGym ? 'Makine & İstasyon' : 'Tüm Olanaklar'}
-              </Text>
+            <View style={styles.heroStatDivider} />
+
+            {/* 3. EKİPMAN HAVUZU */}
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatLabel}>Toplam</Text>
+              <View style={styles.heroStatContentRow}>
+                <WeightsIcon size={19} color={colors.cyanLight} />
+                <Text style={[styles.heroStatValueText, { color: colors.cyanLight }]}>
+                  {defaultGym ? defaultGym.equipment.length : 0}{' '}
+                  <Text style={styles.heroStatUnitText}>ekipman</Text>
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -705,8 +735,8 @@ export default function GymsScreen() {
           <View style={styles.tipBanner}>
             <Text style={styles.tipText}>
               <Text style={styles.tipBold}>💡 Salon Yönetimi: </Text>
-              Antrenman yaptığın yeri tek dokunuşla &quot;Varsayılan Yap&quot;arak programını o salonun
-              olanaklarına göre anında optimize edebilirsin.
+              Bir salonu varsayılan yapmak için &quot;Düzenle&quot; butonuna dokunup varsayılan
+              anahtarını açabilirsin. Programın bu salona göre optimize edilir.
             </Text>
           </View>
         </View>
@@ -729,102 +759,174 @@ export default function GymsScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          /* Salon Listesi Kartları */
-          <View style={styles.gymListContainer}>
-            {gyms.map((gym) => {
-              const eqCount = gym.equipment.length;
-              const isDefaultGym = gym.is_default;
+          /* Yana Kaydırılabilir Salon Kartları (Horizontal Carousel) */
+          <View style={styles.carouselSection}>
+            <View style={styles.carouselHeaderRow}>
+              <View style={styles.carouselHeaderTitleCol}>
+                <Text style={styles.carouselTitle}>Kayıtlı Salonlar</Text>
+                <Text style={styles.carouselSubtitle}>
+                  Yana kaydırarak salonları ve ekipmanlarını görüntüle
+                </Text>
+              </View>
 
-              return (
-                <View
-                  key={gym.id}
-                  style={[
-                    styles.gymCard,
-                    isDefaultGym && styles.gymCardDefault,
-                  ]}
-                >
-                  {/* Kart Üst Bilgisi */}
-                  <View style={styles.gymCardHeader}>
-                    <View style={styles.gymCardTitleCol}>
-                      <Text style={styles.gymName} numberOfLines={1}>
-                        {gym.name}
-                      </Text>
-                      <Text style={styles.gymSub}>
-                        {isDefaultGym ? 'Varsayılan Antrenman Merkezi' : 'Kayıtlı Salon'}
-                      </Text>
-                    </View>
+              <View style={styles.carouselCounterBadge}>
+                <Text style={styles.carouselCounterBadgeText}>
+                  {Math.min(activeGymIndex + 1, gyms.length)} / {gyms.length}
+                </Text>
+              </View>
+            </View>
 
-                    {isDefaultGym && (
-                      <View style={styles.defaultBadge}>
-                        <StarIcon size={12} color={colors.emeraldLight} />
-                        <Text style={styles.defaultBadgeText}>Varsayılan Salon</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalScrollContent}
+              snapToInterval={CARD_WIDTH + CARD_GAP}
+              decelerationRate="fast"
+              snapToAlignment="start"
+              onScroll={(e) => {
+                const x = e.nativeEvent.contentOffset.x;
+                const index = Math.round(x / (CARD_WIDTH + CARD_GAP));
+                if (index >= 0 && index < gyms.length && index !== activeGymIndex) {
+                  setActiveGymIndex(index);
+                }
+              }}
+              scrollEventThrottle={16}
+            >
+              {gyms.map((gym) => {
+                const eqCount = gym.equipment.length;
+                const isDefaultGym = gym.is_default;
+
+                return (
+                  <View
+                    key={gym.id}
+                    style={[
+                      styles.gymCard,
+                      isDefaultGym && styles.gymCardDefault,
+                    ]}
+                  >
+                    {/* Kart Üst Bilgisi */}
+                    <View style={styles.gymCardHeader}>
+                      <View
+                        style={[
+                          styles.gymIconBadge,
+                          isDefaultGym && styles.gymIconBadgeDefault,
+                        ]}
+                      >
+                        <BuildingIcon
+                          size={18}
+                          color={isDefaultGym ? colors.emeraldLight : colors.purpleLight}
+                        />
                       </View>
-                    )}
-                  </View>
 
-                  {/* Ekipman Sayısı & İnce Çip Listesi */}
-                  <View style={styles.equipmentMetaRow}>
-                    <Text style={styles.equipmentMetaText}>
-                      ✓ {eqCount} Ekipman Tanımlı
-                    </Text>
-                    <Text style={styles.equipmentMetaSub}>Makine & İstasyon</Text>
-                  </View>
-
-                  <View style={styles.chipsWrap}>
-                    {gym.equipment.length === 0 ? (
-                      <Text style={styles.noChipsText}>Ekipman tanımlanmamış</Text>
-                    ) : (
-                      gym.equipment.slice(0, 12).map((eqId) => (
-                        <View key={eqId} style={styles.eqChip}>
-                          <Text style={styles.eqChipText} numberOfLines={1}>
-                            {equipmentLabelMap.get(eqId) || eqId}
+                      <View style={styles.gymCardTitleCol}>
+                        <View style={styles.gymCardNameRow}>
+                          <Text style={styles.gymName} numberOfLines={1}>
+                            {gym.name}
                           </Text>
+
+                          {/* Sağ Üst: YALNIZCA Varsayılan Salon ise Rozet Göster */}
+                          {isDefaultGym && (
+                            <View style={styles.defaultBadge}>
+                              <StarIcon size={10} color={colors.emeraldLight} />
+                              <Text style={styles.defaultBadgeText}>Varsayılan</Text>
+                            </View>
+                          )}
                         </View>
-                      ))
-                    )}
-                    {gym.equipment.length > 12 && (
-                      <View style={styles.eqChipMore}>
-                        <Text style={styles.eqChipMoreText}>
-                          +{gym.equipment.length - 12} diğer
+                        <Text style={styles.gymSub} numberOfLines={1}>
+                          {isDefaultGym ? 'Varsayılan Antrenman Merkezi' : 'Kayıtlı Salon'}
                         </Text>
                       </View>
-                    )}
-                  </View>
+                    </View>
 
-                  {/* Eylemler */}
-                  <View style={styles.gymCardActions}>
-                    <TouchableOpacity
-                      style={styles.actionBtnEdit}
-                      onPress={() => openEditModal(gym)}
-                      activeOpacity={0.7}
-                    >
-                      <EditIcon size={14} color={colors.purpleLight} />
-                      <Text style={styles.actionBtnEditText}>Düzenle</Text>
-                    </TouchableOpacity>
+                    {/* Ekipman Sayısı & İnce Çip Listesi */}
+                    <View style={styles.equipmentMetaRow}>
+                      <Text style={styles.equipmentMetaText}>
+                        ✓ {eqCount} Ekipman Tanımlı
+                      </Text>
+                      <Text style={styles.equipmentMetaSub}>Makine & İstasyon</Text>
+                    </View>
 
-                    <TouchableOpacity
-                      style={styles.actionBtnDelete}
-                      onPress={() => handleDeleteGym(gym)}
-                      activeOpacity={0.7}
-                    >
-                      <TrashIcon size={14} color={colors.danger} />
-                      <Text style={styles.actionBtnDeleteText}>Sil</Text>
-                    </TouchableOpacity>
-
-                    {!isDefaultGym && (
-                      <TouchableOpacity
-                        style={styles.actionBtnSetDefault}
-                        onPress={() => handleSetDefault(gym)}
-                        activeOpacity={0.7}
+                    {/* Çipler Alanı — Tüm Ekipman Listesi */}
+                    <View style={styles.chipsContainer}>
+                      <ScrollView
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={false}
+                        style={styles.chipsScrollView}
+                        contentContainerStyle={styles.chipsWrap}
                       >
-                        <StarIcon size={13} color={colors.emeraldLight} />
-                        <Text style={styles.actionBtnSetDefaultText}>Varsayılan Yap</Text>
-                      </TouchableOpacity>
-                    )}
+                        {gym.equipment.length === 0 ? (
+                          <Text style={styles.noChipsText}>Ekipman tanımlanmamış</Text>
+                        ) : (
+                          gym.equipment.map((eqId) => (
+                            <View key={eqId} style={styles.eqChip}>
+                              <Text style={styles.eqChipText} numberOfLines={1}>
+                                {equipmentLabelMap.get(eqId) || eqId}
+                              </Text>
+                            </View>
+                          ))
+                        )}
+                      </ScrollView>
+                    </View>
+
+                    {/* Eylemler (Tüm Kartlarda Standart: Düzenle & Sil) */}
+                    <View style={styles.gymCardActions}>
+                      <View style={styles.actionBtnRow}>
+                        <TouchableOpacity
+                          style={styles.actionBtnEdit}
+                          onPress={() => openEditModal(gym)}
+                          activeOpacity={0.7}
+                        >
+                          <EditIcon size={14} color={colors.purpleLight} />
+                          <Text style={styles.actionBtnEditText}>Düzenle</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnDelete}
+                          onPress={() => handleDeleteGym(gym)}
+                          activeOpacity={0.7}
+                        >
+                          <TrashIcon size={14} color={colors.danger} />
+                          <Text style={styles.actionBtnDeleteText}>Sil</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
+                );
+              })}
+
+              {/* En Sağda Yeni Salon Ekle Kartı */}
+              <TouchableOpacity
+                style={styles.addGymCard}
+                onPress={openAddModal}
+                activeOpacity={0.75}
+              >
+                <View style={styles.addGymIconCircle}>
+                  <PlusIcon size={24} color={colors.purpleLight} />
                 </View>
-              );
-            })}
+                <Text style={styles.addGymTitle}>Yeni Salon Ekle</Text>
+                <Text style={styles.addGymDesc}>
+                  Farklı bir salon veya ev istasyonu tanımla
+                </Text>
+                <View style={styles.addGymActionBtn}>
+                  <Text style={styles.addGymActionBtnText}>+ Salon Ekle</Text>
+                </View>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Sayfalama Noktaları (Pagination Dots) */}
+            {gyms.length > 1 && (
+              <View style={styles.paginationDotsContainer}>
+                {gyms.map((_, dotIdx) => (
+                  <View
+                    key={dotIdx}
+                    style={[
+                      styles.paginationDot,
+                      activeGymIndex === dotIdx && styles.paginationDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -871,21 +973,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: -0.2,
   },
-  headerAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.cyanBg,
-    borderColor: colors.cyanBorder,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    gap: 4,
-  },
-  headerAddBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.cyanLight,
+  headerRightSpacer: {
+    width: 40,
+    height: 40,
   },
   scrollView: {
     flex: 1,
@@ -896,134 +986,131 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 16,
   },
-  subHeaderCard: {
+  heroCard: {
     backgroundColor: colors.cardBg,
-    borderRadius: 16,
+    borderColor: colors.cardBorder,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderRadius: 20,
     padding: 16,
-    gap: 14,
+    marginBottom: 6,
     shadowColor: colors.purple,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 4,
+    elevation: 3,
   },
-  subHeaderTopRow: {
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
   },
-  subHeaderIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.35)',
+  heroIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     marginTop: 2,
   },
-  subHeaderTitleCol: {
+  heroTitleCol: {
     flex: 1,
+    justifyContent: 'center',
     gap: 4,
+    paddingRight: 4,
   },
-  subHeaderHeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  subHeaderTitle: {
+  heroTitle: {
     fontSize: 15.5,
     fontWeight: '800',
     color: colors.text,
     letterSpacing: -0.2,
+    lineHeight: 20,
   },
-  subHeaderDesc: {
+  heroDesc: {
     fontSize: 12,
     color: colors.textMuted,
-    lineHeight: 17,
+    lineHeight: 16.5,
   },
-  gymCountBadge: {
-    backgroundColor: colors.purpleBg,
+  heroBadge: {
+    backgroundColor: 'rgba(139, 92, 246, 0.14)',
     borderWidth: 1,
-    borderColor: colors.purpleBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 8,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
   },
-  gymCountBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
+  heroBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
     color: colors.purpleLight,
+    letterSpacing: 0.3,
   },
-  statGrid: {
+  heroDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginVertical: 14,
+  },
+  heroStatsRow: {
     flexDirection: 'row',
-    backgroundColor: colors.cardBgInner,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  statBox: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
+    justifyContent: 'space-between',
+    paddingVertical: 2,
   },
-  statBoxMiddle: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+  heroStatItem: {
+    flex: 1,
+    paddingHorizontal: 2,
   },
-  statLabel: {
-    fontSize: 9,
+  heroStatDivider: {
+    width: 1,
+    height: 34,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginHorizontal: 8,
+    alignSelf: 'center',
+  },
+  heroStatLabel: {
+    fontSize: 9.5,
     fontWeight: '800',
     color: colors.textDim,
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    textTransform: 'uppercase',
   },
-  statValue: {
-    fontSize: 14,
-    fontWeight: '800',
+  heroStatContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  heroStatValueText: {
+    fontSize: 13.5,
+    fontWeight: '900',
     color: colors.text,
   },
-  statValueGreen: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.emeraldLight,
-  },
-  statValueCyan: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.cyanLight,
-  },
-  statSub: {
-    fontSize: 10,
+  heroStatUnitText: {
+    fontSize: 11.5,
+    fontWeight: '600',
     color: colors.textDim,
   },
-  statSubGreen: {
-    fontSize: 10,
-    color: colors.emeraldLight,
-    fontWeight: '600',
+  heroStatValueDim: {
+    color: colors.textDim,
   },
   tipBanner: {
     backgroundColor: 'rgba(139, 92, 246, 0.08)',
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.22)',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
+    marginTop: 14,
   },
   tipText: {
     fontSize: 11.5,
     color: colors.textMuted,
-    lineHeight: 16,
+    lineHeight: 16.5,
   },
   tipBold: {
     color: colors.purpleLight,
@@ -1073,38 +1160,101 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  gymListContainer: {
-    gap: 14,
+  carouselSection: {
+    marginHorizontal: -16,
+    gap: 10,
   },
-  gymCard: {
+  carouselHeaderRow: {
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  carouselHeaderTitleCol: {
+    gap: 2,
+  },
+  carouselTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.2,
+  },
+  carouselSubtitle: {
+    fontSize: 12,
+    color: colors.textDim,
+  },
+  carouselCounterBadge: {
     backgroundColor: colors.cardBg,
-    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  carouselCounterBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  horizontalScrollContent: {
+    paddingHorizontal: 16,
+    gap: CARD_GAP,
+    paddingBottom: 6,
+  },
+  gymCard: {
+    width: CARD_WIDTH,
+    height: 340,
+    backgroundColor: colors.cardBg,
+    borderRadius: 18,
+    borderWidth: 1.2,
+    borderColor: colors.cardBorder,
     padding: 16,
+    justifyContent: 'space-between',
     gap: 12,
   },
   gymCardDefault: {
     borderColor: 'rgba(16, 185, 129, 0.45)',
-    backgroundColor: '#0F1824',
+    backgroundColor: '#0C1520',
   },
   gymCardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
+    alignItems: 'center',
+    gap: 10,
+  },
+  gymIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  gymIconBadgeDefault: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
   },
   gymCardTitleCol: {
     flex: 1,
     gap: 2,
+    minWidth: 0,
+  },
+  gymCardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
   },
   gymName: {
-    fontSize: 17,
+    fontSize: 16.5,
     fontWeight: '800',
     color: colors.text,
+    flex: 1,
   },
   gymSub: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: colors.textDim,
   },
   defaultBadge: {
@@ -1113,13 +1263,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.emeraldBg,
     borderWidth: 1,
     borderColor: colors.emeraldBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    gap: 3.5,
+    flexShrink: 0,
   },
   defaultBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     color: colors.emeraldLight,
   },
@@ -1127,7 +1278,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 4,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
@@ -1140,10 +1291,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textDim,
   },
+  chipsContainer: {
+    flex: 1,
+    minHeight: 120,
+    maxHeight: 160,
+  },
+  chipsScrollView: {
+    flex: 1,
+  },
   chipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    paddingBottom: 4,
   },
   noChipsText: {
     fontSize: 12,
@@ -1162,36 +1322,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
   },
-  eqChipMore: {
-    backgroundColor: colors.purpleBg,
-    borderWidth: 1,
-    borderColor: colors.purpleBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  eqChipMoreText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.purpleLight,
-  },
   gymCardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
-  actionBtnEdit: {
+  actionBtnRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  actionBtnEdit: {
+    flex: 1,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.purpleBg,
     borderWidth: 1,
     borderColor: colors.purpleBorder,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
+    borderRadius: 9,
     gap: 5,
   },
   actionBtnEditText: {
@@ -1200,14 +1350,15 @@ const styles = StyleSheet.create({
     color: colors.purpleLight,
   },
   actionBtnDelete: {
+    flex: 1,
+    height: 36,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.dangerBg,
     borderWidth: 1,
     borderColor: colors.dangerBorder,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
+    borderRadius: 9,
     gap: 5,
   },
   actionBtnDeleteText: {
@@ -1215,22 +1366,78 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.danger,
   },
-  actionBtnSetDefault: {
+  addGymCard: {
+    width: CARD_WIDTH,
+    height: 340,
+    backgroundColor: 'rgba(16, 21, 36, 0.5)',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 10,
+  },
+  addGymIconCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.purpleBg,
+    borderWidth: 1,
+    borderColor: colors.purpleBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addGymTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  addGymDesc: {
+    fontSize: 12,
+    color: colors.textDim,
+    textAlign: 'center',
+    lineHeight: 16,
+    maxWidth: 220,
+  },
+  addGymActionBtn: {
+    marginTop: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: colors.purpleBg,
+    borderWidth: 1,
+    borderColor: colors.purpleBorder,
+  },
+  addGymActionBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.purpleLight,
+  },
+  paginationDotsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.emeraldBg,
-    borderWidth: 1,
-    borderColor: colors.emeraldBorder,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    gap: 5,
-    marginLeft: 'auto',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 4,
   },
-  actionBtnSetDefaultText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.emeraldLight,
+  paginationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  paginationDotActive: {
+    width: 18,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.purpleLight,
+    shadowColor: colors.purple,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 3,
   },
 });
 
