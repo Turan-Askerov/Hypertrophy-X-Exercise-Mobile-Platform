@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
+import { authApi } from '@/api/auth';
 import { useAuth } from '@/auth/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -183,16 +184,6 @@ function ScaleIcon({ color = colors.purpleLight, size = 20 }: { color?: string; 
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
       <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l9-4 9 4M12 2v20M5 18h14M6 18l-3-7h6l-3 7zm12 0l-3-7h6l-3 7z" />
-    </Svg>
-  );
-}
-
-function RouteIcon({ color = colors.emeraldLight, size = 18 }: { color?: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Circle cx="6" cy="19" r="3" strokeWidth="2" />
-      <Circle cx="18" cy="5" r="3" strokeWidth="2" />
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19h4.5a3.5 3.5 0 000-7h-9a3.5 3.5 0 010-7H12" />
     </Svg>
   );
 }
@@ -1320,29 +1311,25 @@ function UnitsBottomSheetModal({
   visible,
   onClose,
   weightUnit,
-  distanceUnit,
   bodyMeasurementUnit,
   onSave,
 }: {
   visible: boolean;
   onClose: () => void;
   weightUnit: 'kg' | 'lbs';
-  distanceUnit: 'km' | 'mil';
   bodyMeasurementUnit: 'cm' | 'in';
   onSave: (units: {
     weight: 'kg' | 'lbs';
-    distance: 'km' | 'mil';
     body: 'cm' | 'in';
   }) => void;
 }) {
-  const estimatedSheetHeight = 390;
+  const estimatedSheetHeight = 310;
   const [sheetHeight, setSheetHeight] = useState(estimatedSheetHeight);
   const [containerHeight, setContainerHeight] = useState(0);
   const [containerLayoutY, setContainerLayoutY] = useState(0);
 
   // Yerel seçim state'leri
   const [selectedWeight, setSelectedWeight] = useState<'kg' | 'lbs'>(weightUnit);
-  const [selectedDistance, setSelectedDistance] = useState<'km' | 'mil'>(distanceUnit);
   const [selectedBody, setSelectedBody] = useState<'cm' | 'in'>(bodyMeasurementUnit);
 
   const [translateY] = useState(() => new Animated.Value(estimatedSheetHeight));
@@ -1511,7 +1498,6 @@ function UnitsBottomSheetModal({
   const handleSave = () => {
     onSave({
       weight: selectedWeight,
-      distance: selectedDistance,
       body: selectedBody,
     });
     closeSheet();
@@ -1568,7 +1554,7 @@ function UnitsBottomSheetModal({
                 <Text style={styles.modalTitle}>Birim Tercihleri</Text>
               </View>
               <Text style={styles.modalDesc}>
-                Ağırlık, mesafe ve vücut ölçüleri formatını seçin
+                Ağırlık ve vücut ölçüleri formatını seçin
               </Text>
             </View>
             <TouchableOpacity
@@ -1651,74 +1637,7 @@ function UnitsBottomSheetModal({
               </View>
             </View>
 
-            {/* 2. BÖLÜM: MESAFE BİRİMİ */}
-            <View style={unitsModalStyles.groupBlock}>
-              <View style={unitsModalStyles.groupHeader}>
-                <RouteIcon size={14} color={colors.emeraldLight} />
-                <Text style={unitsModalStyles.groupTitle}>MESAFE BİRİMİ</Text>
-              </View>
-              <View style={unitsModalStyles.optionsRow}>
-                <TouchableOpacity
-                  style={[
-                    unitsModalStyles.unitBtn,
-                    selectedDistance === 'km' && unitsModalStyles.unitBtnSelected,
-                  ]}
-                  onPress={() => setSelectedDistance('km')}
-                  activeOpacity={0.75}
-                >
-                  <Text
-                    style={[
-                      unitsModalStyles.unitBtnSymbol,
-                      selectedDistance === 'km' && unitsModalStyles.unitBtnSymbolSelected,
-                    ]}
-                  >
-                    km
-                  </Text>
-                  <Text
-                    style={[
-                      unitsModalStyles.unitBtnName,
-                      selectedDistance === 'km' && unitsModalStyles.unitBtnNameSelected,
-                    ]}
-                  >
-                    Kilometre
-                  </Text>
-                  {selectedDistance === 'km' ? (
-                    <Text style={unitsModalStyles.unitBtnCheck}>✓</Text>
-                  ) : null}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    unitsModalStyles.unitBtn,
-                    selectedDistance === 'mil' && unitsModalStyles.unitBtnSelected,
-                  ]}
-                  onPress={() => setSelectedDistance('mil')}
-                  activeOpacity={0.75}
-                >
-                  <Text
-                    style={[
-                      unitsModalStyles.unitBtnSymbol,
-                      selectedDistance === 'mil' && unitsModalStyles.unitBtnSymbolSelected,
-                    ]}
-                  >
-                    mi
-                  </Text>
-                  <Text
-                    style={[
-                      unitsModalStyles.unitBtnName,
-                      selectedDistance === 'mil' && unitsModalStyles.unitBtnNameSelected,
-                    ]}
-                  >
-                    Mil
-                  </Text>
-                  {selectedDistance === 'mil' ? (
-                    <Text style={unitsModalStyles.unitBtnCheck}>✓</Text>
-                  ) : null}
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* 3. BÖLÜM: VÜCUT ÖLÇÜLERİ */}
+            {/* 2. BÖLÜM: VÜCUT ÖLÇÜLERİ */}
             <View style={unitsModalStyles.groupBlock}>
               <View style={unitsModalStyles.groupHeader}>
                 <RulerIcon size={14} color={colors.cyan} />
@@ -1806,7 +1725,7 @@ function UnitsBottomSheetModal({
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, state: authState } = useAuth();
   const { workouts } = useWorkouts();
   const {
     user,
@@ -1822,7 +1741,6 @@ export default function ProfileScreen() {
 
   // Tercih Durumları
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
-  const [distanceUnit, setDistanceUnit] = useState<'km' | 'mil'>('km');
   const [bodyMeasurementUnit, setBodyMeasurementUnit] = useState<'cm' | 'in'>('cm');
   const [themeMode, setThemeMode] = useState<'Koyu' | 'Açık' | 'Sistem'>('Koyu');
   const [language, setLanguage] = useState<'Türkçe' | 'English'>('Türkçe');
@@ -1851,18 +1769,51 @@ export default function ProfileScreen() {
   // Hesap Silme (Şifre & OTP Doğrulama) State'leri
   const [deleteStep, setDeleteStep] = useState<'password' | 'code'>('password');
   const [deletePassword, setDeletePassword] = useState('');
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+  const [isPasswordValid, setIsPasswordValid] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<{
+    type: 'idle' | 'checking' | 'valid' | 'invalid' | 'rate_limited';
+    message?: string;
+  }>({ type: 'idle' });
+  const lastCheckedPasswordRef = useRef<string>('');
+  const verifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteOtpCode, setDeleteOtpCode] = useState('');
   const [deleteOtpToken, setDeleteOtpToken] = useState('');
   const [deleteMaskedEmail, setDeleteMaskedEmail] = useState('');
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  // Aktif kullanıcı adı (user veya auth oturumundan)
+  const currentUsername = useMemo(() => {
+    if (user?.username) return user.username.trim();
+    if (authState?.status === 'signedIn' && authState.user?.username) {
+      return authState.user.username.trim();
+    }
+    return '';
+  }, [user, authState]);
+
   const resetDeleteModalState = useCallback(() => {
+    if (verifyTimerRef.current) {
+      clearTimeout(verifyTimerRef.current);
+      verifyTimerRef.current = null;
+    }
     setDeletePassword('');
+    setIsPasswordValid(false);
+    setIsVerifyingPassword(false);
+    setPasswordFeedback({ type: 'idle' });
+    lastCheckedPasswordRef.current = '';
     setDeleteOtpCode('');
     setDeleteOtpToken('');
     setDeleteMaskedEmail('');
     setDeleteStep('password');
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (verifyTimerRef.current) {
+        clearTimeout(verifyTimerRef.current);
+      }
+    };
   }, []);
 
   // RPG & XP Durumu
@@ -1987,7 +1938,7 @@ export default function ProfileScreen() {
   };
 
   // 1. Adım: Şifre ile E-postaya OTP Doğrulama Kodu İsteme
-  const handleRequestDeleteOtp = async () => {
+  const handleRequestDeleteOtp = useCallback(async () => {
     Keyboard.dismiss();
     const cleanPassword = deletePassword.trim();
     if (!cleanPassword) {
@@ -2010,7 +1961,129 @@ export default function ProfileScreen() {
       const msg = err?.message || 'Mevcut şifreniz doğrulanamadı veya güvenlik kodu gönderilemedi.';
       Alert.alert('Hata', msg);
     }
-  };
+  }, [deletePassword, requestDeleteAccount, user]);
+
+  // Şifreyi backend'e sorarak doğrulama çekirdek fonksiyonu
+  const verifyPasswordCore = useCallback(
+    async (pwd: string, andRequestOtp = false): Promise<boolean> => {
+      const clean = pwd.trim();
+      if (!clean) {
+        setIsPasswordValid(false);
+        setPasswordFeedback({ type: 'idle' });
+        return false;
+      }
+
+      const usernameToUse = currentUsername;
+      if (!usernameToUse) {
+        setPasswordFeedback({
+          type: 'invalid',
+          message: 'Kullanıcı oturum bilgisi bulunamadı. Lütfen sayfayı yenileyin.',
+        });
+        return false;
+      }
+
+      setIsVerifyingPassword(true);
+      setPasswordFeedback({
+        type: 'checking',
+        message: 'Şifreniz kontrol ediliyor...',
+      });
+
+      try {
+        await authApi.login(usernameToUse, clean);
+        lastCheckedPasswordRef.current = clean;
+        setIsPasswordValid(true);
+        setPasswordFeedback({
+          type: 'valid',
+          message: 'Mevcut şifreniz doğrulandı.',
+        });
+
+        if (andRequestOtp) {
+          const res = await requestDeleteAccount({
+            password: clean,
+          });
+          setDeleteOtpToken(res.token);
+          setDeleteMaskedEmail(res.masked_email || user?.email || 'kayıtlı e-posta adresinize');
+          setDeleteStep('code');
+          Alert.alert(
+            'Doğrulama Kodu Gönderildi',
+            res.message || `${res.masked_email || 'Kayıtlı e-posta'} adresinize 6 haneli güvenlik kodu gönderildi.`
+          );
+        }
+        return true;
+      } catch (err: any) {
+        lastCheckedPasswordRef.current = clean;
+        setIsPasswordValid(false);
+        const errMsg = String(err?.message || err?.info?.message || '');
+        if (err?.status === 429 || errMsg.includes('Çok fazla') || errMsg.includes('429')) {
+          setPasswordFeedback({
+            type: 'rate_limited',
+            message: 'Çok fazla deneme yapıldı. Lütfen biraz bekleyin.',
+          });
+        } else {
+          setPasswordFeedback({
+            type: 'invalid',
+            message: 'Girdiğiniz şifre hatalı.',
+          });
+        }
+        return false;
+      } finally {
+        setIsVerifyingPassword(false);
+      }
+    },
+    [currentUsername, requestDeleteAccount, user]
+  );
+
+  // Şifre Girişini Dinamik Olarak Gerçek Şifreyle Doğrulama (Debounce)
+  const handlePasswordChange = useCallback(
+    (text: string) => {
+      setDeletePassword(text);
+      setIsPasswordValid(false);
+
+      if (verifyTimerRef.current) {
+        clearTimeout(verifyTimerRef.current);
+        verifyTimerRef.current = null;
+      }
+
+      const trimmed = text.trim();
+      if (!trimmed) {
+        setIsVerifyingPassword(false);
+        setPasswordFeedback({ type: 'idle' });
+        lastCheckedPasswordRef.current = '';
+        return;
+      }
+
+      setPasswordFeedback({
+        type: 'checking',
+        message: 'Şifreniz kontrol ediliyor...',
+      });
+
+      verifyTimerRef.current = setTimeout(() => {
+        verifyPasswordCore(trimmed, false);
+      }, 500);
+    },
+    [verifyPasswordCore]
+  );
+
+  // Klavyeden "Bitti" / Gönder Basıldığında Hızlı Doğrulama
+  const handlePasswordSubmit = useCallback(async () => {
+    Keyboard.dismiss();
+    if (isPasswordValid) {
+      handleRequestDeleteOtp();
+      return;
+    }
+
+    const cleanPassword = deletePassword.trim();
+    if (!cleanPassword) {
+      return;
+    }
+
+    if (verifyTimerRef.current) {
+      clearTimeout(verifyTimerRef.current);
+      verifyTimerRef.current = null;
+    }
+
+    await verifyPasswordCore(cleanPassword, true);
+  }, [deletePassword, isPasswordValid, handleRequestDeleteOtp, verifyPasswordCore]);
 
   // 2. Adım: OTP Kodu ve Şifre ile Hesabı Kalıcı Olarak Silme
   const handleDeleteAccount = async () => {
@@ -2292,8 +2365,8 @@ export default function ProfileScreen() {
           <SettingItem
             icon={<ScaleIcon color={colors.purpleLight} />}
             title="Birimler"
-            subtitle="Ağırlık, mesafe ve vücut ölçüleri"
-            valueBadge={`${weightUnit} · ${distanceUnit} · ${bodyMeasurementUnit}`}
+            subtitle="Ağırlık ve vücut ölçüleri"
+            valueBadge={`${weightUnit} · ${bodyMeasurementUnit}`}
             onPress={() => setActiveModal('units')}
           />
           <SettingItem
@@ -2583,11 +2656,9 @@ export default function ProfileScreen() {
         visible={activeModal === 'units'}
         onClose={() => setActiveModal(null)}
         weightUnit={weightUnit}
-        distanceUnit={distanceUnit}
         bodyMeasurementUnit={bodyMeasurementUnit}
         onSave={(newUnits) => {
           setWeightUnit(newUnits.weight);
-          setDistanceUnit(newUnits.distance);
           setBodyMeasurementUnit(newUnits.body);
         }}
       />
@@ -2679,26 +2750,12 @@ export default function ProfileScreen() {
 
           <View style={styles.deleteDialogCard}>
             <View style={styles.deleteDialogHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                 <TrashIcon size={20} color={colors.purpleLight} />
                 <Text style={styles.deleteDialogTitle}>
                   Hesabı Kalıcı Olarak Sil
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseButtonRed}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  resetDeleteModalState();
-                  setActiveModal(null);
-                }}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
             </View>
 
             {deleteStep === 'password' ? (
@@ -2709,17 +2766,80 @@ export default function ProfileScreen() {
                   kayıtlı e-posta adresinize güvenlik kodu talep edin.
                 </Text>
 
-                <TextInput
-                  style={[styles.modalInput, { borderColor: 'rgba(139, 92, 246, 0.35)' }]}
-                  placeholder="Mevcut Şifreniz"
-                  placeholderTextColor={colors.textDim}
-                  value={deletePassword}
-                  onChangeText={setDeletePassword}
-                  secureTextEntry
-                  returnKeyType="done"
-                  onSubmitEditing={handleRequestDeleteOtp}
-                  keyboardAppearance="dark"
-                />
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={[
+                      styles.modalInput,
+                      styles.passwordInputWithIcon,
+                      {
+                        borderColor:
+                          passwordFeedback.type === 'valid'
+                            ? colors.emeraldLight
+                            : passwordFeedback.type === 'invalid'
+                            ? colors.danger
+                            : passwordFeedback.type === 'rate_limited'
+                            ? '#F59E0B'
+                            : passwordFeedback.type === 'checking' || isVerifyingPassword
+                            ? colors.purpleLight
+                            : 'rgba(139, 92, 246, 0.35)',
+                      },
+                    ]}
+                    placeholder="Mevcut Şifreniz"
+                    placeholderTextColor={colors.textDim}
+                    value={deletePassword}
+                    onChangeText={handlePasswordChange}
+                    onBlur={() => {
+                      if (
+                        deletePassword.trim().length >= 1 &&
+                        !isPasswordValid &&
+                        !isVerifyingPassword &&
+                        deletePassword.trim() !== lastCheckedPasswordRef.current
+                      ) {
+                        verifyPasswordCore(deletePassword.trim(), false);
+                      }
+                    }}
+                    secureTextEntry
+                    returnKeyType="done"
+                    onSubmitEditing={handlePasswordSubmit}
+                    keyboardAppearance="dark"
+                  />
+                  <View style={styles.passwordValidationIconWrap} pointerEvents="none">
+                    {passwordFeedback.type === 'checking' || isVerifyingPassword ? (
+                      <ActivityIndicator size="small" color={colors.purpleLight} />
+                    ) : passwordFeedback.type === 'valid' ? (
+                      <Text style={styles.passwordValidCheck}>✓</Text>
+                    ) : passwordFeedback.type === 'invalid' ? (
+                      <Text style={[styles.passwordValidCheck, { color: colors.danger }]}>✕</Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                {passwordFeedback.type === 'checking' || isVerifyingPassword ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -4, marginBottom: 4 }}>
+                    <ActivityIndicator size="small" color={colors.purpleLight} />
+                    <Text style={{ fontSize: 12, color: colors.purpleLight, fontWeight: '600' }}>
+                      Şifreniz kontrol ediliyor...
+                    </Text>
+                  </View>
+                ) : passwordFeedback.type === 'valid' ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -4, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: colors.emeraldLight, fontWeight: '700' }}>
+                      ✓ Mevcut şifreniz doğrulandı.
+                    </Text>
+                  </View>
+                ) : passwordFeedback.type === 'invalid' ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -4, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: colors.danger, fontWeight: '600' }}>
+                      ✕ {passwordFeedback.message || 'Girdiğiniz şifre hatalı.'}
+                    </Text>
+                  </View>
+                ) : passwordFeedback.type === 'rate_limited' ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -4, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: '#F59E0B', fontWeight: '600' }}>
+                      ⚠ {passwordFeedback.message || 'Çok fazla deneme yapıldı. Lütfen biraz bekleyin.'}
+                    </Text>
+                  </View>
+                ) : null}
 
                 <View style={styles.modalActionButtons}>
                   <TouchableOpacity
@@ -2737,16 +2857,28 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={[
                       styles.neonPurpleBtn,
-                      (!deletePassword.trim() || isRequestingDeleteAccount) && { opacity: 0.6 },
+                      (!isPasswordValid || isRequestingDeleteAccount || isVerifyingPassword) && { opacity: 0.5 },
                     ]}
-                    onPress={handleRequestDeleteOtp}
+                    onPress={() => {
+                      if (isPasswordValid) {
+                        handleRequestDeleteOtp();
+                      } else if (deletePassword.trim().length >= 1) {
+                        verifyPasswordCore(deletePassword.trim(), true);
+                      }
+                    }}
                     activeOpacity={0.7}
-                    disabled={!deletePassword.trim() || isRequestingDeleteAccount}
+                    disabled={
+                      (!isPasswordValid && deletePassword.trim().length < 1) ||
+                      isRequestingDeleteAccount ||
+                      isVerifyingPassword
+                    }
                   >
-                    {isRequestingDeleteAccount ? (
+                    {isRequestingDeleteAccount || isVerifyingPassword ? (
                       <ActivityIndicator size="small" color="#C084FC" />
                     ) : (
-                      <Text style={styles.neonPurpleBtnText}>Kodu Gönder</Text>
+                      <Text style={styles.neonPurpleBtnText} numberOfLines={1}>
+                        Doğrulama Kodu Al
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -2793,7 +2925,7 @@ export default function ProfileScreen() {
                   hitSlop={8}
                 >
                   <Text style={{ fontSize: 12, color: colors.purpleLight, fontWeight: '600' }}>
-                    Şifreyi Değiştir veya Kodu Tekrar İste
+                    Kodu Tekrar Gönder
                   </Text>
                 </TouchableOpacity>
 
@@ -2822,7 +2954,7 @@ export default function ProfileScreen() {
                     {isDeletingAccount ? (
                       <ActivityIndicator size="small" color="#EF4444" />
                     ) : (
-                      <Text style={styles.neonDangerBtnText}>Hesabı Kalıcı Olarak Sil</Text>
+                      <Text style={styles.neonDangerBtnText}>Hesabı Sil</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -3624,8 +3756,27 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     letterSpacing: -0.2,
   },
+  passwordInputContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInputWithIcon: {
+    paddingRight: 42,
+  },
+  passwordValidationIconWrap: {
+    position: 'absolute',
+    right: 14,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  passwordValidCheck: {
+    color: colors.emeraldLight,
+    fontSize: 16,
+    fontWeight: '800',
+  },
   neonPurpleBtn: {
-    flex: 1.3,
+    flex: 1.5,
     height: 44,
     borderRadius: 13,
     borderWidth: 1.2,
@@ -3633,12 +3784,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(139, 92, 246, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 8,
   },
   neonPurpleBtnText: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#C084FC',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 });
 

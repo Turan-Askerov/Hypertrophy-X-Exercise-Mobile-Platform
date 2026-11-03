@@ -66,6 +66,12 @@ const colors = {
   pinkBg: 'rgba(236, 72, 153, 0.12)',
   pinkBorder: 'rgba(236, 72, 153, 0.28)',
 
+  // Rose (Yüksek / Düşük Aralık)
+  rose: '#F43F5E',
+  roseLight: '#FB7185',
+  roseBg: 'rgba(244, 63, 94, 0.12)',
+  roseBorder: 'rgba(244, 63, 94, 0.28)',
+
   // Modal Sheet
   modalSheetBg: '#0F1424',
   modalHandle: '#334155',
@@ -446,6 +452,36 @@ export default function PersonalInfoScreen() {
       bmr: Math.round(bmrVal),
     };
   }, [height, weight, age, gender]);
+
+  // BMI Kategoriye Göre Dinamik Rozet Teması
+  const bmiBadgeStyle = useMemo(() => {
+    if (bmiCategory === 'Normal aralık') {
+      return {
+        bg: 'rgba(16, 185, 129, 0.12)',
+        border: 'rgba(16, 185, 129, 0.28)',
+        text: colors.emeraldLight,
+      };
+    }
+    if (bmiCategory === 'Fazla kilo') {
+      return {
+        bg: 'rgba(245, 158, 11, 0.12)',
+        border: 'rgba(245, 158, 11, 0.28)',
+        text: colors.amberLight,
+      };
+    }
+    if (bmiCategory === 'Düşük aralık') {
+      return {
+        bg: 'rgba(56, 189, 248, 0.12)',
+        border: 'rgba(56, 189, 248, 0.28)',
+        text: colors.cyan,
+      };
+    }
+    return {
+      bg: 'rgba(244, 63, 94, 0.12)',
+      border: 'rgba(244, 63, 94, 0.28)',
+      text: colors.rose,
+    };
+  }, [bmiCategory]);
 
   // ─── Sürüklenebilir Alt Panel (Bottom Sheet) Animasyon & PanResponder ───
   const estimatedSheetHeight = 650;
@@ -1103,45 +1139,64 @@ export default function PersonalInfoScreen() {
           </View>
         </Card>
 
-        {/* 4. BÖLÜM: OTOMATİK ANALİZ */}
-        <Text style={styles.sectionHeaderTitle}>OTOMATİK ANALİZ</Text>
+        {/* 4. BÖLÜM: ANALİZ */}
+        <Text style={styles.sectionHeaderTitle}>ANALİZ</Text>
         <View style={styles.twoColsRow}>
           {/* BMI Kartı */}
-          <Card style={styles.analysisCardCol}>
-            <View style={styles.analysisCardHeader}>
+          <Card style={styles.analysisCardCol} padding="none">
+            <View style={styles.analysisCardTopRow}>
               <View style={[styles.analysisIconCircle, styles.emeraldRoundIcon]}>
-                <HeartPulseIcon size={18} color={colors.emeraldLight} />
+                <HeartPulseIcon size={16} color={colors.emeraldLight} />
               </View>
               <Text style={styles.analysisCardLabel}>BMI</Text>
-              <View style={styles.analysisCardRightCol}>
-                <Text style={styles.analysisCardValue}>{bmi || '24,7'}</Text>
-                <View style={styles.bmiBadge}>
-                  <Text style={styles.bmiBadgeText}>{bmiCategory || 'Normal aralık'}</Text>
-                </View>
-              </View>
+            </View>
+
+            <View style={styles.analysisCardBody}>
+              <Text style={styles.analysisCardValue}>{bmi || '24,7'}</Text>
+            </View>
+
+            <View
+              style={[
+                styles.bmiBadge,
+                { backgroundColor: bmiBadgeStyle.bg, borderColor: bmiBadgeStyle.border },
+              ]}
+            >
+              <View style={[styles.badgeDot, { backgroundColor: bmiBadgeStyle.text }]} />
+              <Text
+                style={[styles.bmiBadgeText, { color: bmiBadgeStyle.text }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {bmiCategory || 'Normal aralık'}
+              </Text>
             </View>
           </Card>
 
           {/* BMR Kartı */}
-          <Card style={styles.analysisCardCol}>
-            <View style={styles.analysisCardHeader}>
+          <Card style={styles.analysisCardCol} padding="none">
+            <View style={styles.analysisCardTopRow}>
               <View style={[styles.analysisIconCircle, styles.purpleRoundIcon]}>
-                <FlameIcon size={18} color={colors.purpleLight} />
+                <FlameIcon size={16} color={colors.purpleLight} />
               </View>
               <Text style={styles.analysisCardLabel}>BMR</Text>
-              <View style={styles.analysisCardRightCol}>
-                <View style={styles.bmrValWrap}>
-                  <Text style={styles.analysisCardValue}>{bmr || 1820}</Text>
-                  <Text style={styles.bmrUnitText}>kcal/gün</Text>
-                </View>
-              </View>
+            </View>
+
+            <View style={styles.analysisCardBody}>
+              <Text style={styles.analysisCardValue}>{bmr ? bmr.toLocaleString('tr-TR') : '1.820'}</Text>
+            </View>
+
+            <View style={styles.bmrBadge}>
+              <View style={[styles.badgeDot, { backgroundColor: colors.purpleLight }]} />
+              <Text style={styles.bmrBadgeText} numberOfLines={1} ellipsizeMode="tail">
+                kcal / gün
+              </Text>
             </View>
           </Card>
         </View>
 
         {/* Alt Bilgilendirme */}
         <Text style={styles.autoNoteText}>
-          Boy, kilo, yaş ve cinsiyet bilgilerine göre otomatik hesaplanır. ⓘ
+          Boy, kilo, yaş ve cinsiyet bilgilerine göre hesaplanır. ⓘ
         </Text>
       </ScrollView>
 
@@ -1856,16 +1911,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
     borderRadius: 16,
-    padding: 12,
+    padding: 14,
+    overflow: 'hidden',
   },
-  analysisCardHeader: {
+  analysisCardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
   },
   analysisIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1873,38 +1931,56 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: colors.textMuted,
-    marginLeft: 8,
+    letterSpacing: 0.4,
   },
-  analysisCardRightCol: {
-    marginLeft: 'auto',
-    alignItems: 'flex-end',
+  analysisCardBody: {
+    marginBottom: 8,
   },
   analysisCardValue: {
-    fontSize: 19,
+    fontSize: 22,
     fontWeight: '900',
     color: colors.text,
+    letterSpacing: -0.3,
   },
   bmiBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginTop: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    maxWidth: '100%',
+  },
+  bmrBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderColor: 'rgba(139, 92, 246, 0.28)',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    maxWidth: '100%',
+  },
+  badgeDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   bmiBadgeText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '800',
-    color: colors.emeraldLight,
+    letterSpacing: 0.2,
   },
-  bmrValWrap: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 3,
-  },
-  bmrUnitText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textDim,
+  bmrBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: colors.purpleLight,
+    letterSpacing: 0.2,
   },
   autoNoteText: {
     fontSize: 11.5,

@@ -589,7 +589,7 @@ export default function EquipmentPreferencesScreen() {
       subtitle: hasCustomPrefs
         ? 'Kişisel Olarak Belirlenen Ekipmanlar'
         : 'Varsayılan Salon Ekipmanları Kullanılıyor',
-      badgeText: hasCustomPrefs ? '★ Özel Tercih' : 'Pasif',
+      badgeText: hasCustomPrefs ? 'Özel Tercih' : 'Pasif',
       isActiveCustom: hasCustomPrefs,
       equipmentIds: serverPreferred,
     });
