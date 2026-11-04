@@ -13,7 +13,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -28,6 +27,7 @@ import { useAuth } from '@/auth/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ModernSwitch } from '@/components/ui/modern-switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spacing } from '@/constants/theme';
 import { useUser } from '@/hooks/use-user';
@@ -104,14 +104,6 @@ function EditPencilIcon({ color = colors.purpleLight, size = 18 }: { color?: str
         strokeWidth="2"
         d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
       />
-    </Svg>
-  );
-}
-
-function CloseIcon({ size = 14, color = '#EF4444' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M6 18L18 6M6 6l12 12" />
     </Svg>
   );
 }
@@ -847,22 +839,12 @@ function AboutBottomSheetModal({
 
           {/* Başlık Satırı (Aynı zamanda sürüklenebilir) */}
           <View style={styles.modalHeaderRow}>
-            <View {...panResponder.panHandlers} style={{ flex: 1, paddingRight: 8 }}>
+            <View {...panResponder.panHandlers} style={{ flex: 1 }}>
               <Text style={styles.modalTitle}>Hypertrophy-X Hakkında</Text>
               <Text style={styles.modalDesc}>
                 Aşağı sürükleyerek kapatabilirsiniz
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.modalCloseButtonRed}
-              onPress={closeSheet}
-              hitSlop={10}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Kapat"
-            >
-              <CloseIcon size={14} color="#EF4444" />
-            </TouchableOpacity>
           </View>
 
           <Text style={{ fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: 14 }}>
@@ -1197,7 +1179,7 @@ function ThemeBottomSheetModal({
 
           {/* Başlık Satırı */}
           <View style={styles.modalHeaderRow}>
-            <View {...panResponder.panHandlers} style={{ flex: 1, paddingRight: 8 }}>
+            <View {...panResponder.panHandlers} style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <ThemePaletteIcon size={20} color={colors.purpleLight} />
                 <Text style={styles.modalTitle}>Tema Tercihi</Text>
@@ -1206,16 +1188,6 @@ function ThemeBottomSheetModal({
                 Uygulama arayüzünün görsel görünümünü seçin
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.modalCloseButtonRed}
-              onPress={closeSheet}
-              hitSlop={10}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Kapat"
-            >
-              <CloseIcon size={14} color="#EF4444" />
-            </TouchableOpacity>
           </View>
 
           {/* Tema Seçenek Kartları */}
@@ -1548,7 +1520,7 @@ function UnitsBottomSheetModal({
 
           {/* Başlık Satırı */}
           <View style={styles.modalHeaderRow}>
-            <View {...panResponder.panHandlers} style={{ flex: 1, paddingRight: 8 }}>
+            <View {...panResponder.panHandlers} style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <ScaleIcon size={20} color={colors.purpleLight} />
                 <Text style={styles.modalTitle}>Birim Tercihleri</Text>
@@ -1557,16 +1529,6 @@ function UnitsBottomSheetModal({
                 Ağırlık ve vücut ölçüleri formatını seçin
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.modalCloseButtonRed}
-              onPress={closeSheet}
-              hitSlop={10}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Kapat"
-            >
-              <CloseIcon size={14} color="#EF4444" />
-            </TouchableOpacity>
           </View>
 
           <View style={{ gap: 14, marginVertical: 6 }}>
@@ -1748,16 +1710,10 @@ export default function ProfileScreen() {
   // Antrenman Tercihleri
   const [restTimerSound, setRestTimerSound] = useState<boolean>(true);
 
-  // Bildirimler
-  const [workoutReminders, setWorkoutReminders] = useState<boolean>(true);
-  const [restDayAlerts, setRestDayAlerts] = useState<boolean>(false);
-  const [prCelebrations, setPrCelebrations] = useState<boolean>(true);
-
   // Modal Durumları
   const [activeModal, setActiveModal] = useState<
     | 'fitnessLevel'
     | 'goal'
-    | 'notifications'
     | 'units'
     | 'language'
     | 'theme'
@@ -2331,21 +2287,19 @@ export default function ProfileScreen() {
         <View style={styles.groupCard}>
           <SettingItem
             icon={<BellIcon color={colors.purpleLight} />}
-            title="Hatırlatıcılar & Bildirimler"
-            subtitle="Antrenman saatleri ve dinlenme uyarıları"
-            valueBadge={workoutReminders ? 'Açık' : 'Kapalı'}
-            onPress={() => setActiveModal('notifications')}
+            title="Bildirimler"
+            subtitle="Aylık rapor ve e-posta bildirim tercihleri"
+            onPress={() => router.push('/(app)/notifications' as any)}
           />
           <SettingItem
             icon={<SoundIcon color={colors.emeraldLight} />}
             title="Sesler"
             subtitle="Dinlenme sayacı ses efektleri"
+            onPress={() => setRestTimerSound((prev) => !prev)}
             rightElement={
-              <Switch
+              <ModernSwitch
                 value={restTimerSound}
                 onValueChange={setRestTimerSound}
-                trackColor={{ false: '#1E2538', true: colors.purple }}
-                thumbColor="#ffffff"
               />
             }
           />
@@ -2442,22 +2396,12 @@ export default function ProfileScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeaderRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Deneyim Seviyesi</Text>
                 <Text style={styles.modalDesc}>
                   Ağırlık antrenmanı tecrübenize uygun periyotlama ve set hacmini belirleyin.
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseButtonRed}
-                onPress={() => setActiveModal(null)}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
             </View>
 
             <View style={{ gap: 10, marginTop: Spacing.one }}>
@@ -2511,22 +2455,12 @@ export default function ProfileScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeaderRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Fitness Hedefi</Text>
                 <Text style={styles.modalDesc}>
                   Antrenman hacmi, hedef tekrar aralıkları ve toparlanma hedefinize göre ayarlanır.
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseButtonRed}
-                onPress={() => setActiveModal(null)}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
             </View>
 
             <View style={{ gap: 10, marginTop: Spacing.one }}>
@@ -2573,82 +2507,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* 4. BİLDİRİMLER MODALI */}
-      <Modal visible={activeModal === 'notifications'} animationType="slide" transparent onRequestClose={() => setActiveModal(null)} statusBarTranslucent>
-        <View style={styles.modalRootContainer}>
-          <Pressable style={styles.modalBackdropTap} onPress={() => setActiveModal(null)} />
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeaderRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={styles.modalTitle}>Bildirim Ayarları</Text>
-                <Text style={styles.modalDesc}>Antrenman hatırlatıcıları ve motivasyon uyarıları.</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.modalCloseButtonRed}
-                onPress={() => setActiveModal(null)}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
-            </View>
 
-            <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.switchTitle}>Antrenman Hatırlatıcıları</Text>
-                <Text style={styles.switchSubtitle}>Planlanan günlerde hazırlık bildirimi gönder</Text>
-              </View>
-              <Switch
-                value={workoutReminders}
-                onValueChange={setWorkoutReminders}
-                trackColor={{ false: '#1E2538', true: colors.purple }}
-                thumbColor="#ffffff"
-              />
-            </View>
-
-            <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.switchTitle}>Dinlenme Günü Uyarıları</Text>
-                <Text style={styles.switchSubtitle}>Toparlanma günlerinde hatırlatma yap</Text>
-              </View>
-              <Switch
-                value={restDayAlerts}
-                onValueChange={setRestDayAlerts}
-                trackColor={{ false: '#1E2538', true: colors.purple }}
-                thumbColor="#ffffff"
-              />
-            </View>
-
-            <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.switchTitle}>Kişisel Rekor Tebrikleri</Text>
-                <Text style={styles.switchSubtitle}>Yeni PR kırdığında motivasyon bildirimi al</Text>
-              </View>
-              <Switch
-                value={prCelebrations}
-                onValueChange={setPrCelebrations}
-                trackColor={{ false: '#1E2538', true: colors.purple }}
-                thumbColor="#ffffff"
-              />
-            </View>
-
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.neonSaveBtn}
-                onPress={() => setActiveModal(null)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.neonSaveBtnText}>Kaydet</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.sheetBottomExtension} pointerEvents="none" />
-          </View>
-        </View>
-      </Modal>
 
       {/* 5. BİRİMLER MODALI (MODERN & SÜRÜKLE BIRAK & DİNAMİK KLAVYE) */}
       <UnitsBottomSheetModal
@@ -2670,20 +2529,10 @@ export default function ProfileScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeaderRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Dil Seçimi</Text>
                 <Text style={styles.modalDesc}>Hypertrophy-X arayüzünde kullanmak istediğiniz dili belirleyin.</Text>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseButtonRed}
-                onPress={() => setActiveModal(null)}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
             </View>
 
             <View style={{ gap: 8, marginTop: 4 }}>

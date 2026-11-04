@@ -901,6 +901,29 @@ export default function PersonalInfoScreen() {
     [genderAnim]
   );
 
+  // Formu Temizle (Kutucukları 0 yap, listeleri varsayılan durumuna döndür)
+  const handleClearForm = () => {
+    Keyboard.dismiss();
+    setFormAge('0');
+    setFormHeight('0');
+    setFormWeight('0');
+    setFormTargetWeight('0');
+    setFormGoal('hypertrophy');
+    setFormFitnessLevel('Advanced');
+    setFormDaysPerWeek(4);
+    setFormSessionTimeMins(60);
+    setFormGender('male');
+    Animated.timing(genderAnim, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+    setActiveDropdown(null);
+    setIsDurationOpen(false);
+    dropdownAnim.setValue(0);
+    durationAnim.setValue(0);
+  };
+
   // Bilgileri Kaydet
   const handleSave = async () => {
     Keyboard.dismiss();
@@ -1263,20 +1286,6 @@ export default function PersonalInfoScreen() {
                   </Text>
                 </View>
               </View>
-
-              <TouchableOpacity
-                onPress={() => {
-                  Keyboard.dismiss();
-                  closeSheet();
-                }}
-                style={styles.modalCloseButtonRed}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
             </View>
 
             {/* Form Alanı (Küçük ekranlı veya yüksek klavyeli cihazlarda kaydırılabilir) */}
@@ -1497,10 +1506,19 @@ export default function PersonalInfoScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Aksiyon Butonu: YALNIZCA KAYDET (Eski şık neon transparan cam görünüm) */}
+              {/* Aksiyon Butonları: TEMİZLE (Kırmızı Neon) ve KAYDET (Yeşil Neon) */}
               <View style={styles.modalActionButtons} pointerEvents={isMenuTouchGuard ? 'none' : 'auto'}>
                 <TouchableOpacity
-                  style={[styles.neonSaveBtnOnly, isUpdatingProfile && { opacity: 0.65 }]}
+                  style={[styles.neonClearBtn, isUpdatingProfile && { opacity: 0.65 }]}
+                  onPress={handleClearForm}
+                  activeOpacity={0.7}
+                  disabled={isUpdatingProfile}
+                >
+                  <Text style={styles.neonClearBtnText}>Temizle</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.neonSaveBtn, isUpdatingProfile && { opacity: 0.65 }]}
                   onPress={handleSave}
                   activeOpacity={0.7}
                   disabled={isUpdatingProfile}
@@ -2384,20 +2402,49 @@ const styles = StyleSheet.create({
     color: colors.textDim,
   },
 
-  /* ─── Aksiyon Butonları (Yalnızca Kaydet - Eski Transparan Cam Stili) ─── */
+  /* ─── Aksiyon Butonları (Temizle & Kaydet - Şık Transparan Neon Stili) ─── */
   modalActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginTop: 22,
     marginBottom: 10,
   },
-  neonSaveBtnOnly: {
-    width: '100%',
+  neonClearBtn: {
+    flex: 1,
     height: 48,
     borderRadius: 13,
     borderWidth: 1.2,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 0,
+  },
+  neonClearBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#EF4444',
+    letterSpacing: 0.3,
+  },
+  neonSaveBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 13,
+    borderWidth: 1.2,
+    borderColor: 'rgba(16, 185, 129, 0.45)',
     backgroundColor: 'rgba(16, 185, 129, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 0,
   },
   neonSaveBtnText: {
     fontSize: 14,
