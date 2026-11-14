@@ -4,7 +4,6 @@ import {
   Animated,
   Easing,
   KeyboardAvoidingView,
-  LayoutAnimation,
   LayoutChangeEvent,
   Modal,
   PanResponder,
@@ -16,7 +15,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  UIManager,
   View,
   TextStyle,
   ViewStyle,
@@ -28,18 +26,10 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useNutrition } from '@/hooks/use-nutrition';
 import { useUser } from '@/hooks/use-user';
 
-// Android için donanım hızlandırmalı LayoutAnimation etkinleştirme
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-// Yumuşak, düzgün geçiş konfigürasyonu (Yay/salınım olmadan tek süzülme)
+// GPU tabanlı animasyonlarla çakışmayı ve Android'de UI/JS thread donmalarını
+// önlemek için global LayoutAnimation devre dışı tutulur; tüm geçişler GPU hızlandırmalıdır.
 const smoothTransition = () => {
-  try {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  } catch {
-    // LayoutAnimation hata verirse sessizce devam et
-  }
+  // no-op: GPU destekli Animated bileşenleri 60-120 FPS akıcı geçişi tek başına üstlenir
 };
 
 // ─── Renk Token'ları (Geçmiş Sayfası ile Uyumlu Cyber Dark) ───
@@ -293,6 +283,231 @@ function PressableScale({
   );
 }
 
+// ─── Rakam Haneleri Kayan Animasyon Bileşeni (Alternatif Yukarı / Aşağı Süzülme) ───
+
+type SingleSlidingDigitProps = {
+  char: string;
+  isEven: boolean;
+  lineHeight: number;
+  textStyle: TextStyle;
+};
+
+const SingleSlidingDigit = React.memo(function SingleSlidingDigit({
+  char,
+  isEven,
+  lineHeight,
+  textStyle,
+}: SingleSlidingDigitProps) {
+  const [anim] = useState(() => new Animated.Value(1));
+  const [prevChar, setPrevChar] = useState<string | null>(null);
+  const [lastChar, setLastChar] = useState(char);
+  const activeAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  if (char !== lastChar) {
+    setLastChar(char);
+    setPrevChar(lastChar);
+    anim.setValue(0);
+  }
+
+  useEffect(() => {
+    if (prevChar !== null) {
+      if (activeAnimationRef.current) {
+        activeAnimationRef.current.stop();
+      }
+
+      anim.setValue(0);
+
+      const animation = Animated.timing(anim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: Platform.OS !== 'web',
+      });
+
+      activeAnimationRef.current = animation;
+
+      animation.start(() => {
+        // Kesilse bile her zaman önceki karakteri sıfırla ve yeni karakteri %100 görünür yap
+        setPrevChar(null);
+        anim.setValue(1);
+        activeAnimationRef.current = null;
+      });
+
+      return () => {
+        animation.stop();
+        setPrevChar(null);
+        anim.setValue(1);
+        activeAnimationRef.current = null;
+      };
+    }
+  }, [prevChar, lastChar, anim]);
+
+  const direction = isEven ? -1 : 1;
+  const slideDistance = lineHeight * 0.85;
+
+  return (
+    <View
+      style={{
+        height: lineHeight,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      {/* Çıkan Eski Rakam (Sadece değişim anında yukarı/aşağı kayarak süzülür) */}
+      {prevChar !== null && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            opacity: anim.interpolate({
+              inputRange: [0, 0.6, 1],
+              outputRange: [1, 0.2, 0],
+            }),
+            transform: [
+              {
+                translateY: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -direction * slideDistance],
+                }),
+              },
+            ],
+          }}
+        >
+          <Text style={textStyle}>{prevChar}</Text>
+        </Animated.View>
+      )}
+
+      {/* Giren / Mevcut Rakam (Animasyon yokken DAİMA %100 görünür ve tam yerindedir) */}
+      <Animated.View
+        style={{
+          opacity:
+            prevChar !== null
+              ? anim.interpolate({
+                  inputRange: [0, 0.4, 1],
+                  outputRange: [0.35, 0.8, 1],
+                })
+              : 1,
+          transform: [
+            {
+              translateY:
+                prevChar !== null
+                  ? anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [direction * slideDistance, 0],
+                    })
+                  : 0,
+            },
+          ],
+        }}
+      >
+        <Text style={textStyle}>{char}</Text>
+      </Animated.View>
+    </View>
+  );
+});
+
+type SlidingDigitsTextProps = {
+  value: string | number;
+  style?: StyleProp<TextStyle>;
+  triggerKey?: string | number;
+};
+
+function SlidingDigitsText({
+  value,
+  style,
+}: SlidingDigitsTextProps) {
+  const str = String(value);
+  const flatStyle = (StyleSheet.flatten(style) || {}) as TextStyle;
+  const fontSize = flatStyle.fontSize || 16;
+  const lineHeight = flatStyle.lineHeight || Math.round(fontSize * 1.35);
+
+  const containerStyle: ViewStyle = {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: flatStyle.textAlign === 'center' ? 'center' : 'flex-start',
+    marginTop: flatStyle.marginTop,
+    marginBottom: flatStyle.marginBottom,
+    marginLeft: flatStyle.marginLeft,
+    marginRight: flatStyle.marginRight,
+    maxWidth: flatStyle.maxWidth,
+  };
+
+  const textStyle: TextStyle = {
+    fontSize: flatStyle.fontSize,
+    fontWeight: flatStyle.fontWeight,
+    color: flatStyle.color,
+    letterSpacing: flatStyle.letterSpacing,
+    fontFamily: flatStyle.fontFamily,
+    includeFontPadding: false,
+  };
+
+  const tokens = useMemo(() => {
+    type TokenItem =
+      | { type: 'digit'; char: string; digitIndex: number; key: string }
+      | { type: 'text'; text: string; key: string };
+
+    const totalDigits = (str.match(/\d/g) || []).length;
+    const list: TokenItem[] = [];
+    let digitCount = 0;
+    let currentText = '';
+
+    for (let i = 0; i < str.length; i++) {
+      const c = str[i];
+      if (/\d/.test(c)) {
+        if (currentText) {
+          list.push({ type: 'text', text: currentText, key: `t_${i}` });
+          currentText = '';
+        }
+        // Basamak değerini sağdan hizala (0 = birler, 1 = onlar vb.)
+        const placeFromRight = totalDigits - 1 - digitCount;
+        list.push({
+          type: 'digit',
+          char: c,
+          digitIndex: digitCount,
+          key: `d_p_${placeFromRight}`,
+        });
+        digitCount++;
+      } else {
+        currentText += c;
+      }
+    }
+    if (currentText) {
+      list.push({ type: 'text', text: currentText, key: `t_${str.length}` });
+    }
+    return list;
+  }, [str]);
+
+  return (
+    <View style={containerStyle}>
+      {tokens.map((token) => {
+        if (token.type === 'digit') {
+          const isEven = token.digitIndex % 2 === 0;
+          return (
+            <SingleSlidingDigit
+              key={token.key}
+              char={token.char}
+              isEven={isEven}
+              lineHeight={lineHeight}
+              textStyle={textStyle}
+            />
+          );
+        }
+        return (
+          <View
+            key={token.key}
+            style={{
+              height: lineHeight,
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={textStyle}>{token.text}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 // ─── Kalori Yarım Daire (240° At Nalı) Göstergesi ───
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -315,7 +530,6 @@ function CalorieSemiCircleGauge({
   const clampedPercent = Math.min(100, Math.max(0, percent));
 
   const [animValue] = useState(() => new Animated.Value(0));
-  const [displayPercent, setDisplayPercent] = useState(0);
   const lastFocusRef = useRef(focusTrigger);
   const lastSaveRef = useRef(saveTrigger);
 
@@ -330,22 +544,17 @@ function CalorieSemiCircleGauge({
       animValue.setValue(0);
     }
 
-    // Gün değişiminde veya veri girişinde yumuşak geçiş / kaydetme anında sıfırdan dolma
+    // Gün değişiminde veya veri girişinde akıcı geçiş (JS thread re-render baskısı olmadan)
     const anim = Animated.timing(animValue, {
       toValue: clampedPercent,
-      duration: 650,
+      duration: 380,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
-    });
-
-    const listenerId = animValue.addListener(({ value }) => {
-      setDisplayPercent(value);
     });
 
     anim.start();
 
     return () => {
-      animValue.removeListener(listenerId);
       anim.stop();
     };
   }, [animValue, clampedPercent, focusTrigger, saveTrigger]);
@@ -381,10 +590,13 @@ function CalorieSemiCircleGauge({
           fill="none"
         />
       </Svg>
-      {/* Yay İçi Merkez: Alev İkonu & Yüzde */}
+      {/* Yay İçi Merkez: Alev İkonu & Akıcı Yüzde */}
       <View style={styles.calGaugeCenterTextWrapper}>
         <FlameIcon size={22} color={colors.violet} />
-        <Text style={styles.calGaugePercentText}>%{Math.round(displayPercent)}</Text>
+        <SlidingDigitsText
+          value={`%${Math.round(clampedPercent)}`}
+          style={styles.calGaugePercentText}
+        />
       </View>
     </View>
   );
@@ -437,7 +649,7 @@ function SemiCircleGauge({
     // Gün değişiminde veya veri girişinde yumuşak geçiş / kaydetme anında sıfırdan dolma
     const anim = Animated.timing(animValue, {
       toValue: clampedPercent,
-      duration: 650,
+      duration: 380,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     });
@@ -482,9 +694,11 @@ function SemiCircleGauge({
       </Svg>
       {/* Yay İçi Merkez Metinleri (Kubbeye Tam Oturan Ferah Boşluk) */}
       <View style={styles.gaugeCenterTextWrapper}>
-        <Text numberOfLines={1} adjustsFontSizeToFit style={styles.gaugeAmountText}>
-          {amountText}
-        </Text>
+        <SlidingDigitsText
+          value={amountText}
+          style={styles.gaugeAmountText}
+          triggerKey={`${focusTrigger ?? ''}_${saveTrigger ?? ''}_${amountText}`}
+        />
         <Text numberOfLines={1} style={styles.gaugeStatusText}>
           {statusText}
         </Text>
@@ -994,212 +1208,6 @@ function NutriCalendarModal({
   );
 }
 
-// ─── Rakam Haneleri Kayan Animasyon Bileşeni (Alternatif Yukarı / Aşağı Süzülme) ───
-
-type SingleSlidingDigitProps = {
-  char: string;
-  isEven: boolean;
-  delay: number;
-  lineHeight: number;
-  textStyle: TextStyle;
-  trigger: string | number;
-};
-
-function SingleSlidingDigit({
-  char,
-  isEven,
-  delay,
-  lineHeight,
-  textStyle,
-  trigger,
-}: SingleSlidingDigitProps) {
-  const [anim] = useState(() => new Animated.Value(0));
-  const prevCharRef = useRef<string | null>(null);
-  const [displayPrevChar, setDisplayPrevChar] = useState<string | null>(null);
-
-  useEffect(() => {
-    const prev = prevCharRef.current;
-    prevCharRef.current = char;
-
-    if (prev !== null && prev !== char) {
-      setDisplayPrevChar(prev);
-    }
-
-    anim.setValue(0);
-    const timer = setTimeout(() => {
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 260,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web',
-      }).start(({ finished }) => {
-        if (finished) {
-          setDisplayPrevChar(null);
-        }
-      });
-    }, delay);
-
-    return () => clearTimeout(timer);
-  }, [char, trigger, delay, anim]);
-
-  const direction = isEven ? -1 : 1;
-  const slideDistance = lineHeight * 0.95;
-
-  return (
-    <View
-      style={{
-        height: lineHeight,
-        overflow: 'hidden',
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}
-    >
-      {/* Çıkan Eski Rakam (Varsa) */}
-      {displayPrevChar !== null && (
-        <Animated.View
-          style={{
-            position: 'absolute',
-            opacity: anim.interpolate({
-              inputRange: [0, 0.7, 1],
-              outputRange: [1, 0.2, 0],
-            }),
-            transform: [
-              {
-                translateY: anim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -direction * slideDistance],
-                }),
-              },
-            ],
-          }}
-        >
-          <Text style={textStyle}>{displayPrevChar}</Text>
-        </Animated.View>
-      )}
-
-      {/* Giren Yeni Rakam */}
-      <Animated.View
-        style={{
-          opacity: anim.interpolate({
-            inputRange: [0, 0.35, 1],
-            outputRange: [0, 0.75, 1],
-          }),
-          transform: [
-            {
-              translateY: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [direction * slideDistance, 0],
-              }),
-            },
-          ],
-        }}
-      >
-        <Text style={textStyle}>{char}</Text>
-      </Animated.View>
-    </View>
-  );
-}
-
-type SlidingDigitsTextProps = {
-  value: string | number;
-  style?: StyleProp<TextStyle>;
-  triggerKey?: string | number;
-};
-
-function SlidingDigitsText({
-  value,
-  style,
-  triggerKey = '',
-}: SlidingDigitsTextProps) {
-  const str = String(value);
-  const flatStyle = (StyleSheet.flatten(style) || {}) as TextStyle;
-  const fontSize = flatStyle.fontSize || 16;
-  const lineHeight = flatStyle.lineHeight || Math.round(fontSize * 1.35);
-
-  const containerStyle: ViewStyle = {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: flatStyle.marginTop,
-    marginBottom: flatStyle.marginBottom,
-    marginLeft: flatStyle.marginLeft,
-    marginRight: flatStyle.marginRight,
-    maxWidth: flatStyle.maxWidth,
-  };
-
-  const textStyle: TextStyle = {
-    fontSize: flatStyle.fontSize,
-    fontWeight: flatStyle.fontWeight,
-    color: flatStyle.color,
-    letterSpacing: flatStyle.letterSpacing,
-    fontFamily: flatStyle.fontFamily,
-  };
-
-  const tokens = useMemo(() => {
-    type TokenItem =
-      | { type: 'digit'; char: string; digitIndex: number; key: string }
-      | { type: 'text'; text: string; key: string };
-
-    const list: TokenItem[] = [];
-    let digitCount = 0;
-    let currentText = '';
-
-    for (let i = 0; i < str.length; i++) {
-      const c = str[i];
-      if (/\d/.test(c)) {
-        if (currentText) {
-          list.push({ type: 'text', text: currentText, key: `t_${list.length}` });
-          currentText = '';
-        }
-        list.push({
-          type: 'digit',
-          char: c,
-          digitIndex: digitCount,
-          key: `d_${digitCount}`,
-        });
-        digitCount++;
-      } else {
-        currentText += c;
-      }
-    }
-    if (currentText) {
-      list.push({ type: 'text', text: currentText, key: `t_${list.length}` });
-    }
-    return list;
-  }, [str]);
-
-  return (
-    <View style={containerStyle}>
-      {tokens.map((token) => {
-        if (token.type === 'digit') {
-          const isEven = token.digitIndex % 2 === 0;
-          return (
-            <SingleSlidingDigit
-              key={token.key}
-              char={token.char}
-              isEven={isEven}
-              delay={Math.min(token.digitIndex * 22, 110)}
-              lineHeight={lineHeight}
-              textStyle={textStyle}
-              trigger={`${triggerKey}_${str}`}
-            />
-          );
-        }
-        return (
-          <View
-            key={token.key}
-            style={{
-              height: lineHeight,
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={textStyle}>{token.text}</Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 // ─── Tıklanabilir Ortalama Kart Butonu ───
 
 type StatCardButtonProps = {
@@ -1229,7 +1237,6 @@ function StatCardButton({
           shadowColor: color,
           shadowOpacity: 0.35,
           shadowRadius: 6,
-          elevation: 2,
         },
       ]}
       onPress={onPress}
@@ -1407,6 +1414,11 @@ const DailyInputForm = React.memo(function DailyInputForm({
   );
   const [notes, setNotes] = useState(initialLog.notes || '');
 
+  const [focusedMacro, setFocusedMacro] = useState<'p' | 'c' | 'f' | null>(null);
+  const proteinInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
+  const carbsInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
+  const fatInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
+
   const [prevLog, setPrevLog] = useState(initialLog);
   if (prevLog !== initialLog) {
     setPrevLog(initialLog);
@@ -1547,11 +1559,15 @@ const DailyInputForm = React.memo(function DailyInputForm({
         </View>
       </View>
 
-      {/* Yan Yana 3'lü Makro Kartları (Yağ, Karb, Protein) - Kompakt ve Doğrudan Girişli */}
+      {/* Yan Yana 3'lü Makro Kartları (Yağ, Karb, Protein) - Kompakt, Sayı Kaydırma Animasyonlu ve Doğrudan Girişli */}
       <View style={styles.macroCardsRow}>
         {/* 1. YAĞ KARTI */}
         <View style={[styles.macroCard, styles.macroCardFat]}>
-          <View style={styles.macroCardHeader}>
+          <TouchableOpacity
+            style={styles.macroCardHeader}
+            activeOpacity={0.8}
+            onPress={() => setFocusedMacro('f')}
+          >
             <View style={styles.macroCardTitleGroup}>
               <View style={[styles.macroBadge, { backgroundColor: 'rgba(6, 182, 212, 0.2)' }]}>
                 <DropletIcon size={11} color="#38BDF8" />
@@ -1561,27 +1577,49 @@ const DailyInputForm = React.memo(function DailyInputForm({
               </Text>
             </View>
             <MiniMacroProgressRing percent={fatPercent} color="#38BDF8" size={22} />
-          </View>
+          </TouchableOpacity>
 
-          {/* Ortadaki Sayı Doğrudan Düzenlenebilir Input */}
-          <View style={styles.macroValueDisplayRow}>
-            <TextInput
-              style={styles.macroValueBigInput}
-              value={fat}
-              onChangeText={(v) => handleMacroChange('f', v)}
-              keyboardType="numeric"
-              maxLength={4}
-              placeholder="0"
-              placeholderTextColor="#64748B"
-              selectTextOnFocus
-            />
-            <Text style={styles.macroValueUnitText}>g</Text>
-          </View>
+          {/* Ortadaki Sayı: Odaklanmadığında Rakam Kayan Animasyon, Dokunulduğunda Düzenlenebilir Input */}
+          {focusedMacro === 'f' ? (
+            <View style={[styles.macroValueDisplayRow, { borderColor: '#38BDF8' }]}>
+              <TextInput
+                ref={fatInputRef}
+                style={styles.macroValueBigInput}
+                value={fat}
+                onChangeText={(v) => handleMacroChange('f', v)}
+                onBlur={() => setFocusedMacro(null)}
+                keyboardType="numeric"
+                maxLength={4}
+                placeholder="0"
+                placeholderTextColor="#64748B"
+                autoFocus
+                selectTextOnFocus
+              />
+              <Text style={styles.macroValueUnitText}>g</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.macroValueDisplayRow}
+              activeOpacity={0.75}
+              onPress={() => setFocusedMacro('f')}
+            >
+              <SlidingDigitsText
+                value={fat !== '' ? fat : '0'}
+                style={styles.macroValueBigText}
+                triggerKey={fat}
+              />
+              <Text style={styles.macroValueUnitText}>g</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* 2. KARB KARTI */}
         <View style={[styles.macroCard, styles.macroCardCarbs]}>
-          <View style={styles.macroCardHeader}>
+          <TouchableOpacity
+            style={styles.macroCardHeader}
+            activeOpacity={0.8}
+            onPress={() => setFocusedMacro('c')}
+          >
             <View style={styles.macroCardTitleGroup}>
               <View style={[styles.macroBadge, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
                 <WheatIcon size={11} color="#FBBF24" />
@@ -1591,27 +1629,49 @@ const DailyInputForm = React.memo(function DailyInputForm({
               </Text>
             </View>
             <MiniMacroProgressRing percent={carbsPercent} color="#FBBF24" size={22} />
-          </View>
+          </TouchableOpacity>
 
-          {/* Ortadaki Sayı Doğrudan Düzenlenebilir Input */}
-          <View style={styles.macroValueDisplayRow}>
-            <TextInput
-              style={styles.macroValueBigInput}
-              value={carbs}
-              onChangeText={(v) => handleMacroChange('c', v)}
-              keyboardType="numeric"
-              maxLength={4}
-              placeholder="0"
-              placeholderTextColor="#64748B"
-              selectTextOnFocus
-            />
-            <Text style={styles.macroValueUnitText}>g</Text>
-          </View>
+          {/* Ortadaki Sayı: Odaklanmadığında Rakam Kayan Animasyon, Dokunulduğunda Düzenlenebilir Input */}
+          {focusedMacro === 'c' ? (
+            <View style={[styles.macroValueDisplayRow, { borderColor: '#FBBF24' }]}>
+              <TextInput
+                ref={carbsInputRef}
+                style={styles.macroValueBigInput}
+                value={carbs}
+                onChangeText={(v) => handleMacroChange('c', v)}
+                onBlur={() => setFocusedMacro(null)}
+                keyboardType="numeric"
+                maxLength={4}
+                placeholder="0"
+                placeholderTextColor="#64748B"
+                autoFocus
+                selectTextOnFocus
+              />
+              <Text style={styles.macroValueUnitText}>g</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.macroValueDisplayRow}
+              activeOpacity={0.75}
+              onPress={() => setFocusedMacro('c')}
+            >
+              <SlidingDigitsText
+                value={carbs !== '' ? carbs : '0'}
+                style={styles.macroValueBigText}
+                triggerKey={carbs}
+              />
+              <Text style={styles.macroValueUnitText}>g</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* 3. PROTEİN KARTI */}
         <View style={[styles.macroCard, styles.macroCardProtein]}>
-          <View style={styles.macroCardHeader}>
+          <TouchableOpacity
+            style={styles.macroCardHeader}
+            activeOpacity={0.8}
+            onPress={() => setFocusedMacro('p')}
+          >
             <View style={styles.macroCardTitleGroup}>
               <View style={[styles.macroBadge, { backgroundColor: 'rgba(244, 63, 94, 0.2)' }]}>
                 <MuscleIcon size={11} color="#FB7185" />
@@ -1621,22 +1681,40 @@ const DailyInputForm = React.memo(function DailyInputForm({
               </Text>
             </View>
             <MiniMacroProgressRing percent={proteinPercent} color="#FB7185" size={22} />
-          </View>
+          </TouchableOpacity>
 
-          {/* Ortadaki Sayı Doğrudan Düzenlenebilir Input */}
-          <View style={styles.macroValueDisplayRow}>
-            <TextInput
-              style={styles.macroValueBigInput}
-              value={protein}
-              onChangeText={(v) => handleMacroChange('p', v)}
-              keyboardType="numeric"
-              maxLength={4}
-              placeholder="0"
-              placeholderTextColor="#64748B"
-              selectTextOnFocus
-            />
-            <Text style={styles.macroValueUnitText}>g</Text>
-          </View>
+          {/* Ortadaki Sayı: Odaklanmadığında Rakam Kayan Animasyon, Dokunulduğunda Düzenlenebilir Input */}
+          {focusedMacro === 'p' ? (
+            <View style={[styles.macroValueDisplayRow, { borderColor: '#FB7185' }]}>
+              <TextInput
+                ref={proteinInputRef}
+                style={styles.macroValueBigInput}
+                value={protein}
+                onChangeText={(v) => handleMacroChange('p', v)}
+                onBlur={() => setFocusedMacro(null)}
+                keyboardType="numeric"
+                maxLength={4}
+                placeholder="0"
+                placeholderTextColor="#64748B"
+                autoFocus
+                selectTextOnFocus
+              />
+              <Text style={styles.macroValueUnitText}>g</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.macroValueDisplayRow}
+              activeOpacity={0.75}
+              onPress={() => setFocusedMacro('p')}
+            >
+              <SlidingDigitsText
+                value={protein !== '' ? protein : '0'}
+                style={styles.macroValueBigText}
+                triggerKey={protein}
+              />
+              <Text style={styles.macroValueUnitText}>g</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -1764,8 +1842,9 @@ export default function NutritionScreen() {
   const [activeMonth, setActiveMonth] = useState<string>(() => todayIso.slice(0, 7));
   const [activeYear, setActiveYear] = useState<number>(() => new Date().getFullYear());
 
-  // Grafikte seçili / basılmış olan barın indeksi
+  // Grafikte seçili / basılmış olan barın indeksi ve gösterge paneli durumu
   const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
+  const [isPanelDismissed, setIsPanelDismissed] = useState<boolean>(false);
 
   // Tooltip ve Çizim Alanı Genişlikleri (Piksel Hassasiyetinde Hizalama İçin)
   const [chartCanvasWidth, setChartCanvasWidth] = useState<number>(0);
@@ -1782,7 +1861,6 @@ export default function NutritionScreen() {
   const [barAnim] = useState(() => new Animated.Value(0));
   const [tooltipAnim] = useState(() => new Animated.Value(1));
   const [selectedBarAnim] = useState(() => new Animated.Value(1));
-  const [selectCounter, setSelectCounter] = useState(0);
   const [weekSlideAnim] = useState(() => new Animated.Value(0));
   const [weekOpacityAnim] = useState(() => new Animated.Value(1));
 
@@ -2065,8 +2143,11 @@ export default function NutritionScreen() {
 
   const yMax = ySteps[0];
 
-  // Aktif İncelenen Gün (Varsayılan olarak seçili tarihe denk gelen bar veya en son veri olan gün)
+  // Aktif İncelenen Gün (Varsayılan olarak yukarıdaki haftanın seçili gününe denk gelen bar gösterilir; üzerine tekrar dokunulduğunda gösterge paneli kapanır)
   const resolvedActiveIndex = useMemo(() => {
+    if (isPanelDismissed) {
+      return null;
+    }
     if (activeBarIndex !== null && activeBarIndex >= 0 && activeBarIndex < chartDays.length) {
       return activeBarIndex;
     }
@@ -2074,12 +2155,13 @@ export default function NutritionScreen() {
       const selIdx = chartDays.findIndex((d) => d.date === selectedDate);
       if (selIdx >= 0) return selIdx;
     }
-    // Verisi olan en son günü / ayı bul
-    for (let i = chartDays.length - 1; i >= 0; i--) {
-      if (chartDays[i].hasData) return i;
+    if (statPeriod === 'yearly') {
+      const prefix = selectedDate.slice(0, 7);
+      const selIdx = chartDays.findIndex((d) => d.date === prefix);
+      if (selIdx >= 0) return selIdx;
     }
-    return chartDays.length - 1;
-  }, [activeBarIndex, chartDays, selectedDate, statPeriod]);
+    return null;
+  }, [isPanelDismissed, activeBarIndex, chartDays, selectedDate, statPeriod]);
 
   // Seçili Bar & Tooltip Yumuşak Süzülme ve Yaylanma Animasyonu
   const playBarSelectAnimation = useCallback(() => {
@@ -2092,14 +2174,14 @@ export default function NutritionScreen() {
     Animated.parallel([
       Animated.timing(selectedBarAnim, {
         toValue: 1,
-        duration: 720,
-        easing: Easing.bezier(0.16, 1, 0.3, 1),
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(tooltipAnim, {
         toValue: 1,
-        duration: 720,
-        easing: Easing.bezier(0.16, 1, 0.3, 1),
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
@@ -2110,11 +2192,11 @@ export default function NutritionScreen() {
     playBarSelectAnimation();
   }, [selectedMetric, statPeriod, activeWeekOffset, activeMonth, activeYear, playBarSelectAnimation]);
 
-  const inspectedDay = chartDays[resolvedActiveIndex] || null;
+  const inspectedDay = resolvedActiveIndex !== null ? chartDays[resolvedActiveIndex] || null : null;
 
   // Tooltip Konumu ve Ok Hizalaması (Çubuğun Tam Merkezine Piksel Hassasiyetinde)
   const { cardLeft, arrowOffset, isReadyWithPixels } = useMemo(() => {
-    if (chartDays.length === 0) {
+    if (resolvedActiveIndex === null || chartDays.length === 0) {
       return { cardLeft: 0, arrowOffset: 0, isReadyWithPixels: false };
     }
 
@@ -2211,6 +2293,7 @@ export default function NutritionScreen() {
 
   const handlePrevPeriod = useCallback(() => {
     smoothTransition();
+    setIsPanelDismissed(false);
     setActiveBarIndex(null);
     if (statPeriod === 'weekly') {
       setActiveWeekOffset((prev) => prev - 1);
@@ -2224,6 +2307,7 @@ export default function NutritionScreen() {
   const handleNextPeriod = useCallback(() => {
     if (!canGoNext) return;
     smoothTransition();
+    setIsPanelDismissed(false);
     setActiveBarIndex(null);
     if (statPeriod === 'weekly') {
       setActiveWeekOffset((prev) => prev + 1);
@@ -2270,15 +2354,19 @@ export default function NutritionScreen() {
     [handlePrevPeriod, handleNextPeriod, canGoNext]
   );
 
-  // Hafta Günlerine Dokunulduğunda Hem Tarihi Hem Grafiği Eşle
+  // Hafta Günlerine Dokunulduğunda Tarihi ve Grafikteki Barı Eşle
   const handleSelectWeekday = (dateStr: string) => {
-    smoothTransition();
     setDraftLog(null);
     setSelectedDate(dateStr);
+    setIsPanelDismissed(false);
     const foundIdx = chartDays.findIndex((d) => d.date === dateStr);
     if (foundIdx >= 0) {
       setActiveBarIndex(foundIdx);
-    } else if (statPeriod === 'monthly') {
+      playBarSelectAnimation();
+    } else {
+      setActiveBarIndex(null);
+    }
+    if (statPeriod === 'monthly') {
       const monthPart = dateStr.slice(0, 7);
       if (monthPart !== activeMonth) {
         setActiveMonth(monthPart);
@@ -2306,11 +2394,11 @@ export default function NutritionScreen() {
         smoothTransition();
         setDraftLog(null);
         setSelectedDate(newDate);
+        setIsPanelDismissed(false);
+        setActiveBarIndex(null);
+        playBarSelectAnimation();
 
-        const foundIdx = chartDays.findIndex((d) => d.date === newDate);
-        if (foundIdx >= 0) {
-          setActiveBarIndex(foundIdx);
-        } else if (statPeriod === 'monthly') {
+        if (statPeriod === 'monthly') {
           const monthPart = newDate.slice(0, 7);
           if (monthPart !== activeMonth) {
             setActiveMonth(monthPart);
@@ -2334,7 +2422,7 @@ export default function NutritionScreen() {
         ]).start();
       });
     },
-    [selectedDate, chartDays, statPeriod, activeMonth, weekSlideAnim, weekOpacityAnim]
+    [selectedDate, statPeriod, activeMonth, weekSlideAnim, weekOpacityAnim, playBarSelectAnimation]
   );
 
   const weekPanResponder = useMemo(
@@ -2393,10 +2481,18 @@ export default function NutritionScreen() {
   );
 
   // Grafikte Bir Bara Dokunulduğunda
-  // Çubuk seçilir, yumuşak animasyon anında (0ms) tetiklenir ve o günün bilgileri üst kartlara aktarılır
+  // Çubuk seçilir, yumuşak animasyon anında (0ms) tetiklenir ve o günün bilgileri üst kartlara aktarılır.
+  // Seçili olan çubuğa tekrar basıldığında ise gösterge paneli kapanır.
   const handleBarPress = useCallback(
     (index: number, dateStr: string) => {
-      setSelectCounter((c) => c + 1);
+      // Eğer gösterge paneli açıksa ve kullanıcı o an seçili olan çubuğa bastıysa -> paneli kapat
+      if (!isPanelDismissed && resolvedActiveIndex === index) {
+        setIsPanelDismissed(true);
+        setActiveBarIndex(null);
+        return;
+      }
+      // Farklı bir çubuğa tıklandıysa veya panel kapalıyken tıklandıysa -> paneli aç ve o günü seç
+      setIsPanelDismissed(false);
       playBarSelectAnimation();
       setActiveBarIndex(index);
       if (statPeriod === 'weekly' || statPeriod === 'monthly') {
@@ -2404,7 +2500,7 @@ export default function NutritionScreen() {
         setSelectedDate(dateStr);
       }
     },
-    [statPeriod, playBarSelectAnimation]
+    [isPanelDismissed, resolvedActiveIndex, statPeriod, playBarSelectAnimation]
   );
 
   // Kaydetme Eylemi (Kaydet Butonu)
@@ -2565,11 +2661,15 @@ export default function NutritionScreen() {
           {/* ─── 3. Yeni Kalori Kartı (Görseldeki Tasarım + Yarım Daire At Nalı Göstergesi) ─── */}
           <View style={styles.topCalorieCard}>
             <View style={styles.calCardLeft}>
-              <Text style={styles.calCardBigNumber} numberOfLines={1}>
-                {caloriesLeft >= 0
-                  ? caloriesLeft.toLocaleString('tr-TR')
-                  : Math.abs(caloriesLeft).toLocaleString('tr-TR')}
-              </Text>
+              <SlidingDigitsText
+                value={
+                  caloriesLeft >= 0
+                    ? caloriesLeft.toLocaleString('tr-TR')
+                    : Math.abs(caloriesLeft).toLocaleString('tr-TR')
+                }
+                style={styles.calCardBigNumber}
+                triggerKey={`${focusKey}_${saveTrigger}_${selectedDate}_${caloriesLeft}`}
+              />
               <View style={styles.calCardLabelRow}>
                 <Text style={styles.calCardLabel}>
                   {caloriesLeft >= 0 ? 'Kalan kalori' : 'Kalori aşıldı'}
@@ -2725,6 +2825,7 @@ export default function NutritionScreen() {
                           onPress={() => {
                             smoothTransition();
                             setStatPeriod(p);
+                            setIsPanelDismissed(false);
                             setActiveBarIndex(null);
                             closePeriodMenu();
                           }}
@@ -2763,6 +2864,8 @@ export default function NutritionScreen() {
                 isSelected={selectedMetric === 'calories'}
                 onPress={() => {
                   smoothTransition();
+                  setIsPanelDismissed(false);
+                  setActiveBarIndex(null);
                   setSelectedMetric('calories');
                 }}
                 triggerKey={`${statPeriod}_${activeWeekOffset}_${activeMonth}_${activeYear}`}
@@ -2774,6 +2877,8 @@ export default function NutritionScreen() {
                 isSelected={selectedMetric === 'protein'}
                 onPress={() => {
                   smoothTransition();
+                  setIsPanelDismissed(false);
+                  setActiveBarIndex(null);
                   setSelectedMetric('protein');
                 }}
                 triggerKey={`${statPeriod}_${activeWeekOffset}_${activeMonth}_${activeYear}`}
@@ -2785,6 +2890,8 @@ export default function NutritionScreen() {
                 isSelected={selectedMetric === 'carbs'}
                 onPress={() => {
                   smoothTransition();
+                  setIsPanelDismissed(false);
+                  setActiveBarIndex(null);
                   setSelectedMetric('carbs');
                 }}
                 triggerKey={`${statPeriod}_${activeWeekOffset}_${activeMonth}_${activeYear}`}
@@ -2796,6 +2903,8 @@ export default function NutritionScreen() {
                 isSelected={selectedMetric === 'fat'}
                 onPress={() => {
                   smoothTransition();
+                  setIsPanelDismissed(false);
+                  setActiveBarIndex(null);
                   setSelectedMetric('fat');
                 }}
                 triggerKey={`${statPeriod}_${activeWeekOffset}_${activeMonth}_${activeYear}`}
@@ -2841,7 +2950,7 @@ export default function NutritionScreen() {
                 <View style={styles.tooltipCanvas} onLayout={handleCanvasLayout}>
                   {inspectedDay && (
                     <Animated.View
-                      key={`tooltip-${resolvedActiveIndex}-${selectCounter}`}
+                      key="chart-tooltip"
                       style={[
                         styles.tooltipWrapper,
                         isReadyWithPixels
@@ -2937,7 +3046,7 @@ export default function NutritionScreen() {
                   {/* Çubuklar Satırı (X Ekseninden Yukarıya Süzülen 60-120 FPS GPU Hızlandırmalı Animasyon) */}
                   <View style={styles.barsRow}>
                     {chartDays.map((item, index) => {
-                      const isInspected = index === resolvedActiveIndex;
+                      const isInspected = resolvedActiveIndex !== null && index === resolvedActiveIndex;
                       const barHeight = yMax > 0 && item.value > 0
                         ? Math.max(4, Math.round((item.value / yMax) * CHART_HEIGHT))
                         : 0;
@@ -3009,18 +3118,8 @@ export default function NutritionScreen() {
                                     : `${activeMetricColor}24`,
                                 shadowColor: isInspected || barHeight > 0 ? activeMetricColor : 'transparent',
                                 shadowOffset: { width: 0, height: 0 },
-                                shadowOpacity: isInspected
-                                  ? selectedBarAnim.interpolate({
-                                      inputRange: [0, 1],
-                                      outputRange: [0.35, 0.95],
-                                    })
-                                  : 0.35,
-                                shadowRadius: isInspected
-                                  ? selectedBarAnim.interpolate({
-                                      inputRange: [0, 1],
-                                      outputRange: [2, 7],
-                                    })
-                                  : 2,
+                                shadowOpacity: isInspected ? 0.85 : 0.35,
+                                shadowRadius: isInspected ? 5 : 2,
                                 width:
                                   statPeriod === 'weekly'
                                     ? 14
@@ -3118,9 +3217,13 @@ export default function NutritionScreen() {
             smoothTransition();
             setDraftLog(null);
             setSelectedDate(newDate);
+            setIsPanelDismissed(false);
             const foundIdx = chartDays.findIndex((d) => d.date === newDate);
             if (foundIdx >= 0) {
               setActiveBarIndex(foundIdx);
+              playBarSelectAnimation();
+            } else {
+              setActiveBarIndex(null);
             }
           }}
           onClose={() => setShowDatePicker(false)}
@@ -3392,6 +3495,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     maxWidth: 72,
     textAlign: 'center',
+    lineHeight: 20,
   },
   gaugeStatusText: {
     fontSize: 10.5,
@@ -3566,7 +3670,7 @@ const styles = StyleSheet.create({
   },
   macroValueDisplayRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderRadius: 9,
@@ -3575,6 +3679,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingVertical: 3,
     paddingHorizontal: 4,
+    height: 32,
   },
   macroValueBigInput: {
     fontSize: 20,
@@ -3585,6 +3690,13 @@ const styles = StyleSheet.create({
     margin: 0,
     textAlign: 'center',
     minWidth: 26,
+  },
+  macroValueBigText: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 24,
   },
   macroValueUnitText: {
     fontSize: 11,
@@ -3686,7 +3798,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 2,
   },
   periodSelectBtnActive: {
     backgroundColor: 'rgba(192, 132, 252, 0.22)',

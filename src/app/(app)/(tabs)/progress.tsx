@@ -30,11 +30,12 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 import { useFocusEffect } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useExercises } from '@/hooks/use-exercises';
-import { useProgress } from '@/hooks/use-progress';
-import { useWorkouts } from '@/hooks/use-workouts';
-import type { PersonalRecordItem, ProgressChartResponse, ProgressMetric, ProgressPeriod } from '@/types/progress';
+import { getLatestWorkoutFirstExercise, PROGRESS_KEY, useProgress } from '@/hooks/use-progress';
+import { WORKOUTS_QUERY_KEY, useWorkouts } from '@/hooks/use-workouts';
+import type { PersonalRecordItem, ProgressChartResponse, ProgressMetric, ProgressPeriod, ProgressResponse } from '@/types/progress';
 import type { Workout } from '@/types/workout';
 
 // Android için LayoutAnimation etkinleştirme
@@ -1231,17 +1232,6 @@ function AllImprovementsBottomSheetModal({
                   </Text>
                 </View>
               </View>
-
-              <TouchableOpacity
-                onPress={closeSheet}
-                style={styles.modalCloseButtonRed}
-                hitSlop={10}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Kapat"
-              >
-                <CloseIcon size={14} color="#EF4444" />
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -1376,14 +1366,15 @@ export default function ProgressScreen() {
   const { width } = useWindowDimensions();
   const contentWidth = width - 32;
 
+  const queryClient = useQueryClient();
+
   // Ana Sekme State'i: 'progress' | 'records'
   const [activeTab, setActiveTab] = useState<'progress' | 'records'>('progress');
 
   // Grafik Seçici State'leri (Aylık, Yıllık, Genel & Ağırlık / Ağırlık+Tekrar)
   const [metric, setMetric] = useState<ProgressMetric>('weight');
   const [period, setPeriod] = useState<ProgressPeriod>('monthly');
-  const [selectedExercise, setSelectedExercise] = useState('Overhead Press');
-  const [selectedExerciseId, setSelectedExerciseId] = useState<string | undefined>('overhead-press');
+  const [userSelectedExercise, setUserSelectedExercise] = useState<{ id?: string; name: string } | null>(null);
 
   // Dönem Menüsü Açılış/Kapanış Yumuşak Yay & Süzülme Animasyonu
   const [menuMounted, setMenuMounted] = useState(false);
@@ -1591,19 +1582,29 @@ export default function ProgressScreen() {
     }
   }, [activeTab, triggerChartAnimation]);
 
-  // 3. Egzersiz, metrik veya dönem değiştiğinde hüzme animasyonunu uygula
-  useEffect(() => {
-    if (activeTab === 'progress') {
-      triggerChartAnimation();
-    }
-  }, [selectedExercise, metric, period, activeTab, triggerChartAnimation]);
-
   // ─── Backend API Hook Entegrasyonu (Egzersiz Havuzu, PR'lar, Workouts) ───
   const {
     exercises: catalogExercises,
     isError: isExercisesError,
     refetch: refetchExercises,
   } = useExercises();
+  const {
+    workouts,
+    refetch: refetchWorkouts,
+  } = useWorkouts();
+
+  // Web platformu ile birebir uyumlu: Kullanıcının son girdiği antrenmanın ilk hareketini otomatik tespit et
+  const autoExercise = useMemo(() => {
+    const cachedWorkouts = queryClient.getQueryData<Workout[]>(WORKOUTS_QUERY_KEY);
+    const cachedProgress = queryClient.getQueryData<ProgressResponse>(PROGRESS_KEY);
+    const candidateWorkouts = workouts && workouts.length > 0 ? workouts : cachedWorkouts;
+    return getLatestWorkoutFirstExercise(candidateWorkouts, cachedProgress?.personal_records);
+  }, [workouts, queryClient]);
+
+  const activeExercise = userSelectedExercise || autoExercise || { id: 'bench-press', name: 'Bench Press' };
+  const selectedExercise = activeExercise.name;
+  const selectedExerciseId = activeExercise.id;
+
   const {
     topProgress,
     personalRecords,
@@ -1612,10 +1613,13 @@ export default function ProgressScreen() {
     isError: isProgressError,
     refetch: refetchProgress,
   } = useProgress(selectedExercise, selectedExerciseId);
-  const {
-    workouts,
-    refetch: refetchWorkouts,
-  } = useWorkouts();
+
+  // 3. Egzersiz, metrik veya dönem değiştiğinde hüzme animasyonunu uygula
+  useEffect(() => {
+    if (activeTab === 'progress') {
+      triggerChartAnimation();
+    }
+  }, [selectedExercise, metric, period, activeTab, triggerChartAnimation]);
 
   // 10 Saniyelik Yükleme Gecikmesi & Zaman Aşımı (Timeout) Kontrolü
   const [loadTimedOut, setLoadTimedOut] = useState(false);
@@ -2030,8 +2034,7 @@ export default function ProgressScreen() {
       );
       const exId = typeof item === 'string' ? matched?.id : item.id;
 
-      setSelectedExercise(cleanName);
-      setSelectedExerciseId(exId);
+      setUserSelectedExercise({ id: exId, name: cleanName });
       closeExerciseDropdown();
       setSelectedPointIndex(null);
       triggerChartAnimation();
@@ -2053,8 +2056,7 @@ export default function ProgressScreen() {
       const matched = selectableExercises.find(
         (e) => e.name.toLowerCase() === cleanName.toLowerCase() || e.id === cleanName.toLowerCase()
       );
-      setSelectedExercise(cleanName);
-      setSelectedExerciseId(matched?.id);
+      setUserSelectedExercise({ id: matched?.id, name: cleanName });
       setShowAllModal(false);
       setActiveTab('progress');
       triggerChartAnimation();
@@ -2313,7 +2315,7 @@ export default function ProgressScreen() {
                       ref={searchInputRef}
                       style={styles.exerciseBarInput}
                       value={isSearching ? exerciseSearchQuery : selectedExercise}
-                      placeholder={isSearching ? 'Hareket ara...' : selectedExercise}
+                      placeholder={isSearching ? 'Hareket ara...' : selectedExercise || 'Hareket seçin...'}
                       placeholderTextColor="#94A3B8"
                       editable={isSearching}
                       pointerEvents={isSearching ? 'auto' : 'none'}
@@ -2504,7 +2506,7 @@ export default function ProgressScreen() {
                   </View>
                   <Text style={styles.chartEmptyTitle}>Kayıtlı Seans Bulunamadı</Text>
                   <Text style={styles.chartEmptySubtitle}>
-                    {selectedExercise} için veri tabanında henüz kayıtlı seans bulunmuyor. Yeni bir antrenman kaydettikçe ilerleme grafiğin burada otomatik olarak çizilecektir.
+                    {selectedExercise || 'Seçili hareket'} için veri tabanında henüz kayıtlı seans bulunmuyor. Yeni bir antrenman kaydettikçe ilerleme grafiğin burada otomatik olarak çizilecektir.
                   </Text>
                 </View>
               ) : (
@@ -3299,7 +3301,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.75,
     shadowRadius: 10,
-    elevation: 6,
   },
   mainTabText: {
     color: '#D8B4FE',
@@ -3902,7 +3903,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 2,
   },
   periodSelectBtnActive: {
     backgroundColor: 'rgba(192, 132, 252, 0.22)',
