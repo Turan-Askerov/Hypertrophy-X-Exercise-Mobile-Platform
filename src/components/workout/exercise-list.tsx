@@ -1,24 +1,27 @@
+import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { EmptyState } from '@/components/ui/empty-state';
 import { ExerciseCard } from '@/components/workout/exercise-card';
-import { AppColors, Radius, Spacing, Typography } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import type { ExerciseEntry } from '@/types/workout';
 
 export type ExerciseListProps = {
   exercises: ExerciseEntry[];
-  previousExercises?: ExerciseEntry[];
   onUpdateExercise: (index: number, updated: ExerciseEntry) => void;
   onRemoveExercise: (index: number) => void;
+  onMoveUpExercise?: (index: number) => void;
+  onMoveDownExercise?: (index: number) => void;
   onAddExercise: () => void;
   onTriggerRestTimer?: () => void;
 };
 
-export function ExerciseList({
+export const ExerciseList = React.memo(function ExerciseList({
   exercises,
-  previousExercises = [],
   onUpdateExercise,
   onRemoveExercise,
+  onMoveUpExercise,
+  onMoveDownExercise,
   onAddExercise,
   onTriggerRestTimer,
 }: ExerciseListProps) {
@@ -37,54 +40,55 @@ export function ExerciseList({
 
   return (
     <View style={styles.container}>
-      {exercises.map((entry, index) => {
-        // Önceki antrenmanda bu hareket var mıydı?
-        const prevMatch =
-          previousExercises.find(
-            (p) =>
-              (p.canonical_exercise_id &&
-                p.canonical_exercise_id === entry.canonical_exercise_id) ||
-              p.exercise_id === entry.exercise_id ||
-              p.exercise_name.toLowerCase() === entry.exercise_name.toLowerCase()
-          ) ?? null;
+      {exercises.map((entry, index) => (
+        <ExerciseCard
+          key={`${entry.exercise_id}_${index}`}
+          entry={entry}
+          index={index}
+          totalExercises={exercises.length}
+          allExercises={exercises}
+          onUpdate={(updated) => onUpdateExercise(index, updated)}
+          onRemove={() => onRemoveExercise(index)}
+          onMoveUp={onMoveUpExercise ? () => onMoveUpExercise(index) : undefined}
+          onMoveDown={onMoveDownExercise ? () => onMoveDownExercise(index) : undefined}
+          onTriggerRestTimer={onTriggerRestTimer}
+        />
+      ))}
 
-        return (
-          <ExerciseCard
-            key={`${entry.exercise_id}_${index}`}
-            entry={entry}
-            previousEntry={prevMatch}
-            onUpdate={(updated) => onUpdateExercise(index, updated)}
-            onRemove={() => onRemoveExercise(index)}
-            onTriggerRestTimer={onTriggerRestTimer}
-          />
-        );
-      })}
-
-      <TouchableOpacity style={styles.addBtn} onPress={onAddExercise}>
-        <Text style={styles.addBtnText}>+ Egzersiz Ekle</Text>
+      {/* Yeni Egzersiz Ekle Butonu (Neon Mor Çerçeveli, İkonsuz) */}
+      <TouchableOpacity
+        style={styles.addBtn}
+        onPress={onAddExercise}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.addBtnText}>Yeni Egzersiz Ekle</Text>
       </TouchableOpacity>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: Spacing.four,
+    paddingBottom: Spacing.two,
   },
   emptyContainer: {
     paddingVertical: Spacing.four,
   },
   addBtn: {
-    backgroundColor: AppColors.primary,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.three,
+    backgroundColor: 'rgba(168, 85, 247, 0.10)',
+    borderWidth: 1.6,
+    borderColor: '#A855F7',
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: Spacing.two,
+    marginTop: Spacing.one,
+    marginBottom: Spacing.two,
   },
   addBtnText: {
-    fontSize: Typography.body,
-    fontWeight: '700',
-    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#D8B4FE',
+    letterSpacing: -0.1,
   },
 });

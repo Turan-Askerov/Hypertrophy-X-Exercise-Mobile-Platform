@@ -49,7 +49,7 @@ export function LiveStatsBar({ exercises }: LiveStatsBarProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#0F1528',
     borderRadius: Radius.md,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
@@ -57,11 +57,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     borderWidth: 1,
     borderColor: AppColors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   statBox: {
     alignItems: 'center',

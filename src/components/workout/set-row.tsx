@@ -1,31 +1,47 @@
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 
-import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { AppColors, Colors, Radius, Typography } from '@/constants/theme';
 import type { SetData } from '@/types/workout';
 
 export type SetRowProps = {
   index: number;
   set: SetData;
   isBodyweight: boolean;
-  previousSet?: SetData | null;
   onChange: (updated: SetData) => void;
   onDelete: () => void;
+  onAddSet?: () => void;
   onComplete?: () => void;
 };
 
-const RIR_OPTIONS = [0, 1, 2, 3, 4, 5];
+const RIR_OPTIONS = [
+  { label: '—', desc: 'Belirtilmedi', value: null },
+  { label: '0', desc: '0 RIR (Tam Tükeniş)', value: 0 },
+  { label: '1', desc: '1 RIR (1 tekrar kala)', value: 1 },
+  { label: '2', desc: '2 RIR (2 tekrar kala)', value: 2 },
+  { label: '3', desc: '3+ RIR (3 veya daha fazla)', value: 3 },
+];
 
-export function SetRow({
+export const SetRow = React.memo(function SetRow({
   index,
   set,
-  isBodyweight,
-  previousSet,
+  isBodyweight: _isBodyweight,
   onChange,
   onDelete,
+  onAddSet,
   onComplete,
 }: SetRowProps) {
+  const [rirModalOpen, setRirModalOpen] = useState(false);
+
   const handleWeightChange = (text: string) => {
-    // Virgülü noktaya çevirip ondalık desteği
     const clean = text.replace(',', '.');
     const val = parseFloat(clean);
     onChange({
@@ -42,51 +58,40 @@ export function SetRow({
     });
   };
 
-  const handleRirSelect = (rirVal: number) => {
-    // Aynı RIR'a tekrar basılırsa seçimi kaldır
-    if (set.rir === rirVal) {
-      onChange({ ...set, rir: null });
-    } else {
-      onChange({ ...set, rir: rirVal });
-      if (onComplete) onComplete();
-    }
+  const handleSelectRir = (val: number | null) => {
+    onChange({ ...set, rir: val });
+    setRirModalOpen(false);
+    if (onComplete) onComplete();
   };
 
-  const prevText = previousSet
-    ? isBodyweight
-      ? `Önceki: ${previousSet.reps} tekrar`
-      : `Önceki: ${previousSet.weight_kg} kg × ${previousSet.reps}`
-    : null;
+  const isFirstRow = index === 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topRow}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{index + 1}</Text>
+    <>
+      <View style={styles.row}>
+        {/* Sütun 1: SET (Pill Rozeti) */}
+        <View style={styles.setCol}>
+          <View style={styles.setBadge}>
+            <Text style={styles.setBadgeText}>{index + 1}</Text>
+          </View>
         </View>
 
-        {!isBodyweight ? (
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Ağırlık (kg)</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="decimal-pad"
-              value={set.weight_kg > 0 ? String(set.weight_kg) : ''}
-              placeholder="0"
-              placeholderTextColor={Colors.light.textSecondary}
-              onChangeText={handleWeightChange}
-            />
-          </View>
-        ) : (
-          <View style={styles.bwBadge}>
-            <Text style={styles.bwBadgeText}>Vücut Ağırlığı</Text>
-          </View>
-        )}
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Tekrar</Text>
+        {/* Sütun 2: AĞIRLIK (KG) */}
+        <View style={styles.weightCol}>
           <TextInput
-            style={styles.input}
+            style={styles.cellInput}
+            keyboardType="decimal-pad"
+            value={set.weight_kg > 0 ? String(set.weight_kg) : ''}
+            placeholder="0"
+            placeholderTextColor={Colors.light.textSecondary}
+            onChangeText={handleWeightChange}
+          />
+        </View>
+
+        {/* Sütun 3: TEKRAR */}
+        <View style={styles.repsCol}>
+          <TextInput
+            style={styles.cellInput}
             keyboardType="number-pad"
             value={set.reps > 0 ? String(set.reps) : ''}
             placeholder="0"
@@ -95,156 +100,314 @@ export function SetRow({
           />
         </View>
 
-        <TouchableOpacity
-          onPress={onDelete}
-          style={styles.deleteBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.deleteText}>✕</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Sütun 4: RIR Dropdown Seçici */}
+        <View style={styles.rirCol}>
+          <TouchableOpacity
+            style={styles.rirSelectBox}
+            onPress={() => setRirModalOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.rirText}>
+              {set.rir !== null && set.rir !== undefined ? String(set.rir) : '—'}
+            </Text>
+            <Text style={styles.rirArrow}>▾</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* RIR Chip Sırası */}
-      <View style={styles.rirContainer}>
-        <Text style={styles.rirLabel}>RIR (Kalan Tekrar):</Text>
-        <View style={styles.chipRow}>
-          {RIR_OPTIONS.map((opt) => {
-            const isSelected = set.rir === opt;
-            return (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => handleRirSelect(opt)}
-                style={[styles.chip, isSelected && styles.selectedChip]}
-              >
-                <Text
-                  style={[styles.chipText, isSelected && styles.selectedChipText]}
-                >
-                  {opt}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        {/* Sütun 5: İŞLEM (İlk satırda [+ Set], sonraki satırlarda [✕] Sil) */}
+        <View style={styles.actionCol}>
+          {isFirstRow ? (
+            <TouchableOpacity
+              style={styles.addSetRowBtn}
+              onPress={onAddSet}
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Text style={styles.addSetRowText}>+ Set</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.deleteSetRowBtn}
+              onPress={onDelete}
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Text style={styles.deleteSetRowText}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {prevText ? <Text style={styles.prevText}>{prevText}</Text> : null}
-    </View>
+      {/* RIR Seçim Modalı */}
+      <Modal
+        visible={rirModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRirModalOpen(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setRirModalOpen(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>RIR Seçimi</Text>
+                  <Text style={styles.modalSubtitle}>Kalan Tekrar Sayısı</Text>
+                </View>
+
+                <View style={styles.modalOptions}>
+                  {RIR_OPTIONS.map((opt) => {
+                    const isSelected = set.rir === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={String(opt.value)}
+                        style={[
+                          styles.modalOptionItem,
+                          isSelected && styles.modalOptionSelected,
+                        ]}
+                        onPress={() => handleSelectRir(opt.value)}
+                      >
+                        <View style={styles.modalOptionBadge}>
+                          <Text
+                            style={[
+                              styles.modalOptionBadgeText,
+                              isSelected && styles.modalOptionBadgeTextSelected,
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.modalOptionDesc,
+                            isSelected && styles.modalOptionDescSelected,
+                          ]}
+                        >
+                          {opt.desc}
+                        </Text>
+                        {isSelected && (
+                          <Text style={styles.modalOptionCheck}>✓</Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setRirModalOpen(false)}
+                >
+                  <Text style={styles.modalCloseText}>Kapat</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    </>
   );
-}
+});
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: Colors.light.backgroundElement,
-    borderRadius: Radius.md,
-    padding: Spacing.two,
-    gap: Spacing.one,
-    marginBottom: Spacing.two,
-  },
-  topRow: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
-  badge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.light.backgroundSelected,
+  setCol: {
+    width: '12%',
+    alignItems: 'flex-start',
+  },
+  setBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: {
-    fontSize: Typography.small,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  inputLabel: {
+  setBadgeText: {
     fontSize: 11,
-    color: Colors.light.textSecondary,
-    marginBottom: 2,
-    fontWeight: '500',
+    fontWeight: '800',
+    color: '#D8B4FE',
   },
-  input: {
-    backgroundColor: Colors.light.background,
+  weightCol: {
+    width: '26%',
+    paddingHorizontal: 3,
+  },
+  repsCol: {
+    width: '24%',
+    paddingHorizontal: 3,
+  },
+  rirCol: {
+    width: '18%',
+    paddingHorizontal: 3,
+  },
+  actionCol: {
+    width: '20%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellInput: {
+    backgroundColor: '#0F1528',
     borderWidth: 1,
-    borderColor: AppColors.border,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 6,
-    fontSize: Typography.body,
-    fontWeight: '600',
-    color: Colors.light.text,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderRadius: Radius.md,
+    height: 38,
+    paddingHorizontal: 6,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: Typography.label,
     textAlign: 'center',
   },
-  bwBadge: {
-    flex: 1,
-    backgroundColor: AppColors.primaryMuted,
-    borderRadius: Radius.sm,
-    paddingVertical: 8,
+  rirSelectBox: {
+    backgroundColor: '#0F1528',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    borderRadius: Radius.md,
+    height: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  rirText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E2E8F0',
+  },
+  rirArrow: {
+    fontSize: 10,
+    color: AppColors.muted,
+  },
+  addSetRowBtn: {
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    borderWidth: 1.6,
+    borderColor: '#06B6D4', // Neon Cyan Çerçeve
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    minWidth: 54,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bwBadgeText: {
-    fontSize: Typography.small,
-    fontWeight: '600',
-    color: AppColors.primary,
+  addSetRowText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#38BDF8',
+    letterSpacing: 0.2,
   },
-  deleteBtn: {
+  deleteSetRowBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1.6,
+    borderColor: '#EF4444', // Neon Kırmızı Çerçeve
+    borderRadius: 10,
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: Radius.sm,
   },
-  deleteText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: AppColors.danger,
+  deleteSetRowText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#F87171',
   },
-  rirContainer: {
+
+  // Modal Stilleri
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#0F1528',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    padding: 20,
+  },
+  modalHeader: {
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: AppColors.muted,
+    marginTop: 2,
+  },
+  modalOptions: {
+    gap: 8,
+  },
+  modalOptionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 10,
+    gap: 12,
   },
-  rirLabel: {
-    fontSize: 11,
-    color: Colors.light.textSecondary,
-    fontWeight: '500',
+  modalOptionSelected: {
+    backgroundColor: 'rgba(139, 92, 246, 0.16)',
+    borderColor: 'rgba(139, 92, 246, 0.45)',
   },
-  chipRow: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  chip: {
+  modalOptionBadge: {
     width: 28,
     height: 28,
-    borderRadius: 6,
-    backgroundColor: Colors.light.background,
-    borderWidth: 1,
-    borderColor: AppColors.border,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  selectedChip: {
-    backgroundColor: AppColors.primary,
-    borderColor: AppColors.primary,
+  modalOptionBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#D8B4FE',
   },
-  chipText: {
-    fontSize: 12,
+  modalOptionBadgeTextSelected: {
+    color: '#FFFFFF',
+  },
+  modalOptionDesc: {
+    flex: 1,
+    fontSize: 13,
+    color: '#94A3B8',
     fontWeight: '600',
-    color: Colors.light.text,
   },
-  selectedChipText: {
-    color: '#fff',
+  modalOptionDescSelected: {
+    color: '#F8FAFC',
+    fontWeight: '700',
   },
-  prevText: {
-    fontSize: 11,
-    color: Colors.light.textSecondary,
-    fontStyle: 'italic',
-    marginTop: 2,
+  modalOptionCheck: {
+    fontSize: 14,
+    color: '#34D399',
+    fontWeight: '800',
+  },
+  modalCloseBtn: {
+    marginTop: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#94A3B8',
   },
 });

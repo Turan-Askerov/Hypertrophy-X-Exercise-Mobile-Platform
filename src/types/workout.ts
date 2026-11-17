@@ -15,6 +15,7 @@ export type ExerciseEntry = {
   canonical_exercise_id?: string | null;
   exercise_meta_version?: number;
   legacy_exercise_name?: string | null;
+  superset_id?: string | null;
 };
 
 export type WorkoutCreate = {

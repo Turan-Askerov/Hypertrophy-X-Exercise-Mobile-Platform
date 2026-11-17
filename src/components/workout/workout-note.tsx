@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { AppColors, Radius, Spacing, Typography } from '@/constants/theme';
 
 export type WorkoutNoteProps = {
   value: string;
@@ -18,8 +18,13 @@ export function WorkoutNote({ value, onChange }: WorkoutNoteProps) {
         onPress={() => setIsOpen((prev) => !prev)}
         activeOpacity={0.7}
       >
-        <Text style={styles.title}>📝 Antrenman Notu</Text>
-        <Text style={styles.toggleText}>{isOpen ? 'Gizle' : 'Ekle / Düzenle'}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.icon}>📝</Text>
+          <Text style={styles.title}>Günün Antrenman Notu</Text>
+        </View>
+        <View style={styles.togglePill}>
+          <Text style={styles.toggleText}>{isOpen ? 'Gizle' : 'Düzenle'}</Text>
+        </View>
       </TouchableOpacity>
 
       {isOpen ? (
@@ -28,13 +33,19 @@ export function WorkoutNote({ value, onChange }: WorkoutNoteProps) {
             style={styles.input}
             multiline
             numberOfLines={3}
-            placeholder="Bugünkü antrenman, uyku, enerji veya sakatlık durumu hakkında notlar..."
-            placeholderTextColor={Colors.light.textSecondary}
+            placeholder="Bugünkü antrenman, uyku, enerji veya form durumu hakkında notlar..."
+            placeholderTextColor={AppColors.muted}
             value={value}
             onChangeText={onChange}
             maxLength={500}
           />
           <Text style={styles.counter}>{value.length} / 500</Text>
+        </View>
+      ) : value ? (
+        <View style={styles.previewBox}>
+          <Text style={styles.previewText} numberOfLines={2}>
+            &ldquo;{value}&rdquo;
+          </Text>
         </View>
       ) : null}
     </View>
@@ -43,11 +54,11 @@ export function WorkoutNote({ value, onChange }: WorkoutNoteProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.light.background,
-    borderRadius: Radius.md,
+    backgroundColor: '#0D101C',
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: AppColors.border,
-    padding: Spacing.three,
+    borderColor: 'rgba(139, 92, 246, 0.22)',
+    padding: Spacing.two + 4,
     marginBottom: Spacing.three,
   },
   header: {
@@ -55,32 +66,64 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  icon: {
+    fontSize: 14,
+  },
   title: {
     fontSize: Typography.label,
-    fontWeight: '600',
-    color: Colors.light.text,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: -0.2,
+  },
+  togglePill: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   toggleText: {
-    fontSize: Typography.small,
-    fontWeight: '600',
-    color: AppColors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#C084FC',
   },
   body: {
     marginTop: Spacing.two,
     gap: 4,
   },
   input: {
-    backgroundColor: Colors.light.backgroundElement,
-    borderRadius: Radius.sm,
+    backgroundColor: '#0F1528',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
     padding: Spacing.two,
     fontSize: Typography.label,
-    color: Colors.light.text,
-    minHeight: 64,
+    color: '#FFFFFF',
+    minHeight: 70,
     textAlignVertical: 'top',
   },
   counter: {
     fontSize: 11,
-    color: Colors.light.textSecondary,
+    color: AppColors.muted,
     textAlign: 'right',
+  },
+  previewBox: {
+    marginTop: Spacing.two,
+    backgroundColor: '#0F1528',
+    borderRadius: Radius.md,
+    padding: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  previewText: {
+    fontSize: Typography.small,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
 });

@@ -1,4 +1,4 @@
-import { useSyncExternalStore, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   Alert,
   ScrollView,
@@ -15,12 +15,18 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DatePickerSheet } from '@/components/ui/date-picker-sheet';
 import { ExerciseList } from '@/components/workout/exercise-list';
+import { FinishWorkoutDialog } from '@/components/workout/finish-workout-dialog';
 import { LiveStatsBar } from '@/components/workout/live-stats-bar';
 import { RestTimer } from '@/components/workout/rest-timer';
+import {
+  formatDurationHuman,
+  WorkoutTimerBar,
+} from '@/components/workout/workout-timer-bar';
 import { WorkoutNote } from '@/components/workout/workout-note';
 import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useWorkouts } from '@/hooks/use-workouts';
 import { formatTrDate } from '@/lib/rpe';
+import { exerciseVolume } from '@/lib/volume';
 import { workoutDraft } from '@/lib/workout-draft';
 import { DEFAULT_SESSION_TYPES } from '@/types/workout';
 
@@ -31,16 +37,53 @@ export default function WorkoutScreen() {
     workoutDraft.getSnapshot
   );
 
-  const { workouts, saveWorkout, isSaving } = useWorkouts();
-
-  // En son kaydedilen antrenman (önceki ağırlık/tekrar referansları için)
-  const lastWorkout = workouts[0] ?? null;
+  const { saveWorkout, isSaving } = useWorkouts();
 
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [showRestTimer, setShowRestTimer] = useState(false);
   const [customSessionOpen, setCustomSessionOpen] = useState(false);
   const [customSessionText, setCustomSessionText] = useState('');
+
+  // ─── Genel Antrenman Süresi Sayacı (Başlatılınca Çalışır) ───
+  const [hasStarted, setHasStarted] = useState(false);
+  const [durationSeconds, setDurationSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const startTimeRef = useRef<number | null>(null);
+  const pausedSecondsRef = useRef<number>(0);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    if (hasStarted && isTimerRunning) {
+      if (startTimeRef.current === null) {
+        startTimeRef.current = Date.now();
+      } else {
+        startTimeRef.current = Date.now() - pausedSecondsRef.current * 1000;
+      }
+      interval = setInterval(() => {
+        if (startTimeRef.current !== null) {
+          const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+          setDurationSeconds(elapsed);
+          pausedSecondsRef.current = elapsed;
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [hasStarted, isTimerRunning]);
+
+  const handleStartWorkout = () => {
+    setHasStarted(true);
+    setIsTimerRunning(true);
+  };
+
+  const handleToggleTimer = () => {
+    setIsTimerRunning((prev) => !prev);
+  };
 
   const handleSelectSessionType = (type: string) => {
     if (type === 'Diğer') {
@@ -58,9 +101,10 @@ export default function WorkoutScreen() {
     }
   };
 
-  const handleSave = async () => {
+  // Bitir Butonuna Basıldığında Onay Diyaloğunu Aç
+  const handleOpenFinishDialog = () => {
     if (draft.exercises.length === 0) {
-      Alert.alert('Uyarı', 'Lütfen en az bir egzersiz ekleyin.');
+      Alert.alert('Uyarı', 'Lütfen antrenmanı bitirmeden önce en az bir egzersiz ekleyin.');
       return;
     }
 
@@ -76,13 +120,35 @@ export default function WorkoutScreen() {
       return;
     }
 
+    setFinishDialogOpen(true);
+  };
+
+  // Onay Panosunda "Bitir ve Kaydet"e Basıldığında DB'ye Kaydet
+  const handleConfirmFinish = async () => {
     try {
-      await saveWorkout(draft);
+      const durationHuman = formatDurationHuman(durationSeconds);
+      const finalNotes = draft.notes?.trim()
+        ? `${draft.notes.trim()}\n\n⏱️ Antrenman Süresi: ${durationHuman}`
+        : `⏱️ Antrenman Süresi: ${durationHuman}`;
+
+      const payload = {
+        ...draft,
+        notes: finalNotes,
+      };
+
+      await saveWorkout(payload);
+      setFinishDialogOpen(false);
+
       Alert.alert('Tebrikler! 💪', 'Antrenmanınız başarıyla kaydedildi.', [
         {
           text: 'Tamam',
           onPress: () => {
             workoutDraft.reset();
+            setHasStarted(false);
+            setIsTimerRunning(false);
+            setDurationSeconds(0);
+            startTimeRef.current = null;
+            pausedSecondsRef.current = 0;
             router.push('/(app)/history');
           },
         },
@@ -95,19 +161,30 @@ export default function WorkoutScreen() {
     }
   };
 
+  // İstatistik Hesaplamaları (Onay Modalı İçin)
+  const totalSetsCount = draft.exercises.reduce(
+    (sum, ex) => sum + (ex.sets_data?.length || 0),
+    0
+  );
+  const totalVolume = draft.exercises.reduce(
+    (sum, ex) => sum + exerciseVolume(ex.sets_data, ex.is_bodyweight),
+    0
+  );
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
-        {/* Üst Bar: Başlık, Tarih ve Geçmişe Git */}
+        {/* ─── ÜST BAR: Başlık, Tarih & Geçmişe Git (İkonsuz, Neon Çerçeveli) ─── */}
         <View style={styles.topBar}>
           <View>
             <Text style={styles.screenTitle}>Antrenman Kaydı</Text>
             <TouchableOpacity
               onPress={() => setDateSheetOpen(true)}
               style={styles.dateSelector}
+              activeOpacity={0.7}
             >
               <Text style={styles.dateSelectorText}>
-                📅 {formatTrDate(draft.date)} ▾
+                {formatTrDate(draft.date)} ▾
               </Text>
             </TouchableOpacity>
           </View>
@@ -116,14 +193,16 @@ export default function WorkoutScreen() {
             <TouchableOpacity
               style={styles.historyBtn}
               onPress={() => router.push('/(app)/history')}
+              activeOpacity={0.7}
             >
-              <Text style={styles.historyBtnText}>Geçmiş 📜</Text>
+              <Text style={styles.historyBtnText}>Geçmiş</Text>
             </TouchableOpacity>
 
             {draft.exercises.length > 0 && (
               <TouchableOpacity
                 style={styles.resetBtn}
                 onPress={() => setResetDialogOpen(true)}
+                activeOpacity={0.7}
               >
                 <Text style={styles.resetBtnText}>Temizle</Text>
               </TouchableOpacity>
@@ -131,6 +210,7 @@ export default function WorkoutScreen() {
           </View>
         </View>
 
+        {/* ─── KAYDIRILABİLİR İÇERİK ─── */}
         <ScrollView
           style={styles.scrollArea}
           contentContainerStyle={styles.scrollContent}
@@ -167,6 +247,7 @@ export default function WorkoutScreen() {
                       styles.sessionChip,
                       isSelected && styles.selectedSessionChip,
                     ]}
+                    activeOpacity={0.7}
                   >
                     <Text
                       style={[
@@ -200,38 +281,48 @@ export default function WorkoutScreen() {
             ) : null}
           </View>
 
-          {/* Not Alanı */}
-          <WorkoutNote
-            value={draft.notes ?? ''}
-            onChange={(text) => workoutDraft.setNotes(text)}
-          />
-
-          {/* Egzersiz Listesi */}
+          {/* ─── EGZERSİZ KARTLARI LİSTESİ ─── */}
           <ExerciseList
             exercises={draft.exercises}
-            previousExercises={lastWorkout?.exercises}
             onUpdateExercise={(idx, updated) =>
               workoutDraft.updateExercise(idx, updated)
             }
             onRemoveExercise={(idx) => workoutDraft.removeExercise(idx)}
+            onMoveUpExercise={(idx) => workoutDraft.moveExerciseUp(idx)}
+            onMoveDownExercise={(idx) => workoutDraft.moveExerciseDown(idx)}
             onAddExercise={() => router.push('/(app)/workout/add-exercise')}
             onTriggerRestTimer={() => setShowRestTimer(true)}
           />
 
-          {/* Kaydet Butonu */}
-          {draft.exercises.length > 0 && (
-            <View style={styles.saveContainer}>
-              <Button
-                variant="primary"
-                onPress={handleSave}
-                loading={isSaving}
-                disabled={isSaving}
-              >
-                Antrenmanı Kaydet
-              </Button>
-            </View>
-          )}
+          {/* ─── NOT ALMA KISMI (Hareket kartlarının altında, süre sayacının hemen üstünde) ─── */}
+          <WorkoutNote
+            value={draft.notes ?? ''}
+            onChange={(text) => workoutDraft.setNotes(text)}
+          />
         </ScrollView>
+
+        {/* ─── EN ALTTTAKİ YAPIŞKAN: SAYAÇ + BAŞLAT / BİTİR (Neon Çerçeveli) ─── */}
+        <WorkoutTimerBar
+          seconds={durationSeconds}
+          hasStarted={hasStarted}
+          isRunning={isTimerRunning}
+          onStart={handleStartWorkout}
+          onTogglePause={handleToggleTimer}
+          onFinish={handleOpenFinishDialog}
+        />
+
+        {/* ─── EKRANIN ORTASINDA AÇILAN ONAY PANOSU ─── */}
+        <FinishWorkoutDialog
+          visible={finishDialogOpen}
+          durationSeconds={durationSeconds}
+          exerciseCount={draft.exercises.length}
+          totalSetsCount={totalSetsCount}
+          totalVolume={totalVolume}
+          note={draft.notes}
+          isSaving={isSaving}
+          onConfirm={handleConfirmFinish}
+          onCancel={() => setFinishDialogOpen(false)}
+        />
 
         {/* Tarih Seçici Bottom Sheet */}
         <DatePickerSheet
@@ -250,6 +341,11 @@ export default function WorkoutScreen() {
           destructive
           onConfirm={() => {
             workoutDraft.reset();
+            setHasStarted(false);
+            setIsTimerRunning(false);
+            setDurationSeconds(0);
+            startTimeRef.current = null;
+            pausedSecondsRef.current = 0;
             setResetDialogOpen(false);
           }}
           onCancel={() => setResetDialogOpen(false)}
@@ -262,7 +358,7 @@ export default function WorkoutScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#080B14',
   },
   container: {
     flex: 1,
@@ -274,20 +370,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     borderBottomWidth: 1,
-    borderBottomColor: AppColors.border,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#0A0D18',
   },
   screenTitle: {
     fontSize: Typography.heading,
     fontWeight: '800',
-    color: Colors.light.text,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
   },
   dateSelector: {
     marginTop: 2,
   },
   dateSelectorText: {
     fontSize: Typography.small,
-    color: AppColors.primary,
-    fontWeight: '600',
+    color: '#C084FC',
+    fontWeight: '700',
   },
   topActions: {
     flexDirection: 'row',
@@ -295,26 +393,30 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   historyBtn: {
-    backgroundColor: Colors.light.backgroundElement,
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
     paddingHorizontal: Spacing.three,
-    paddingVertical: 6,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: AppColors.border,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#A855F7',
   },
   historyBtnText: {
     fontSize: Typography.small,
-    fontWeight: '600',
-    color: Colors.light.text,
+    fontWeight: '800',
+    color: '#D8B4FE',
   },
   resetBtn: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.10)',
+    paddingHorizontal: Spacing.two + 4,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
   },
   resetBtnText: {
     fontSize: Typography.small,
-    color: AppColors.danger,
-    fontWeight: '600',
+    color: '#F87171',
+    fontWeight: '800',
   },
   scrollArea: {
     flex: 1,
@@ -322,15 +424,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 24,
   },
   section: {
     marginBottom: Spacing.three,
   },
   sectionTitle: {
     fontSize: Typography.small,
-    fontWeight: '700',
-    color: Colors.light.textSecondary,
+    fontWeight: '800',
+    color: AppColors.muted,
     marginBottom: Spacing.one,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -343,21 +445,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: 8,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.light.backgroundElement,
+    backgroundColor: '#101524',
     borderWidth: 1,
-    borderColor: AppColors.border,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   selectedSessionChip: {
-    backgroundColor: AppColors.primary,
-    borderColor: AppColors.primary,
+    backgroundColor: 'rgba(139, 92, 246, 0.22)',
+    borderColor: '#C084FC',
   },
   sessionChipText: {
     fontSize: Typography.small,
-    fontWeight: '600',
-    color: Colors.light.text,
+    fontWeight: '700',
+    color: '#94A3B8',
   },
   selectedSessionChipText: {
-    color: '#fff',
+    color: '#FFFFFF',
   },
   customSessionRow: {
     flexDirection: 'row',
@@ -367,7 +469,7 @@ const styles = StyleSheet.create({
   },
   customSessionInput: {
     flex: 1,
-    backgroundColor: Colors.light.backgroundElement,
+    backgroundColor: '#101524',
     borderWidth: 1,
     borderColor: AppColors.border,
     borderRadius: Radius.md,
@@ -375,9 +477,5 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontSize: Typography.label,
     color: Colors.light.text,
-  },
-  saveContainer: {
-    marginTop: Spacing.three,
-    marginBottom: Spacing.four,
   },
 });
