@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { Easing, LinearTransition } from 'react-native-reanimated';
 
 import { EmptyState } from '@/components/ui/empty-state';
 import { ExerciseCard } from '@/components/workout/exercise-card';
@@ -39,7 +40,10 @@ export const ExerciseList = React.memo(function ExerciseList({
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View
+      layout={LinearTransition.duration(260).easing(Easing.bezier(0.25, 1, 0.5, 1))}
+      style={styles.container}
+    >
       {exercises.map((entry, index) => (
         <ExerciseCard
           key={`${entry.exercise_id}_${index}`}
@@ -63,7 +67,7 @@ export const ExerciseList = React.memo(function ExerciseList({
       >
         <Text style={styles.addBtnText}>Yeni Egzersiz Ekle</Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 });
 

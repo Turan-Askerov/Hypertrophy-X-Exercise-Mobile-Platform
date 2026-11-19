@@ -19,6 +19,8 @@ export type FinishWorkoutDialogProps = {
   totalSetsCount: number;
   totalVolume: number;
   note?: string;
+  gymName?: string | null;
+  onPressGym?: () => void;
   isSaving: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -31,6 +33,8 @@ export function FinishWorkoutDialog({
   totalSetsCount,
   totalVolume,
   note,
+  gymName,
+  onPressGym,
   isSaving,
   onConfirm,
   onCancel,
@@ -78,6 +82,21 @@ export function FinishWorkoutDialog({
                     </Text>
                   </View>
                 )}
+
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Salon:</Text>
+                  {onPressGym ? (
+                    <TouchableOpacity onPress={onPressGym} activeOpacity={0.7}>
+                      <Text style={styles.summaryValueGym}>
+                        📍 {gymName || 'Belirtilmedi'} ▾
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.summaryValue}>
+                      📍 {gymName || 'Belirtilmedi'}
+                    </Text>
+                  )}
+                </View>
 
                 {note ? (
                   <View style={styles.noteItem}>
@@ -183,6 +202,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#F8FAFC',
+  },
+  summaryValueGym: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#C084FC',
   },
   summaryValueHighlight: {
     fontSize: 13.5,

@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Modal,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -38,62 +41,166 @@ export function ExerciseOptionsSheet({
   onRemoveSuperset,
   onRemove,
 }: ExerciseOptionsSheetProps) {
+  const estimatedSheetHeight = 420;
+  const [translateY] = useState(() => new Animated.Value(estimatedSheetHeight));
+  const [backdropAnim] = useState(() => new Animated.Value(0));
+
+  const openSheet = useCallback(() => {
+    translateY.setValue(estimatedSheetHeight);
+    Animated.parallel([
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        damping: 24,
+        mass: 0.8,
+        stiffness: 260,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [backdropAnim, estimatedSheetHeight, translateY]);
+
+  const closeSheet = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: false,
+      }),
+      Animated.timing(translateY, {
+        toValue: estimatedSheetHeight,
+        duration: 200,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  }, [backdropAnim, estimatedSheetHeight, onClose, translateY]);
+
+  useEffect(() => {
+    if (visible) {
+      openSheet();
+    }
+  }, [visible, openSheet]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return gestureState.dy > 1 || Math.abs(gestureState.dy) > 2;
+        },
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+          return gestureState.dy > 1 || Math.abs(gestureState.dy) > 2;
+        },
+        onPanResponderGrant: () => {
+          translateY.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            translateY.setValue(gestureState.dy);
+            const fade = Math.max(0.2, 1 - gestureState.dy / (estimatedSheetHeight * 1.1));
+            backdropAnim.setValue(fade);
+          } else {
+            translateY.setValue(gestureState.dy * 0.18);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const shouldDismiss = gestureState.dy > 70 || gestureState.vy > 0.4;
+          if (shouldDismiss) {
+            closeSheet();
+          } else {
+            Animated.parallel([
+              Animated.spring(translateY, {
+                toValue: 0,
+                damping: 22,
+                mass: 0.8,
+                stiffness: 240,
+                useNativeDriver: false,
+              }),
+              Animated.timing(backdropAnim, {
+                toValue: 1,
+                duration: 160,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: false,
+              }),
+            ]).start();
+          }
+        },
+      }),
+    [backdropAnim, closeSheet, estimatedSheetHeight, translateY]
+  );
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      animationType="none"
+      onRequestClose={closeSheet}
       statusBarTranslucent
     >
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Animated.View
+          style={[
+            styles.backdrop,
+            {
+              opacity: backdropAnim,
+            },
+          ]}
+        >
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
+        </Animated.View>
 
-        <View style={styles.sheet}>
-          {/* Üst Tutamaç */}
-          <View style={styles.handle} />
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              transform: [{ translateY }],
+            },
+          ]}
+        >
+          {/* Sürüklenebilir Tutamaç ve Başlık Alanı (PanResponder) */}
+          <View style={styles.dragArea} {...panResponder.panHandlers}>
+            <View style={styles.handle} />
 
-          {/* Kart Başlığı */}
-          <View style={styles.header}>
-            <View style={styles.titleArea}>
-              <Text style={styles.exerciseName} numberOfLines={1}>
-                {exerciseName}
-              </Text>
-              <View style={styles.badgeRow}>
-                <View style={styles.muscleBadge}>
-                  <Text style={styles.muscleText}>{muscleGroup}</Text>
-                </View>
-                {isSuperset && (
-                  <View
-                    style={[
-                      styles.supersetBadge,
-                      supersetTheme && {
-                        borderColor: supersetTheme.border,
-                        backgroundColor: supersetTheme.bg,
-                      },
-                    ]}
-                  >
-                    <Text
+            {/* Kart Başlığı (Kapatma X Butonu Kaldırıldı) */}
+            <View style={styles.header}>
+              <View style={styles.titleArea}>
+                <Text style={styles.exerciseName} numberOfLines={1}>
+                  {exerciseName}
+                </Text>
+                <View style={styles.badgeRow}>
+                  <View style={styles.muscleBadge}>
+                    <Text style={styles.muscleText}>{muscleGroup}</Text>
+                  </View>
+                  {isSuperset && (
+                    <View
                       style={[
-                        styles.supersetText,
-                        supersetTheme && { color: supersetTheme.text },
+                        styles.supersetBadge,
+                        supersetTheme && {
+                          borderColor: supersetTheme.border,
+                          backgroundColor: supersetTheme.bg,
+                        },
                       ]}
                     >
-                      {supersetTheme?.label ?? 'SÜPERSET'}
-                    </Text>
-                  </View>
-                )}
+                      <Text
+                        style={[
+                          styles.supersetText,
+                          supersetTheme && { color: supersetTheme.text },
+                        ]}
+                      >
+                        {supersetTheme?.label ?? 'SÜPERSET'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
-
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeBtn}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.divider} />
@@ -104,7 +211,7 @@ export function ExerciseOptionsSheet({
             <TouchableOpacity
               style={styles.optionItem}
               onPress={() => {
-                onClose();
+                closeSheet();
                 onReorder();
               }}
               activeOpacity={0.75}
@@ -123,7 +230,7 @@ export function ExerciseOptionsSheet({
             <TouchableOpacity
               style={styles.optionItem}
               onPress={() => {
-                onClose();
+                closeSheet();
                 onReplace();
               }}
               activeOpacity={0.75}
@@ -143,7 +250,7 @@ export function ExerciseOptionsSheet({
               <TouchableOpacity
                 style={styles.optionItem}
                 onPress={() => {
-                  onClose();
+                  closeSheet();
                   onRemoveSuperset?.();
                 }}
                 activeOpacity={0.75}
@@ -184,7 +291,7 @@ export function ExerciseOptionsSheet({
               <TouchableOpacity
                 style={styles.optionItem}
                 onPress={() => {
-                  onClose();
+                  closeSheet();
                   onAddSuperset();
                 }}
                 activeOpacity={0.75}
@@ -204,7 +311,7 @@ export function ExerciseOptionsSheet({
             <TouchableOpacity
               style={[styles.optionItem, styles.removeOptionItem]}
               onPress={() => {
-                onClose();
+                closeSheet();
                 onRemove();
               }}
               activeOpacity={0.75}
@@ -219,7 +326,7 @@ export function ExerciseOptionsSheet({
               <Text style={[styles.chevron, styles.removeChevron]}>›</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -229,10 +336,10 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(4, 7, 15, 0.75)',
   },
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(4, 7, 15, 0.75)',
   },
   sheet: {
     backgroundColor: '#0D111E',
@@ -241,9 +348,14 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(139, 92, 246, 0.35)',
     borderBottomWidth: 0,
-    paddingTop: 12,
-    paddingBottom: 32,
+    paddingTop: 8,
+    paddingBottom: 72,
+    marginBottom: -40,
     paddingHorizontal: Spacing.four,
+  },
+  dragArea: {
+    paddingTop: 4,
+    paddingBottom: 4,
   },
   handle: {
     width: 44,
@@ -251,18 +363,17 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#8B5CF6',
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 6,
   },
   titleArea: {
     flex: 1,
     gap: 4,
-    paddingRight: 12,
   },
   exerciseName: {
     fontSize: 17,
@@ -304,71 +415,55 @@ const styles = StyleSheet.create({
     color: '#F472B6',
     letterSpacing: 0.5,
   },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtnText: {
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '800',
-  },
   divider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 8,
+    marginVertical: 12,
   },
   optionsList: {
-    gap: 6,
+    gap: 10,
   },
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#101524',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
     paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 14,
+    gap: 12,
   },
   removeOptionItem: {
-    borderColor: 'rgba(239, 68, 68, 0.25)',
-    backgroundColor: 'rgba(239, 68, 68, 0.04)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
   },
   iconCircle: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-    borderWidth: 1.2,
+    borderWidth: 1,
   },
   reorderCircle: {
-    backgroundColor: 'rgba(139, 92, 246, 0.14)',
+    backgroundColor: 'rgba(139, 92, 246, 0.18)',
     borderColor: 'rgba(139, 92, 246, 0.4)',
   },
   reorderIcon: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#C084FC',
     fontWeight: '800',
   },
   replaceCircle: {
-    backgroundColor: 'rgba(6, 182, 212, 0.14)',
-    borderColor: 'rgba(6, 182, 212, 0.4)',
+    backgroundColor: 'rgba(14, 165, 233, 0.18)',
+    borderColor: 'rgba(14, 165, 233, 0.4)',
   },
   replaceIcon: {
-    fontSize: 14,
-    color: '#22D3EE',
+    fontSize: 16,
   },
   supersetCircle: {
-    backgroundColor: 'rgba(236, 72, 153, 0.14)',
+    backgroundColor: 'rgba(236, 72, 153, 0.18)',
     borderColor: 'rgba(236, 72, 153, 0.4)',
   },
   supersetIcon: {
@@ -377,35 +472,35 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   removeCircle: {
-    backgroundColor: 'rgba(239, 68, 68, 0.14)',
-    borderColor: 'rgba(239, 68, 68, 0.45)',
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    borderColor: 'rgba(239, 68, 68, 0.4)',
   },
   removeIcon: {
     fontSize: 14,
-    color: '#EF4444',
-    fontWeight: '800',
+    color: '#F87171',
+    fontWeight: '900',
   },
   optionTextCol: {
     flex: 1,
     gap: 2,
   },
   optionLabel: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '700',
     color: '#F8FAFC',
   },
   removeLabel: {
     color: '#F87171',
+    fontWeight: '800',
   },
   optionDesc: {
     fontSize: 11,
     color: '#94A3B8',
   },
   chevron: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#64748B',
     fontWeight: '700',
-    paddingLeft: 8,
   },
   removeChevron: {
     color: '#EF4444',

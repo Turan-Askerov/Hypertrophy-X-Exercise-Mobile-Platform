@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -41,7 +41,35 @@ export const SetRow = React.memo(function SetRow({
 }: SetRowProps) {
   const [rirModalOpen, setRirModalOpen] = useState(false);
 
+  const [weightStr, setWeightStr] = useState<string>(() =>
+    set.weight_kg > 0 ? String(set.weight_kg) : ''
+  );
+  const [repsStr, setRepsStr] = useState<string>(() =>
+    set.reps > 0 ? String(set.reps) : ''
+  );
+
+  useEffect(() => {
+    setWeightStr((prev) => {
+      const currentNum = parseFloat(prev.replace(',', '.')) || 0;
+      if (set.weight_kg !== currentNum) {
+        return set.weight_kg > 0 ? String(set.weight_kg) : '';
+      }
+      return prev;
+    });
+  }, [set.weight_kg]);
+
+  useEffect(() => {
+    setRepsStr((prev) => {
+      const currentNum = parseInt(prev, 10) || 0;
+      if (set.reps !== currentNum) {
+        return set.reps > 0 ? String(set.reps) : '';
+      }
+      return prev;
+    });
+  }, [set.reps]);
+
   const handleWeightChange = (text: string) => {
+    setWeightStr(text);
     const clean = text.replace(',', '.');
     const val = parseFloat(clean);
     onChange({
@@ -51,6 +79,7 @@ export const SetRow = React.memo(function SetRow({
   };
 
   const handleRepsChange = (text: string) => {
+    setRepsStr(text);
     const val = parseInt(text, 10);
     onChange({
       ...set,
@@ -81,7 +110,7 @@ export const SetRow = React.memo(function SetRow({
           <TextInput
             style={styles.cellInput}
             keyboardType="decimal-pad"
-            value={set.weight_kg > 0 ? String(set.weight_kg) : ''}
+            value={weightStr}
             placeholder="0"
             placeholderTextColor={Colors.light.textSecondary}
             onChangeText={handleWeightChange}
@@ -93,7 +122,7 @@ export const SetRow = React.memo(function SetRow({
           <TextInput
             style={styles.cellInput}
             keyboardType="number-pad"
-            value={set.reps > 0 ? String(set.reps) : ''}
+            value={repsStr}
             placeholder="0"
             placeholderTextColor={Colors.light.textSecondary}
             onChangeText={handleRepsChange}

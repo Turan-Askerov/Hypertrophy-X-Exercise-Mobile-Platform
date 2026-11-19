@@ -4,6 +4,7 @@ export type SetData = {
   reps: number;
   weight_kg: number;
   rir?: number | null;
+  _id?: string;
 };
 
 export type ExerciseEntry = {

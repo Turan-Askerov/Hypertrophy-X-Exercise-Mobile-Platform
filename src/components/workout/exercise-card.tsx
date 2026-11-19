@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  Easing,
+  FadeInDown,
+  FadeOut,
+  LinearTransition,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 
 import { ExerciseOptionsSheet } from '@/components/workout/exercise-options-sheet';
@@ -8,7 +14,7 @@ import { SupersetPickerSheet } from '@/components/workout/superset-picker-sheet'
 import { getSupersetTheme } from '@/constants/superset';
 import { AppColors, Radius, Spacing } from '@/constants/theme';
 import { formatVolume, exerciseVolume } from '@/lib/volume';
-import { workoutDraft } from '@/lib/workout-draft';
+import { generateSetId, workoutDraft } from '@/lib/workout-draft';
 import type { ExerciseEntry, SetData } from '@/types/workout';
 
 export type ExerciseCardProps = {
@@ -39,8 +45,38 @@ export const ExerciseCard = React.memo(function ExerciseCard({
   const sets = entry.sets_data ?? [];
 
   const handleSetChange = (setIdx: number, updatedSet: SetData) => {
-    const nextSets = [...sets];
-    nextSets[setIdx] = updatedSet;
+    const nextSets = sets.map((s) => ({ ...s }));
+    const oldSet = sets[setIdx];
+    nextSets[setIdx] = {
+      ...updatedSet,
+      _id: oldSet._id || updatedSet._id || generateSetId(),
+    };
+
+    // Web sürümündeki otomatik yayılım (auto-propagation) mantığı:
+    // Bir sette (özellikle 1. sette) ağırlık, tekrar veya RİR değiştirildiğinde;
+    // alttaki henüz özel değer girilmemiş (eski değerle aynı veya boş/0 olan) setler de aynı değere güncellenir.
+    const weightChanged = updatedSet.weight_kg !== oldSet.weight_kg;
+    const repsChanged = updatedSet.reps !== oldSet.reps;
+    const rirChanged = updatedSet.rir !== oldSet.rir;
+
+    for (let i = setIdx + 1; i < nextSets.length; i++) {
+      if (weightChanged) {
+        if (nextSets[i].weight_kg === oldSet.weight_kg || nextSets[i].weight_kg === 0) {
+          nextSets[i].weight_kg = updatedSet.weight_kg;
+        }
+      }
+      if (repsChanged) {
+        if (nextSets[i].reps === oldSet.reps || nextSets[i].reps === 0) {
+          nextSets[i].reps = updatedSet.reps;
+        }
+      }
+      if (rirChanged) {
+        if (nextSets[i].rir === oldSet.rir || nextSets[i].rir === null) {
+          nextSets[i].rir = updatedSet.rir;
+        }
+      }
+    }
+
     onUpdate({ ...entry, sets_data: nextSets });
   };
 
@@ -50,15 +86,17 @@ export const ExerciseCard = React.memo(function ExerciseCard({
       weight_kg: lastSet?.weight_kg ?? 0,
       reps: lastSet?.reps ?? 0,
       rir: lastSet?.rir ?? null,
+      _id: generateSetId(),
     };
     onUpdate({ ...entry, sets_data: [...sets, newSet] });
   };
 
   const handleDeleteSet = (setIdx: number) => {
     if (sets.length <= 1) {
+      const currentId = sets[0]?._id || generateSetId();
       onUpdate({
         ...entry,
-        sets_data: [{ weight_kg: 0, reps: 0, rir: null }],
+        sets_data: [{ weight_kg: 0, reps: 0, rir: null, _id: currentId }],
       });
       return;
     }
@@ -90,7 +128,10 @@ export const ExerciseCard = React.memo(function ExerciseCard({
   };
 
   return (
-    <View style={styles.card}>
+    <Animated.View
+      layout={LinearTransition.duration(260).easing(Easing.bezier(0.25, 1, 0.5, 1))}
+      style={styles.card}
+    >
       {/* ─── KART BAŞLIĞI ─── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -161,20 +202,32 @@ export const ExerciseCard = React.memo(function ExerciseCard({
       </View>
 
       {/* ─── SET SATIRLARI ─── */}
-      <View style={styles.setsList}>
-        {sets.map((set, setIdx) => (
-          <SetRow
-            key={setIdx}
-            index={setIdx}
-            set={set}
-            isBodyweight={entry.is_bodyweight}
-            onChange={(updated) => handleSetChange(setIdx, updated)}
-            onDelete={() => handleDeleteSet(setIdx)}
-            onAddSet={handleAddSet}
-            onComplete={onTriggerRestTimer}
-          />
-        ))}
-      </View>
+      <Animated.View
+        layout={LinearTransition.duration(260).easing(Easing.bezier(0.25, 1, 0.5, 1))}
+        style={styles.setsList}
+      >
+        {sets.map((set, setIdx) => {
+          const setId = set._id || `set_${entry.exercise_id}_${setIdx}`;
+          return (
+            <Animated.View
+              key={setId}
+              entering={FadeInDown.duration(260).easing(Easing.bezier(0.25, 1, 0.5, 1))}
+              exiting={FadeOut.duration(200).easing(Easing.in(Easing.quad))}
+              layout={LinearTransition.duration(260).easing(Easing.bezier(0.25, 1, 0.5, 1))}
+            >
+              <SetRow
+                index={setIdx}
+                set={set}
+                isBodyweight={entry.is_bodyweight}
+                onChange={(updated) => handleSetChange(setIdx, updated)}
+                onDelete={() => handleDeleteSet(setIdx)}
+                onAddSet={handleAddSet}
+                onComplete={onTriggerRestTimer}
+              />
+            </Animated.View>
+          );
+        })}
+      </Animated.View>
 
       {/* ─── 3 NOKTA ALTTAN AÇILAN SEÇENEK PANOSU ─── */}
       <ExerciseOptionsSheet
@@ -200,7 +253,7 @@ export const ExerciseCard = React.memo(function ExerciseCard({
         onClose={() => setSupersetSheetVisible(false)}
         onSelectTarget={handleLinkSuperset}
       />
-    </View>
+    </Animated.View>
   );
 });
 

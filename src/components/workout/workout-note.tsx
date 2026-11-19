@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppColors, Radius, Spacing, Typography } from '@/constants/theme';
 
@@ -9,45 +9,26 @@ export type WorkoutNoteProps = {
 };
 
 export function WorkoutNote({ value, onChange }: WorkoutNoteProps) {
-  const [isOpen, setIsOpen] = useState(Boolean(value));
-
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.header}
-        onPress={() => setIsOpen((prev) => !prev)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.titleRow}>
-          <Text style={styles.icon}>📝</Text>
-          <Text style={styles.title}>Günün Antrenman Notu</Text>
-        </View>
-        <View style={styles.togglePill}>
-          <Text style={styles.toggleText}>{isOpen ? 'Gizle' : 'Düzenle'}</Text>
-        </View>
-      </TouchableOpacity>
+      <View style={styles.titleRow}>
+        <Text style={styles.icon}>📝</Text>
+        <Text style={styles.title}>Günün Antrenman Notu</Text>
+      </View>
 
-      {isOpen ? (
-        <View style={styles.body}>
-          <TextInput
-            style={styles.input}
-            multiline
-            numberOfLines={3}
-            placeholder="Bugünkü antrenman, uyku, enerji veya form durumu hakkında notlar..."
-            placeholderTextColor={AppColors.muted}
-            value={value}
-            onChangeText={onChange}
-            maxLength={500}
-          />
-          <Text style={styles.counter}>{value.length} / 500</Text>
-        </View>
-      ) : value ? (
-        <View style={styles.previewBox}>
-          <Text style={styles.previewText} numberOfLines={2}>
-            &ldquo;{value}&rdquo;
-          </Text>
-        </View>
-      ) : null}
+      <View style={styles.body}>
+        <TextInput
+          style={styles.input}
+          multiline
+          numberOfLines={3}
+          placeholder="Bugünkü antrenman, uyku, enerji veya form durumu hakkında notlar..."
+          placeholderTextColor={AppColors.muted}
+          value={value}
+          onChangeText={onChange}
+          maxLength={500}
+        />
+        <Text style={styles.counter}>{value.length} / 500</Text>
+      </View>
     </View>
   );
 }
@@ -61,15 +42,11 @@ const styles = StyleSheet.create({
     padding: Spacing.two + 4,
     marginBottom: Spacing.three,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 8,
   },
   icon: {
     fontSize: 14,
@@ -80,21 +57,7 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     letterSpacing: -0.2,
   },
-  togglePill: {
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  toggleText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#C084FC',
-  },
   body: {
-    marginTop: Spacing.two,
     gap: 4,
   },
   input: {
@@ -105,25 +68,12 @@ const styles = StyleSheet.create({
     padding: Spacing.two,
     fontSize: Typography.label,
     color: '#FFFFFF',
-    minHeight: 70,
+    minHeight: 72,
     textAlignVertical: 'top',
   },
   counter: {
     fontSize: 11,
     color: AppColors.muted,
     textAlign: 'right',
-  },
-  previewBox: {
-    marginTop: Spacing.two,
-    backgroundColor: '#0F1528',
-    borderRadius: Radius.md,
-    padding: Spacing.two,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  previewText: {
-    fontSize: Typography.small,
-    color: '#94A3B8',
-    fontStyle: 'italic',
   },
 });

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   Alert,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,21 +18,33 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ExerciseList } from '@/components/workout/exercise-list';
 import { FinishWorkoutDialog } from '@/components/workout/finish-workout-dialog';
 import { FutureDateModal } from '@/components/workout/future-date-modal';
+import { GymPickerModal } from '@/components/workout/gym-picker-modal';
 import { LiveStatsBar } from '@/components/workout/live-stats-bar';
 import { RestTimer } from '@/components/workout/rest-timer';
 import { WorkoutCalendarModal } from '@/components/workout/workout-calendar-modal';
 import { WorkoutCalendarView } from '@/components/workout/workout-calendar-view';
+import { WorkoutValidationModal } from '@/components/workout/workout-validation-modal';
 import {
   formatDurationHuman,
   WorkoutTimerBar,
 } from '@/components/workout/workout-timer-bar';
 import { WorkoutNote } from '@/components/workout/workout-note';
 import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { useExpertData } from '@/hooks/use-expert';
 import { useWorkouts } from '@/hooks/use-workouts';
 import { formatTrDate } from '@/lib/rpe';
 import { exerciseVolume } from '@/lib/volume';
 import { workoutDraft } from '@/lib/workout-draft';
 import { DEFAULT_SESSION_TYPES } from '@/types/workout';
+
+function formatDotDate(iso: string): string {
+  if (!iso) return '';
+  const parts = iso.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  }
+  return iso;
+}
 
 export default function WorkoutScreen() {
   const router = useRouter();
@@ -40,6 +54,8 @@ export default function WorkoutScreen() {
   );
 
   const { workouts, saveWorkout, isSaving } = useWorkouts();
+  const { data: expertData } = useExpertData();
+  const gyms = useMemo(() => expertData?.gyms || [], [expertData?.gyms]);
 
   const todayIso = useMemo(() => {
     const d = new Date();
@@ -69,11 +85,27 @@ export default function WorkoutScreen() {
   const [manualDurationMinutes, setManualDurationMinutes] = useState<number>(45);
 
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
+  const [gymModalOpen, setGymModalOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [showRestTimer, setShowRestTimer] = useState(false);
   const [customSessionOpen, setCustomSessionOpen] = useState(false);
   const [customSessionText, setCustomSessionText] = useState('');
+  const [validationModal, setValidationModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    actionLabel?: string;
+    onAction?: () => void;
+    showCancel?: boolean;
+    cancelLabel?: string;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
 
   // ─── Canlı Antrenman Süresi Sayacı (Yalnızca Canlı Modda Çalışır) ───
   const [hasStarted, setHasStarted] = useState(false);
@@ -83,8 +115,9 @@ export default function WorkoutScreen() {
   const pausedSecondsRef = useRef<number>(0);
   const [futureModalOpen, setFutureModalOpen] = useState(false);
 
-  // Antrenman Kaydı Ana Sayfası: Egzersiz seçilene kadar daima bu başlangıç ekranı gösterilir
-  const isLanding = draft.exercises.length === 0;
+  // Antrenman Kaydı Ana Sayfası: Başlatılana kadar veya egzersiz yoksa başlangıç ekranı gösterilir
+  // Temizle dendiğinde hasStarted true kalır ve sayfa değişimi olmadan aktif ekranda kalınır
+  const isLanding = !hasStarted && draft.exercises.length === 0;
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -109,6 +142,20 @@ export default function WorkoutScreen() {
     };
   }, [entryMode, hasStarted, isTimerRunning]);
 
+  // Varsayılan salonu taslağa otomatik ata (eğer henüz seçilmemişse)
+  useEffect(() => {
+    if (
+      expertData?.default_gym_id &&
+      draft.gym_id === undefined
+    ) {
+      const defGym = expertData.gyms?.find((g) => g.id === expertData.default_gym_id);
+      workoutDraft.setGym(
+        expertData.default_gym_id,
+        expertData.default_gym_name || defGym?.name || null
+      );
+    }
+  }, [expertData, draft.gym_id]);
+
   const handleStartWorkout = () => {
     setHasStarted(true);
     setIsTimerRunning(true);
@@ -122,6 +169,17 @@ export default function WorkoutScreen() {
   const handleSelectDate = (newDate: string) => {
     if (newDate > todayIso) {
       setFutureModalOpen(true);
+      return;
+    }
+    if (entryMode === 'live' && hasStarted && newDate !== todayIso) {
+      setValidationModal({
+        visible: true,
+        title: 'Tarih Değiştirilemez',
+        message:
+          'Canlı antrenman seansları yalnızca güncel gün (Bugün) için kaydedilebilir.',
+        actionLabel: 'Tamam',
+        showCancel: false,
+      });
       return;
     }
     workoutDraft.setDate(newDate);
@@ -161,6 +219,16 @@ export default function WorkoutScreen() {
     }
   };
 
+  const handleCancelWorkout = () => {
+    workoutDraft.reset();
+    setHasStarted(false);
+    setIsTimerRunning(false);
+    setDurationSeconds(0);
+    startTimeRef.current = null;
+    pausedSecondsRef.current = 0;
+    setCancelDialogOpen(false);
+  };
+
   const handleSelectSessionType = (type: string) => {
     if (type === 'Diğer') {
       setCustomSessionOpen(true);
@@ -184,7 +252,18 @@ export default function WorkoutScreen() {
   // Bitir / Kaydet Butonuna Basıldığında Onay Diyaloğunu Aç
   const handleOpenFinishDialog = () => {
     if (draft.exercises.length === 0) {
-      Alert.alert('Uyarı', 'Lütfen antrenmanı kaydetmeden önce en az bir egzersiz ekleyin.');
+      setValidationModal({
+        visible: true,
+        title: 'Egzersiz Eklenmedi',
+        message: 'Antrenmanı kaydetmek için lütfen listenize en az bir egzersiz ekleyin.',
+        actionLabel: '+ Egzersiz Ekle',
+        showCancel: true,
+        cancelLabel: 'Vazgeç',
+        onAction: () => {
+          setValidationModal((prev) => ({ ...prev, visible: false }));
+          router.push('/(app)/workout/add-exercise');
+        },
+      });
       return;
     }
 
@@ -192,10 +271,16 @@ export default function WorkoutScreen() {
       ex.sets_data.some((s) => s.reps > 0)
     );
     if (!hasValidSets) {
-      Alert.alert(
-        'Uyarı',
-        'Kaydetmek için en az bir sette tekrar (reps) sayısı girilmelidir.'
-      );
+      setValidationModal({
+        visible: true,
+        title: 'Eksik Set Bilgisi',
+        message: 'Antrenmanı kaydedebilmek için en az bir sete geçerli bir tekrar (reps) sayısı girmelisiniz.',
+        actionLabel: 'Tamam',
+        showCancel: false,
+        onAction: () => {
+          setValidationModal((prev) => ({ ...prev, visible: false }));
+        },
+      });
       return;
     }
 
@@ -272,41 +357,55 @@ export default function WorkoutScreen() {
           <View style={styles.topBar}>
             <View style={styles.activeHeaderLeft}>
               <View>
-                <View style={styles.activeTitleRow}>
-                  <Text style={styles.screenTitle}>Antrenman Kaydı</Text>
-                  <View style={styles.sessionBadge}>
-                    <Text style={styles.sessionBadgeText}>
-                      {draft.session_type || 'Üst Vücut'}
+                <Text style={styles.screenTitle}>Antrenman Kaydı</Text>
+                <View style={styles.activeHeaderSubRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (entryMode === 'live') {
+                        setValidationModal({
+                          visible: true,
+                          title: 'Tarih Değiştirilemez',
+                          message:
+                            'Canlı antrenman seansları yalnızca bugünün tarihi için kaydedilebilir. Geçmişe dönük bir kayıt girmek istiyorsanız antrenmanı iptal edip "Geçmiş Kayıt" modunu seçebilirsiniz.',
+                          actionLabel: 'Tamam',
+                          showCancel: false,
+                        });
+                        return;
+                      }
+                      setDateSheetOpen(true);
+                    }}
+                    style={styles.dateSelector}
+                    activeOpacity={entryMode === 'live' ? 0.85 : 0.7}
+                  >
+                    <Text style={styles.dateSelectorText}>
+                      {entryMode === 'live'
+                        ? `Bugün ${formatDotDate(todayIso)}`
+                        : `${formatDotDate(draft.date)} ▾`}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
+
+                  <Text style={styles.activeHeaderSubDivider}>•</Text>
+
+                  <TouchableOpacity
+                    onPress={() => setGymModalOpen(true)}
+                    style={styles.gymHeaderSelector}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.gymHeaderSelectorText} numberOfLines={1}>
+                      📍 {draft.gym_name || 'Salon Seç'} ▾
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  onPress={() => setDateSheetOpen(true)}
-                  style={styles.dateSelector}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.dateSelectorText}>
-                    {formatTrDate(draft.date)} ▾
-                  </Text>
-                </TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.topActions}>
               <TouchableOpacity
-                style={styles.historyBtn}
-                onPress={() => router.push('/(app)/history')}
+                style={styles.cancelBtn}
+                onPress={() => setCancelDialogOpen(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.historyBtnText}>Geçmiş</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.resetBtn}
-                onPress={() => setResetDialogOpen(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.resetBtnText}>Temizle</Text>
+                <Text style={styles.cancelBtnText}>İptal</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -371,7 +470,83 @@ export default function WorkoutScreen() {
               ) : null}
             </View>
 
-            {/* 2. ORTASINDA: 2 BUTON (CANLI MI / KAYIT MI) */}
+            {/* 2. ANTRENMAN SALONU (SEÇENEK A) */}
+            <View style={styles.landingSection}>
+              <View style={styles.landingSectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Antrenman Salonu</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/(app)/workout-preferences/gyms' as any)}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={styles.landingManageGymsText}>Salonları Yönet ⚙️</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sessionTypeScroll}
+              >
+                {gyms.map((gym) => {
+                  const isSelected = draft.gym_id === gym.id;
+                  return (
+                    <TouchableOpacity
+                      key={gym.id}
+                      onPress={() => workoutDraft.setGym(gym.id, gym.name)}
+                      style={[
+                        styles.sessionChip,
+                        styles.gymLandingChip,
+                        isSelected && styles.selectedSessionChip,
+                      ]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.gymLandingChipIcon}>📍</Text>
+                      <Text
+                        style={[
+                          styles.sessionChipText,
+                          isSelected && styles.selectedSessionChipText,
+                        ]}
+                      >
+                        {gym.name}
+                      </Text>
+                      {gym.is_default && (
+                        <View style={styles.landingGymDefaultBadge}>
+                          <Text style={styles.landingGymDefaultBadgeText}>Varsayılan</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+
+                <TouchableOpacity
+                  onPress={() => workoutDraft.setGym(null, null)}
+                  style={[
+                    styles.sessionChip,
+                    draft.gym_id === null && styles.selectedSessionChip,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.sessionChipText,
+                      draft.gym_id === null && styles.selectedSessionChipText,
+                    ]}
+                  >
+                    🏢 Diğer / Belirtilmedi
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => router.push('/(app)/workout-preferences/gyms' as any)}
+                  style={styles.landingAddGymBtn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.landingAddGymBtnText}>+ Salon Ekle</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+
+            {/* 3. ORTASINDA: 2 BUTON (CANLI MI / KAYIT MI) */}
             <View style={styles.landingSection}>
               <Text style={styles.sectionTitle}>Antrenmanı Nasıl Yapacaksınız?</Text>
               <View style={styles.landingModeRow}>
@@ -478,12 +653,12 @@ export default function WorkoutScreen() {
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
             >
-              {/* 1. Canlı İstatistik Çubuğu (Toplam Set, Toplam Hacim ve Kayıt Tarihi) */}
+              {/* 1. Canlı İstatistik Çubuğu (Toplam Set, Toplam Hacim ve Seans Türü) */}
               <View style={styles.section}>
                 <LiveStatsBar
                   exercises={draft.exercises}
-                  date={draft.date}
-                  onPressDate={() => setDateSheetOpen(true)}
+                  sessionType={draft.session_type}
+                  onPressSessionType={() => setSessionPickerOpen(true)}
                 />
               </View>
 
@@ -528,6 +703,7 @@ export default function WorkoutScreen() {
                 onStart={handleStartWorkout}
                 onTogglePause={handleToggleTimer}
                 onFinish={handleOpenFinishDialog}
+                onReset={() => setResetDialogOpen(true)}
               />
             ) : (
               <View style={styles.manualBottomBar}>
@@ -560,13 +736,24 @@ export default function WorkoutScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.manualSaveBtn}
-                  onPress={handleOpenFinishDialog}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.manualSaveBtnText}>Antrenmanı Kaydet</Text>
-                </TouchableOpacity>
+                {/* Temizle & Antrenmanı Kaydet Yan Yana */}
+                <View style={styles.manualActionsGroup}>
+                  <TouchableOpacity
+                    style={styles.manualResetBtn}
+                    onPress={() => setResetDialogOpen(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.manualResetBtnText}>Temizle</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.manualSaveBtn}
+                    onPress={handleOpenFinishDialog}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.manualSaveBtnText}>Antrenmanı Kaydet</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </>
@@ -580,6 +767,8 @@ export default function WorkoutScreen() {
           totalSetsCount={totalSetsCount}
           totalVolume={totalVolume}
           note={draft.notes}
+          gymName={draft.gym_name}
+          onPressGym={() => setGymModalOpen(true)}
           isSaving={isSaving}
           onConfirm={handleConfirmFinish}
           onCancel={() => setFinishDialogOpen(false)}
@@ -594,29 +783,105 @@ export default function WorkoutScreen() {
           onClose={() => setDateSheetOpen(false)}
         />
 
-        {/* Taslağı Temizle Diyaloğu */}
+        {/* ─── ANTRENMAN SALONU SEÇİM MODALI (MODAL) ─── */}
+        <GymPickerModal
+          visible={gymModalOpen}
+          onClose={() => setGymModalOpen(false)}
+          selectedGymId={draft.gym_id}
+          gyms={gyms}
+          onSelectGym={(gymId, gymName) => workoutDraft.setGym(gymId, gymName)}
+          onManageGyms={() => router.push('/(app)/workout-preferences/gyms' as any)}
+        />
+
+        {/* Antrenmanı Temizle Diyaloğu */}
         <ConfirmDialog
           visible={resetDialogOpen}
-          title="Antrenmanı Temizle"
-          message="Girilen tüm egzersiz ve setler silinecek. Emin misiniz?"
+          title="Hareketleri Temizle"
+          message="Seçili tüm hareketler listeden kaldırılacak. Emin misiniz?"
           confirmText="Evet, Temizle"
           destructive
           onConfirm={() => {
-            workoutDraft.reset();
-            setHasStarted(false);
-            setIsTimerRunning(false);
-            setDurationSeconds(0);
-            startTimeRef.current = null;
-            pausedSecondsRef.current = 0;
+            workoutDraft.clearExercises();
             setResetDialogOpen(false);
           }}
           onCancel={() => setResetDialogOpen(false)}
         />
+
+        {/* Antrenmanı İptal Et Diyaloğu (Header'daki İptal Butonu İçin) */}
+        <ConfirmDialog
+          visible={cancelDialogOpen}
+          title="Antrenmanı İptal Et"
+          message="Mevcut antrenman kaydı iptal edilecek, tüm işlemler sıfırlanarak ana sayfaya dönülecektir. Onaylıyor musunuz?"
+          confirmText="Evet, İptal Et"
+          cancelText="Vazgeç"
+          destructive
+          onConfirm={handleCancelWorkout}
+          onCancel={() => setCancelDialogOpen(false)}
+        />
+
         {/* Gelecek Tarih Uyarı Panosu (Şık Neon Tasarım) */}
         <FutureDateModal
           visible={futureModalOpen}
           onClose={() => setFutureModalOpen(false)}
         />
+
+        {/* Antrenman Doğrulama / Eksik Bilgi Uyarı Panosu */}
+        <WorkoutValidationModal
+          visible={validationModal.visible}
+          title={validationModal.title}
+          message={validationModal.message}
+          actionLabel={validationModal.actionLabel}
+          onAction={validationModal.onAction}
+          showCancel={validationModal.showCancel}
+          cancelLabel={validationModal.cancelLabel}
+          onClose={() => setValidationModal((prev) => ({ ...prev, visible: false }))}
+        />
+
+        {/* Seans Türü Seçim Modalı (3'lü Göstergeden Tıklandığında) */}
+        <Modal
+          visible={sessionPickerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSessionPickerOpen(false)}
+          statusBarTranslucent
+        >
+          <Pressable
+            style={styles.sessionPickerModalBackdrop}
+            onPress={() => setSessionPickerOpen(false)}
+          >
+            <Pressable style={styles.sessionPickerCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.sessionPickerTitle}>Seans Türünü Değiştir</Text>
+              <View style={styles.sessionPickerGrid}>
+                {DEFAULT_SESSION_TYPES.map((type) => {
+                  const isSelected = draft.session_type === type;
+                  return (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.sessionPickerChip,
+                        isSelected && styles.sessionPickerChipActive,
+                      ]}
+                      onPress={() => {
+                        handleSelectSessionType(type);
+                        setSessionPickerOpen(false);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text
+                        style={[
+                          styles.sessionPickerChipText,
+                          isSelected && styles.sessionPickerChipTextActive,
+                        ]}
+                      >
+                        {type}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -647,12 +912,36 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   dateSelector: {
-    marginTop: 2,
+    marginTop: 0,
   },
   dateSelectorText: {
     fontSize: Typography.small,
     color: '#C084FC',
     fontWeight: '700',
+  },
+  activeHeaderSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 3,
+  },
+  activeHeaderSubDivider: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  gymHeaderSelector: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.3)',
+  },
+  gymHeaderSelectorText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#D8B4FE',
+    maxWidth: 150,
   },
   topActions: {
     flexDirection: 'row',
@@ -664,23 +953,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  activeTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  cancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6.5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1.4,
+    borderColor: '#EF4444',
   },
-  sessionBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: 7,
-    backgroundColor: 'rgba(168, 85, 247, 0.16)',
-    borderWidth: 1.2,
-    borderColor: '#C084FC',
-  },
-  sessionBadgeText: {
-    fontSize: 10.5,
+  cancelBtnText: {
+    fontSize: Typography.small,
     fontWeight: '800',
-    color: '#E9D5FF',
+    color: '#FCA5A5',
   },
   historyBtn: {
     backgroundColor: 'rgba(168, 85, 247, 0.12)',
@@ -694,19 +978,6 @@ const styles = StyleSheet.create({
     fontSize: Typography.small,
     fontWeight: '800',
     color: '#D8B4FE',
-  },
-  resetBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.10)',
-    paddingHorizontal: Spacing.two + 4,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#EF4444',
-  },
-  resetBtnText: {
-    fontSize: Typography.small,
-    color: '#F87171',
-    fontWeight: '800',
   },
   scrollArea: {
     flex: 1,
@@ -728,6 +999,51 @@ const styles = StyleSheet.create({
   },
   landingSection: {
     gap: 8,
+  },
+  landingSectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  landingManageGymsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#C084FC',
+  },
+  gymLandingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gymLandingChipIcon: {
+    fontSize: 13,
+  },
+  landingGymDefaultBadge: {
+    backgroundColor: 'rgba(192, 132, 252, 0.2)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginLeft: 2,
+  },
+  landingGymDefaultBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#E9D5FF',
+  },
+  landingAddGymBtn: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 8,
+    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(168, 85, 247, 0.10)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  landingAddGymBtnText: {
+    fontSize: Typography.small,
+    fontWeight: '800',
+    color: '#D8B4FE',
   },
   landingModeRow: {
     flexDirection: 'row',
@@ -959,41 +1275,40 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingTop: 10,
+    paddingBottom: 14,
     gap: 12,
   },
   manualDurationGroup: {
-    flex: 1,
-    gap: 3,
+    gap: 6,
   },
   manualDurationLabel: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '800',
     color: '#94A3B8',
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
   durationPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   durationPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 3.5,
-    borderRadius: 6,
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   durationPillActive: {
     backgroundColor: 'rgba(192, 132, 252, 0.2)',
     borderColor: '#C084FC',
   },
   durationPillText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#94A3B8',
   },
@@ -1001,9 +1316,29 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     fontWeight: '800',
   },
+  manualActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  manualResetBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(239, 68, 68, 0.55)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manualResetBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FCA5A5',
+  },
   manualSaveBtn: {
-    height: 42,
-    paddingHorizontal: 18,
+    flex: 2.2,
+    height: 44,
     borderRadius: 12,
     borderWidth: 1.6,
     borderColor: '#10B981',
@@ -1012,9 +1347,60 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   manualSaveBtnText: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '900',
     color: '#34D399',
     letterSpacing: 0.2,
+  },
+  sessionPickerModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  sessionPickerCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#0D111E',
+    borderRadius: 18,
+    borderWidth: 1.8,
+    borderColor: 'rgba(168, 85, 247, 0.45)',
+    padding: 18,
+    gap: 12,
+  },
+  sessionPickerTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    textAlign: 'center',
+  },
+  sessionPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  sessionPickerChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  sessionPickerChipActive: {
+    backgroundColor: 'rgba(168, 85, 247, 0.22)',
+    borderWidth: 1.5,
+    borderColor: '#C084FC',
+  },
+  sessionPickerChipText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  sessionPickerChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
 });

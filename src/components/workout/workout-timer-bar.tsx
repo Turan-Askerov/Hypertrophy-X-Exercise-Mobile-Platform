@@ -10,6 +10,7 @@ export type WorkoutTimerBarProps = {
   onStart: () => void;
   onTogglePause: () => void;
   onFinish: () => void;
+  onReset?: () => void;
 };
 
 export function formatDuration(totalSeconds: number): string {
@@ -44,6 +45,7 @@ export const WorkoutTimerBar = React.memo(function WorkoutTimerBar({
   onStart,
   onTogglePause,
   onFinish,
+  onReset,
 }: WorkoutTimerBarProps) {
   const timeFormatted = formatDuration(seconds);
 
@@ -67,7 +69,7 @@ export const WorkoutTimerBar = React.memo(function WorkoutTimerBar({
         </View>
       </View>
 
-      {/* Sağ: Başlat / (Durdur/Devam + Bitir) Neon Çerçeveli Butonlar (İkonsuz) */}
+      {/* Sağ: Başlat / (Durdur/Devam + Temizle + Bitir) Neon Çerçeveli Butonlar */}
       <View style={styles.actionsGroup}>
         {!hasStarted ? (
           /* Başlamadan Önce: Neon Yeşil Çerçeveli "Başlat" Butonu */
@@ -79,7 +81,7 @@ export const WorkoutTimerBar = React.memo(function WorkoutTimerBar({
             <Text style={styles.startBtnText}>Başlat</Text>
           </TouchableOpacity>
         ) : (
-          /* Başladıktan Sonra: "Durdur / Devam" + "Bitir" */
+          /* Başladıktan Sonra: "Durdur / Devam" + "Temizle" + "Bitir" */
           <>
             <TouchableOpacity
               style={[
@@ -98,6 +100,16 @@ export const WorkoutTimerBar = React.memo(function WorkoutTimerBar({
                 {isRunning ? 'Durdur' : 'Devam'}
               </Text>
             </TouchableOpacity>
+
+            {onReset && (
+              <TouchableOpacity
+                style={styles.resetBtn}
+                onPress={onReset}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.resetBtnText}>Temizle</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.finishBtn}
@@ -119,7 +131,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -129,15 +141,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timeInfo: {
-    gap: 2,
+    gap: 1,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   statusLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     color: AppColors.muted,
     textTransform: 'uppercase',
@@ -155,33 +167,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#FBBF24',
   },
   timeText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     color: '#FFFFFF',
     fontVariant: ['tabular-nums'],
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
   actionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
+    gap: 7,
   },
 
   // ─── NEON ÇERÇEVELİ BUTON TASARIMLARI (GÖLGESİZ & İKONSUZ) ───
 
   // Başlat Butonu (Neon Yeşil Çerçeve)
   startBtn: {
-    height: 42,
-    paddingHorizontal: 22,
-    borderRadius: 12,
-    borderWidth: 1.6,
+    height: 35,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: '#10B981',
     backgroundColor: 'rgba(16, 185, 129, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   startBtnText: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '900',
     color: '#34D399',
     letterSpacing: 0.2,
@@ -189,10 +201,10 @@ const styles = StyleSheet.create({
 
   // Durdur / Devam Butonu (Neon Sarı/Amber Çerçeve)
   pauseBtn: {
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: 11,
-    borderWidth: 1.5,
+    height: 33,
+    paddingHorizontal: 11,
+    borderRadius: 9,
+    borderWidth: 1.4,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -205,7 +217,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(253, 224, 71, 0.18)',
   },
   pauseBtnText: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '800',
   },
   pauseTextRunning: {
@@ -215,19 +227,36 @@ const styles = StyleSheet.create({
     color: '#FEF08A',
   },
 
+  // Temizle Butonu (Neon Kırmızı / Rose Çerçeve)
+  resetBtn: {
+    height: 33,
+    paddingHorizontal: 10,
+    borderRadius: 9,
+    borderWidth: 1.4,
+    borderColor: 'rgba(239, 68, 68, 0.55)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resetBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#FCA5A5',
+  },
+
   // Bitir Butonu (Neon Yeşil / Emerald Çerçeve)
   finishBtn: {
-    height: 40,
-    paddingHorizontal: 18,
-    borderRadius: 11,
-    borderWidth: 1.6,
+    height: 33,
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    borderWidth: 1.5,
     borderColor: '#10B981',
     backgroundColor: 'rgba(16, 185, 129, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   finishBtnText: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '900',
     color: '#34D399',
     letterSpacing: 0.2,

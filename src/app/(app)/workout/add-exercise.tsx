@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -44,6 +45,20 @@ export default function AddExerciseScreen() {
     return matchesSearch && matchesMuscle;
   });
 
+  const isExerciseAlreadyInDraft = (exercise: Exercise, excludeIndex = -1) => {
+    const current = workoutDraft.getSnapshot().exercises;
+    return current.some((e, idx) => {
+      if (excludeIndex >= 0 && idx === excludeIndex) return false;
+      return (
+        e.exercise_id === exercise.id ||
+        e.canonical_exercise_id === exercise.id ||
+        (exercise.canonical_exercise_id &&
+          (e.exercise_id === exercise.canonical_exercise_id ||
+            e.canonical_exercise_id === exercise.canonical_exercise_id))
+      );
+    });
+  };
+
   const toggleSelectExercise = (exercise: Exercise) => {
     setSelectedExercises((prev) => {
       const exists = prev.some((e) => e.id === exercise.id);
@@ -56,6 +71,14 @@ export default function AddExerciseScreen() {
 
   const handleItemPress = (item: Exercise) => {
     if (isReplaceMode) {
+      if (isExerciseAlreadyInDraft(item, replaceIndex)) {
+        Alert.alert(
+          'Egzersiz Zaten Ekli',
+          `"${item.name}" zaten antrenman listenizde bulunuyor. Başka bir egzersiz seçiniz.`,
+          [{ text: 'Tamam' }]
+        );
+        return;
+      }
       if (replaceIndex >= 0) {
         workoutDraft.replaceExercise(replaceIndex, item);
       }
@@ -66,6 +89,16 @@ export default function AddExerciseScreen() {
       }
       return;
     }
+
+    if (isExerciseAlreadyInDraft(item)) {
+      Alert.alert(
+        'Egzersiz Zaten Ekli',
+        `"${item.name}" zaten antrenman listenizde bulunuyor. Aynı hareket birden fazla eklenemez.`,
+        [{ text: 'Tamam' }]
+      );
+      return;
+    }
+
     toggleSelectExercise(item);
   };
 
@@ -194,6 +227,9 @@ export default function AddExerciseScreen() {
               />
             }
             renderItem={({ item }) => {
+              const isAlreadyInDraft = isReplaceMode
+                ? isExerciseAlreadyInDraft(item, replaceIndex)
+                : isExerciseAlreadyInDraft(item);
               const isSelected = selectedExercises.some((e) => e.id === item.id);
 
               return (
@@ -201,6 +237,7 @@ export default function AddExerciseScreen() {
                   style={[
                     styles.itemCard,
                     isSelected && styles.itemCardSelected,
+                    isAlreadyInDraft && styles.itemCardDisabled,
                   ]}
                   onPress={() => handleItemPress(item)}
                   activeOpacity={0.75}
@@ -215,6 +252,7 @@ export default function AddExerciseScreen() {
                         style={[
                           styles.itemName,
                           isSelected && styles.itemNameSelected,
+                          isAlreadyInDraft && styles.itemNameDisabled,
                         ]}
                       >
                         {item.name}
@@ -232,14 +270,18 @@ export default function AddExerciseScreen() {
                     </View>
                   </View>
 
-                  {/* Sağ Taraf: Değiştirme Modunda 'Seç', Çoklu Seçimde + */}
-                  {isReplaceMode ? (
+                  {/* Sağ Taraf: Ekli, Değiştirme Modunda 'Seç', Çoklu Seçimde + / ✓ */}
+                  {isAlreadyInDraft ? (
+                    <View style={styles.alreadyAddedBadge}>
+                      <Text style={styles.alreadyAddedText}>Ekli</Text>
+                    </View>
+                  ) : isReplaceMode ? (
                     <View style={styles.replaceTag}>
                       <Text style={styles.replaceTagText}>Seç</Text>
                     </View>
                   ) : (
                     <Text style={[styles.addIcon, isSelected && styles.addIconSelected]}>
-                      +
+                      {isSelected ? '✓' : '+'}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -397,6 +439,27 @@ const styles = StyleSheet.create({
     borderColor: '#10B981', // Neon Yeşil Çerçeve
     borderWidth: 1.5,
     backgroundColor: 'rgba(16, 185, 129, 0.08)',
+  },
+  itemCardDisabled: {
+    opacity: 0.65,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: '#0c101c',
+  },
+  itemNameDisabled: {
+    color: '#94A3B8',
+  },
+  alreadyAddedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.28)',
+  },
+  alreadyAddedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
   },
   itemLeftGroup: {
     flex: 1,

@@ -26,6 +26,11 @@ function notify() {
   for (const l of listeners) l();
 }
 
+let setIdCounter = 0;
+export function generateSetId(): string {
+  return `set_${Date.now()}_${++setIdCounter}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export const workoutDraft = {
   getSnapshot(): WorkoutCreate {
     return currentDraft;
@@ -46,6 +51,11 @@ export const workoutDraft = {
     notify();
   },
 
+  setGym(gym_id?: string | null, gym_name?: string | null) {
+    currentDraft = { ...currentDraft, gym_id, gym_name };
+    notify();
+  },
+
   setNotes(notes: string) {
     currentDraft = { ...currentDraft, notes };
     notify();
@@ -58,7 +68,22 @@ export const workoutDraft = {
   addExercises(exercises: Exercise[]) {
     if (!exercises || exercises.length === 0) return;
 
-    const newEntries: ExerciseEntry[] = exercises.map((exercise) => ({
+    // Filter out duplicates that already exist in the workout
+    const uniqueExercises = exercises.filter(
+      (exercise) =>
+        !currentDraft.exercises.some(
+          (e) =>
+            e.exercise_id === exercise.id ||
+            e.canonical_exercise_id === exercise.id ||
+            (exercise.canonical_exercise_id &&
+              (e.exercise_id === exercise.canonical_exercise_id ||
+                e.canonical_exercise_id === exercise.canonical_exercise_id))
+        )
+    );
+
+    if (uniqueExercises.length === 0) return;
+
+    const newEntries: ExerciseEntry[] = uniqueExercises.map((exercise) => ({
       exercise_id: exercise.id,
       exercise_name: exercise.name,
       muscle_group: exercise.muscle || exercise.muscle_group,
@@ -66,11 +91,9 @@ export const workoutDraft = {
       canonical_exercise_id: exercise.canonical_exercise_id || exercise.id,
       exercise_meta_version: 2,
       sets_data: [
-        {
-          reps: 0,
-          weight_kg: 0,
-          rir: null,
-        },
+        { reps: 0, weight_kg: 0, rir: null, _id: generateSetId() },
+        { reps: 0, weight_kg: 0, rir: null, _id: generateSetId() },
+        { reps: 0, weight_kg: 0, rir: null, _id: generateSetId() },
       ],
     }));
 
@@ -103,13 +126,16 @@ export const workoutDraft = {
       is_bodyweight: newExercise.is_bodyweight || newExercise.bw,
       canonical_exercise_id: newExercise.canonical_exercise_id || newExercise.id,
       exercise_meta_version: 2,
-      sets_data: [
-        {
-          reps: 0,
-          weight_kg: 0,
-          rir: null,
-        },
-      ],
+      sets_data: currentDraft.exercises[index]?.sets_data?.length
+        ? currentDraft.exercises[index].sets_data.map((s) => ({
+            ...s,
+            _id: s._id || generateSetId(),
+          }))
+        : [
+            { reps: 0, weight_kg: 0, rir: null, _id: generateSetId() },
+            { reps: 0, weight_kg: 0, rir: null, _id: generateSetId() },
+            { reps: 0, weight_kg: 0, rir: null, _id: generateSetId() },
+          ],
       superset_id: null,
     };
     const next = [...currentDraft.exercises];
@@ -206,12 +232,22 @@ export const workoutDraft = {
     }
   },
 
+  clearExercises() {
+    currentDraft = {
+      ...currentDraft,
+      exercises: [],
+    };
+    notify();
+  },
+
   reset() {
     currentDraft = {
       date: getTodayIso(),
       session_type: "Üst Vücut",
       notes: "",
       exercises: [],
+      gym_id: null,
+      gym_name: null,
     };
     notify();
   },
@@ -221,9 +257,14 @@ export const workoutDraft = {
       date: workout.date,
       session_type: workout.session_type,
       notes: workout.notes ?? "",
+      gym_id: workout.gym_id ?? null,
+      gym_name: workout.gym_name ?? null,
       exercises: workout.exercises.map((e) => ({
         ...e,
-        sets_data: e.sets_data.map((s) => ({ ...s })),
+        sets_data: e.sets_data.map((s) => ({
+          ...s,
+          _id: s._id || generateSetId(),
+        })),
       })),
     };
     notify();
