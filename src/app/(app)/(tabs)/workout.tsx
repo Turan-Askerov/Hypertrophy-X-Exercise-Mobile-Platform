@@ -1,19 +1,30 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
+import Reanimated, {
+  Easing as ReanimatedEasing,
+  FadeIn,
+  FadeInUp,
+  FadeOut,
+  FadeOutUp,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ExerciseList } from '@/components/workout/exercise-list';
 import { FinishWorkoutDialog } from '@/components/workout/finish-workout-dialog';
@@ -29,13 +40,131 @@ import {
   WorkoutTimerBar,
 } from '@/components/workout/workout-timer-bar';
 import { WorkoutNote } from '@/components/workout/workout-note';
-import { AppColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { AppColors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useExpertData } from '@/hooks/use-expert';
 import { useWorkouts } from '@/hooks/use-workouts';
 import { formatTrDate } from '@/lib/rpe';
 import { exerciseVolume } from '@/lib/volume';
 import { workoutDraft } from '@/lib/workout-draft';
-import { DEFAULT_SESSION_TYPES } from '@/types/workout';
+
+// Android için donanım hızlandırmalı LayoutAnimation etkinleştirme
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const triggerSmoothTransition = () => {
+  try {
+    LayoutAnimation.configureNext({
+      duration: 280,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+  } catch {}
+};
+
+export type SessionTypeDetail = {
+  name: string;
+  subtitle: string;
+  tag?: string;
+};
+
+export const SESSION_DETAILS: Record<string, SessionTypeDetail> = {
+  'Push': {
+    name: 'Push (İtiş)',
+    subtitle: 'Göğüs · Omuz · Triceps',
+    tag: 'Split PPL',
+  },
+  'Pull': {
+    name: 'Pull (Çekiş)',
+    subtitle: 'Sırt · Biceps · Arka Omuz',
+    tag: 'Split PPL',
+  },
+  'Legs': {
+    name: 'Legs (Bacak)',
+    subtitle: 'Quadriceps · Hamstrings · Kalça · Calf',
+    tag: 'Split PPL',
+  },
+  'Upper': {
+    name: 'Upper (Üst Vücut)',
+    subtitle: 'Göğüs · Sırt · Omuz · Kollar',
+    tag: 'Bölgesel',
+  },
+  'Üst Vücut': {
+    name: 'Upper (Üst Vücut)',
+    subtitle: 'Göğüs · Sırt · Omuz · Kollar',
+    tag: 'Bölgesel',
+  },
+  'Lower': {
+    name: 'Lower (Alt Vücut)',
+    subtitle: 'Ön/Arka Bacak · Kalça · Karın (Core)',
+    tag: 'Bölgesel',
+  },
+  'Alt Vücut': {
+    name: 'Lower (Alt Vücut)',
+    subtitle: 'Ön/Arka Bacak · Kalça · Karın (Core)',
+    tag: 'Bölgesel',
+  },
+  'Full Body': {
+    name: 'Full Body (Tüm Vücut)',
+    subtitle: 'Bileşik Tüm Ana Kas Grupları',
+    tag: 'Fonksiyonel',
+  },
+  'Tam Vücut': {
+    name: 'Full Body (Tüm Vücut)',
+    subtitle: 'Bileşik Tüm Ana Kas Grupları',
+    tag: 'Fonksiyonel',
+  },
+  'Arms': {
+    name: 'Arms (Kol)',
+    subtitle: 'Biceps · Triceps · Ön Kol',
+    tag: 'İzole',
+  },
+  'Core': {
+    name: 'Core (Karın)',
+    subtitle: 'Abs · Oblikler · Karın & Stabilite',
+    tag: 'İzole',
+  },
+  'Rotatorlar': {
+    name: 'Rotatorlar (Omuz ve Kalça)',
+    subtitle: 'Omuz Stabilizasyonu · Kalça Mobilite',
+    tag: 'Stabilite',
+  },
+  'Kardiyo': {
+    name: 'Kardiyo & Kondisyon',
+    subtitle: 'Kardiyovasküler Dayanıklılık & Yağ Yakımı',
+    tag: 'Kondisyon',
+  },
+  'Diğer': {
+    name: 'Özel Seans (Tüm Hareketler)',
+    subtitle: 'Kişiselleştirilmiş antrenman seansı',
+    tag: 'Özel',
+  },
+  'Custom': {
+    name: 'Özel Seans (Tüm Hareketler)',
+    subtitle: 'Kişiselleştirilmiş antrenman seansı',
+    tag: 'Özel',
+  },
+};
+
+export function getSessionInfo(type?: string | null): SessionTypeDetail {
+  if (type && SESSION_DETAILS[type]) {
+    return SESSION_DETAILS[type];
+  }
+  return {
+    name: type || 'Özel Seans',
+    subtitle: 'Özel antrenman seansı',
+    tag: 'Özel',
+  };
+}
 
 function formatDotDate(iso: string): string {
   if (!iso) return '';
@@ -45,6 +174,20 @@ function formatDotDate(iso: string): string {
   }
   return iso;
 }
+
+export const ORDERED_SESSION_TYPES = [
+  'Push',
+  'Pull',
+  'Legs',
+  'Upper',
+  'Lower',
+  'Full Body',
+  'Arms',
+  'Core',
+  'Rotatorlar',
+  'Kardiyo',
+  'Diğer',
+] as const;
 
 export default function WorkoutScreen() {
   const router = useRouter();
@@ -59,15 +202,6 @@ export default function WorkoutScreen() {
 
   const todayIso = useMemo(() => {
     const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }, []);
-
-  const yesterdayIso = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -93,6 +227,142 @@ export default function WorkoutScreen() {
   const [showRestTimer, setShowRestTimer] = useState(false);
   const [customSessionOpen, setCustomSessionOpen] = useState(false);
   const [customSessionText, setCustomSessionText] = useState('');
+  const [sessionDropdownOpen, setSessionDropdownOpen] = useState(false);
+
+  // ─── Açılır Menü Akıcı Animasyon Değerleri ───
+  const [fadeAnim] = useState(() => new Animated.Value(0));
+  const [translateAnim] = useState(() => new Animated.Value(-10));
+  const [rotateAnim] = useState(() => new Animated.Value(0));
+  const isOpeningRef = useRef(false);
+  const isClosingRef = useRef(false);
+
+  // ─── Canlı / Geçmiş Kayıt Mod Butonları Yumuşak Dokunma Animasyonu ───
+  const [liveBtnScale] = useState(() => new Animated.Value(1));
+  const [manualBtnScale] = useState(() => new Animated.Value(1));
+
+  const animateModePress = (scaleVal: Animated.Value) => {
+    Animated.sequence([
+      Animated.timing(scaleVal, {
+        toValue: 0.94,
+        duration: 70,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleVal, {
+        toValue: 1,
+        friction: 5,
+        tension: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const chevronRotate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
+
+  const openDropdownWithAnimation = () => {
+    isOpeningRef.current = true;
+    isClosingRef.current = false;
+    setTimeout(() => {
+      isOpeningRef.current = false;
+    }, 120);
+
+    setSessionDropdownOpen(true);
+    fadeAnim.setValue(0);
+    translateAnim.setValue(-10);
+
+    // Yukarıdan aşağıya akıcı açılış
+    Animated.parallel([
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 140,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 120,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateAnim, {
+        toValue: 0,
+        duration: 140,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeDropdownWithAnimation = (onClosed?: () => void) => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+
+    // Aşağıdan yukarıya doğru toplanarak akıcı kapanış
+    Animated.parallel([
+      Animated.timing(rotateAnim, {
+        toValue: 0,
+        duration: 130,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 110,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateAnim, {
+        toValue: -10,
+        duration: 130,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSessionDropdownOpen(false);
+      isClosingRef.current = false;
+      if (onClosed) onClosed();
+    });
+  };
+
+  const handleToggleDropdown = () => {
+    if (isClosingRef.current) return;
+    if (sessionDropdownOpen) {
+      closeDropdownWithAnimation();
+      return;
+    }
+    openDropdownWithAnimation();
+  };
+
+  const selectedSessionInfo = useMemo(() => {
+    return getSessionInfo(draft.session_type);
+  }, [draft.session_type]);
+
+  const availableSessionTypes = useMemo(() => {
+    if (draft.session_type && !ORDERED_SESSION_TYPES.includes(draft.session_type as any)) {
+      return [draft.session_type, ...ORDERED_SESSION_TYPES];
+    }
+    return ORDERED_SESSION_TYPES as unknown as string[];
+  }, [draft.session_type]);
+
+  // Seçili olan kart listede ikinci kez görünmesin (kullanıcı talebi)
+  const filteredSessionTypes = useMemo(() => {
+    return availableSessionTypes.filter((type) => {
+      const isSelected =
+        draft.session_type === type ||
+        (type === 'Upper' && draft.session_type === 'Üst Vücut') ||
+        (type === 'Üst Vücut' && draft.session_type === 'Upper') ||
+        (type === 'Lower' && draft.session_type === 'Alt Vücut') ||
+        (type === 'Alt Vücut' && draft.session_type === 'Lower') ||
+        (type === 'Full Body' && draft.session_type === 'Tam Vücut') ||
+        (type === 'Tam Vücut' && draft.session_type === 'Full Body') ||
+        (type === 'Diğer' && draft.session_type === 'Custom') ||
+        (type === 'Custom' && draft.session_type === 'Diğer');
+      return !isSelected;
+    });
+  }, [availableSessionTypes, draft.session_type]);
+
   const [validationModal, setValidationModal] = useState<{
     visible: boolean;
     title: string;
@@ -118,6 +388,7 @@ export default function WorkoutScreen() {
   // Antrenman Kaydı Ana Sayfası: Başlatılana kadar veya egzersiz yoksa başlangıç ekranı gösterilir
   // Temizle dendiğinde hasStarted true kalır ve sayfa değişimi olmadan aktif ekranda kalınır
   const isLanding = !hasStarted && draft.exercises.length === 0;
+  const hasExercises = draft.exercises.length > 0;
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -189,15 +460,19 @@ export default function WorkoutScreen() {
   };
 
   const handleSelectLiveMode = () => {
+    if (entryMode === 'live') return;
+    triggerSmoothTransition();
+    animateModePress(liveBtnScale);
     setEntryMode('live');
     workoutDraft.setDate(todayIso);
   };
 
   const handleSelectManualMode = () => {
+    if (entryMode === 'manual') return;
+    triggerSmoothTransition();
+    animateModePress(manualBtnScale);
     setEntryMode('manual');
-    if (draft.date >= todayIso) {
-      workoutDraft.setDate(yesterdayIso);
-    }
+    workoutDraft.setDate(todayIso);
   };
 
   const handleStartFromLanding = () => {
@@ -227,6 +502,7 @@ export default function WorkoutScreen() {
     startTimeRef.current = null;
     pausedSecondsRef.current = 0;
     setCancelDialogOpen(false);
+    setSessionDropdownOpen(false);
   };
 
   const handleSelectSessionType = (type: string) => {
@@ -242,6 +518,7 @@ export default function WorkoutScreen() {
     if (customSessionText.trim()) {
       workoutDraft.setSessionType(customSessionText.trim());
       setCustomSessionOpen(false);
+      closeDropdownWithAnimation();
     }
   };
 
@@ -413,238 +690,406 @@ export default function WorkoutScreen() {
 
         {/* ─── İÇERİK: BAŞLANGIÇ GİRİŞ DURUMU VEYA AKTİF ANTRENMAN ─── */}
         {isLanding ? (
-          <ScrollView
-            style={styles.scrollArea}
-            contentContainerStyle={styles.landingScrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* 1. EN ÜSTTE: OTURUM TİPİ */}
-            <View style={styles.landingSection}>
-              <Text style={styles.sectionTitle}>Oturum Tipi</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.sessionTypeScroll}
-              >
-                {DEFAULT_SESSION_TYPES.map((type) => {
-                  const isSelected = draft.session_type === type;
-                  return (
-                    <TouchableOpacity
-                      key={type}
-                      onPress={() => handleSelectSessionType(type)}
-                      style={[
-                        styles.sessionChip,
-                        isSelected && styles.selectedSessionChip,
-                      ]}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.sessionChipText,
-                          isSelected && styles.selectedSessionChipText,
-                        ]}
-                      >
-                        {type}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {customSessionOpen ? (
-                <View style={styles.customSessionRow}>
-                  <TextInput
-                    style={styles.customSessionInput}
-                    placeholder="Özel oturum adı (örn: Kol Günü)..."
-                    placeholderTextColor={Colors.light.textSecondary}
-                    value={customSessionText}
-                    onChangeText={setCustomSessionText}
-                  />
-                  <Button
-                    onPress={handleCustomSessionSubmit}
-                    disabled={!customSessionText.trim()}
+          <>
+            <ScrollView
+              style={styles.scrollArea}
+              contentContainerStyle={styles.landingScrollContent}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled={true}
+            >
+              {/* 1. EN ÜSTTE: ANTRENMAN SALONU */}
+              <View style={[styles.landingSection, { zIndex: 1 }]}>
+                <View style={styles.landingSectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>Antrenman Salonu</Text>
+                  <TouchableOpacity
+                    onPress={() => router.push('/(app)/workout-preferences/gyms' as any)}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
-                    Belirle
-                  </Button>
+                    <Text style={styles.landingManageGymsText}>Salonları Yönet ⚙️</Text>
+                  </TouchableOpacity>
                 </View>
-              ) : null}
-            </View>
 
-            {/* 2. ANTRENMAN SALONU (SEÇENEK A) */}
-            <View style={styles.landingSection}>
-              <View style={styles.landingSectionHeaderRow}>
-                <Text style={styles.sectionTitle}>Antrenman Salonu</Text>
-                <TouchableOpacity
-                  onPress={() => router.push('/(app)/workout-preferences/gyms' as any)}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.sessionTypeScroll}
                 >
-                  <Text style={styles.landingManageGymsText}>Salonları Yönet ⚙️</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.sessionTypeScroll}
-              >
-                {gyms.map((gym) => {
-                  const isSelected = draft.gym_id === gym.id;
-                  return (
-                    <TouchableOpacity
-                      key={gym.id}
-                      onPress={() => workoutDraft.setGym(gym.id, gym.name)}
-                      style={[
-                        styles.sessionChip,
-                        styles.gymLandingChip,
-                        isSelected && styles.selectedSessionChip,
-                      ]}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.gymLandingChipIcon}>📍</Text>
-                      <Text
+                  {gyms.map((gym) => {
+                    const isSelected = draft.gym_id === gym.id;
+                    return (
+                      <TouchableOpacity
+                        key={gym.id}
+                        onPress={() => workoutDraft.setGym(gym.id, gym.name)}
                         style={[
-                          styles.sessionChipText,
-                          isSelected && styles.selectedSessionChipText,
+                          styles.sessionChip,
+                          styles.gymLandingChip,
+                          isSelected && styles.selectedSessionChip,
                         ]}
+                        activeOpacity={0.7}
                       >
-                        {gym.name}
-                      </Text>
-                      {gym.is_default && (
-                        <View style={styles.landingGymDefaultBadge}>
-                          <Text style={styles.landingGymDefaultBadgeText}>Varsayılan</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text style={styles.gymLandingChipIcon}>📍</Text>
+                        <Text
+                          style={[
+                            styles.sessionChipText,
+                            isSelected && styles.selectedSessionChipText,
+                          ]}
+                        >
+                          {gym.name}
+                        </Text>
+                        {gym.is_default && (
+                          <View style={styles.landingGymDefaultBadge}>
+                            <Text style={styles.landingGymDefaultBadgeText}>Varsayılan</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
 
-                <TouchableOpacity
-                  onPress={() => workoutDraft.setGym(null, null)}
-                  style={[
-                    styles.sessionChip,
-                    draft.gym_id === null && styles.selectedSessionChip,
-                  ]}
-                  activeOpacity={0.7}
-                >
-                  <Text
+                  <TouchableOpacity
+                    onPress={() => workoutDraft.setGym(null, null)}
                     style={[
-                      styles.sessionChipText,
-                      draft.gym_id === null && styles.selectedSessionChipText,
+                      styles.sessionChip,
+                      draft.gym_id === null && styles.selectedSessionChip,
                     ]}
+                    activeOpacity={0.7}
                   >
-                    🏢 Diğer / Belirtilmedi
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.sessionChipText,
+                        draft.gym_id === null && styles.selectedSessionChipText,
+                      ]}
+                    >
+                      🏢 Diğer / Belirtilmedi
+                    </Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => router.push('/(app)/workout-preferences/gyms' as any)}
-                  style={styles.landingAddGymBtn}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.landingAddGymBtnText}>+ Salon Ekle</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-
-            {/* 3. ORTASINDA: 2 BUTON (CANLI MI / KAYIT MI) */}
-            <View style={styles.landingSection}>
-              <Text style={styles.sectionTitle}>Antrenmanı Nasıl Yapacaksınız?</Text>
-              <View style={styles.landingModeRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.landingModeBtn,
-                    entryMode === 'live' && styles.landingModeBtnLiveActive,
-                  ]}
-                  onPress={handleSelectLiveMode}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.landingModeIcon}>⚡</Text>
-                  <Text
-                    style={[
-                      styles.landingModeText,
-                      entryMode === 'live' && styles.landingModeTextLiveActive,
-                    ]}
+                  <TouchableOpacity
+                    onPress={() => router.push('/(app)/workout-preferences/gyms' as any)}
+                    style={styles.landingAddGymBtn}
+                    activeOpacity={0.7}
                   >
-                    Canlı Antrenman
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.landingModeBtn,
-                    entryMode === 'manual' && styles.landingModeBtnManualActive,
-                  ]}
-                  onPress={handleSelectManualMode}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.landingModeIcon}>📝</Text>
-                  <Text
-                    style={[
-                      styles.landingModeText,
-                      entryMode === 'manual' && styles.landingModeTextManualActive,
-                    ]}
-                  >
-                    Geçmiş Kayıt
-                  </Text>
-                </TouchableOpacity>
+                    <Text style={styles.landingAddGymBtnText}>+ Salon Ekle</Text>
+                  </TouchableOpacity>
+                </ScrollView>
               </View>
-            </View>
 
-            {/* 3. TARİH ALANI: CANLI İSE O GÜNÜ GÖSTERİR, DEĞİLSE TARİH PANOSU EKRANDA BULUNUR */}
-            {entryMode === 'live' ? (
-              <View style={styles.landingLiveArea}>
-                <View style={styles.landingLiveDateCard}>
-                  <View style={styles.landingLiveDateHeader}>
-                    <Text style={styles.landingLiveDateLabel}>KAYIT TARİHİ</Text>
-                    <View style={styles.landingLiveDateBadge}>
-                      <Text style={styles.landingLiveDateBadgeText}>Canlı Tarih</Text>
-                    </View>
+              {/* 2. SEANS TÜRÜ - WEB VERSİYONUYLA BİREBİR ŞIK SELECT GİRİŞ KUTUSU */}
+              <View
+                style={[
+                  styles.landingSection,
+                  sessionDropdownOpen && {
+                    zIndex: 1000,
+                    elevation: Platform.OS === 'android' ? 40 : undefined,
+                  },
+                ]}
+              >
+                <View style={styles.landingSectionHeaderRow}>
+                  <View style={styles.sectionTitleWithIcon}>
+                    <Text style={styles.sectionTitleIcon}>↔️</Text>
+                    <Text style={styles.sectionTitle}>Seans Türü</Text>
                   </View>
-                  <Text style={styles.landingLiveDateValue}>
-                    Bugün · {formatTrDate(todayIso)}
-                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCustomSessionOpen((prev) => !prev);
+                      handleToggleDropdown();
+                    }}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.landingAddCustomSessionText}>+ Özel Seans</Text>
+                  </TouchableOpacity>
                 </View>
 
-                <Text style={styles.landingInfoText}>
-                  Salondasınız; antrenmanı başlattığınızda süre sayacı aktif olur ve egzersizlerinizi canlı olarak girersiniz.
-                </Text>
-
-                <TouchableOpacity
-                  style={styles.landingStartLiveBtn}
-                  onPress={handleStartFromLanding}
-                  activeOpacity={0.8}
+                {/* Web Tarzı Select Giriş Kutusu (Tetikleyici) */}
+                <View
+                  style={[
+                    styles.selectContainer,
+                    sessionDropdownOpen && styles.selectContainerActive,
+                  ]}
                 >
-                  <Text style={styles.landingStartLiveBtnText}>
-                    Antrenmanı Başlat
-                  </Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.selectTrigger,
+                      sessionDropdownOpen && styles.selectTriggerOpen,
+                    ]}
+                    onPress={handleToggleDropdown}
+                    activeOpacity={0.7}
+                  >
+                    {/* Boş Görsel Penceresi (Hedef kas görseli için) */}
+                    <View style={styles.thumbnailWindow} />
+
+                    {/* Seçili Seans Başlığı ve Hedef Kas Grubu */}
+                    <View style={styles.selectTriggerMiddle}>
+                      <View style={styles.selectTriggerTitleRow}>
+                        <Text style={styles.selectTriggerTitle} numberOfLines={1}>
+                          {selectedSessionInfo.name}
+                        </Text>
+                        {selectedSessionInfo.tag ? (
+                          <View style={styles.selectTagBadge}>
+                            <Text style={styles.selectTagBadgeText}>
+                              {selectedSessionInfo.tag}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.selectTriggerSubtitle} numberOfLines={1}>
+                        {selectedSessionInfo.subtitle}
+                      </Text>
+                    </View>
+
+                    {/* Sağ: 180 derece akıcı yaylanan chevron oku */}
+                    <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
+                      <Text style={styles.selectChevron}>▼</Text>
+                    </Animated.View>
+                  </TouchableOpacity>
+
+                  {/* ─── KARTIN TAM ALTINA YÜZEN SEANS TÜRÜ LİSTESİ (PANOLARIN ÜZERİNE AÇILIR) ─── */}
+                  {sessionDropdownOpen && (
+                    <Animated.View
+                      style={[
+                        styles.dropdownMenuFloating,
+                        {
+                          opacity: fadeAnim,
+                          transform: [{ translateY: translateAnim }],
+                        },
+                      ]}
+                    >
+                      <ScrollView
+                        style={styles.dropdownScroll}
+                        contentContainerStyle={styles.dropdownScrollContent}
+                        showsVerticalScrollIndicator={true}
+                        persistentScrollbar={true}
+                        nestedScrollEnabled={true}
+                        keyboardShouldPersistTaps="handled"
+                        bounces={Platform.OS === 'ios'}
+                        overScrollMode="always"
+                      >
+                        {filteredSessionTypes.map((type, index) => {
+                          const info = getSessionInfo(type);
+                          const isLast = index === filteredSessionTypes.length - 1;
+
+                          return (
+                            <View key={type}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.dropdownItem,
+                                  !isLast && styles.dropdownItemBorder,
+                                ]}
+                                onPress={() => {
+                                  handleSelectSessionType(type);
+                                  if (type !== 'Diğer') {
+                                    closeDropdownWithAnimation();
+                                  }
+                                }}
+                                activeOpacity={0.65}
+                              >
+                                {/* Boş Görsel Penceresi (Hedef kas görseli için) */}
+                                <View style={styles.thumbnailWindowSmall} />
+
+                                {/* Seans Adı ve Hedef Kas Grubu */}
+                                <View style={styles.dropdownItemTextCol}>
+                                  <View style={styles.dropdownItemTitleRow}>
+                                    <Text
+                                      style={styles.dropdownItemTitle}
+                                      numberOfLines={1}
+                                    >
+                                      {info.name}
+                                    </Text>
+                                    {info.tag ? (
+                                      <View style={styles.dropdownItemTag}>
+                                        <Text style={styles.dropdownItemTagText}>
+                                          {info.tag}
+                                        </Text>
+                                      </View>
+                                    ) : null}
+                                  </View>
+                                  <Text
+                                    style={styles.dropdownItemSubtitle}
+                                    numberOfLines={1}
+                                  >
+                                    {info.subtitle}
+                                  </Text>
+                                </View>
+
+                                {/* Sağ: İnce modern seçim oku */}
+                                <Text style={styles.dropdownItemArrow}>›</Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
+
+                        {customSessionOpen && (
+                          <View style={styles.dropdownCustomBox}>
+                            <TextInput
+                              style={styles.dropdownCustomInput}
+                              placeholder="Özel seans adı (örn: Kol Günü)..."
+                              placeholderTextColor="#64748B"
+                              value={customSessionText}
+                              onChangeText={setCustomSessionText}
+                              autoFocus
+                            />
+                            <TouchableOpacity
+                              style={[
+                                styles.dropdownCustomBtn,
+                                !customSessionText.trim() && styles.dropdownCustomBtnDisabled,
+                              ]}
+                              onPress={() => {
+                                handleCustomSessionSubmit();
+                              }}
+                              disabled={!customSessionText.trim()}
+                              activeOpacity={0.75}
+                            >
+                              <Text style={styles.dropdownCustomBtnText}>Ekle</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </ScrollView>
+                    </Animated.View>
+                  )}
+                </View>
               </View>
-            ) : (
-              <View style={styles.landingManualArea}>
-                {/* Scroll / Swipe özellikli Tarih Panomuz (Dün, 2 gün önce kaldırıldı) */}
-                <WorkoutCalendarView
-                  selectedDate={draft.date}
-                  workoutDatesSet={workoutDatesSet}
-                  onSelect={(dateIso) => workoutDraft.setDate(dateIso)}
-                  title="Hangi Günün Antrenmanı?"
-                />
 
-                <Text style={styles.landingInfoText}>
-                  Geçmiş antrenman notlarınızı süre sayacı olmadan doğrudan girmek için yukarıdan tarihi seçin.
-                </Text>
+              {/* 3. ORTASINDA: 2 BUTON (CANLI MI / KAYIT MI) */}
+              <View
+                style={[
+                  styles.landingSection,
+                  { zIndex: 1, elevation: 0 },
+                  sessionDropdownOpen && { marginTop: -286 },
+                ]}
+                pointerEvents={sessionDropdownOpen ? 'none' : 'auto'}
+              >
+                <Text style={styles.sectionTitle}>Antrenmanı Nasıl Yapacaksınız?</Text>
+                <View style={styles.landingModeRow}>
+                  <Animated.View style={{ flex: 1, transform: [{ scale: liveBtnScale }] }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.landingModeBtn,
+                        entryMode === 'live' && styles.landingModeBtnLiveActive,
+                      ]}
+                      onPress={handleSelectLiveMode}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.landingModeIcon}>⚡</Text>
+                      <Text
+                        style={[
+                          styles.landingModeText,
+                          entryMode === 'live' && styles.landingModeTextLiveActive,
+                        ]}
+                      >
+                        Canlı Antrenman
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
 
-                <TouchableOpacity
-                  style={styles.landingStartManualBtn}
-                  onPress={handleStartFromLanding}
-                  activeOpacity={0.8}
+                  <Animated.View style={{ flex: 1, transform: [{ scale: manualBtnScale }] }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.landingModeBtn,
+                        entryMode === 'manual' && styles.landingModeBtnManualActive,
+                      ]}
+                      onPress={handleSelectManualMode}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.landingModeIcon}>📝</Text>
+                      <Text
+                        style={[
+                          styles.landingModeText,
+                          entryMode === 'manual' && styles.landingModeTextManualActive,
+                        ]}
+                      >
+                        Geçmiş Kayıt
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                </View>
+              </View>
+
+              {/* 4. TARİH ALANI: CANLI İSE O GÜNÜ GÖSTERİR, DEĞİLSE TARİH PANOSU EKRANDA BULUNUR */}
+              {entryMode === 'live' ? (
+                <Reanimated.View
+                  key="live-content"
+                  entering={FadeIn.duration(280)}
+                  exiting={FadeOut.duration(180)}
+                  style={styles.landingLiveArea}
+                  pointerEvents={sessionDropdownOpen ? 'none' : 'auto'}
                 >
-                  <Text style={styles.landingStartManualBtnText}>
-                    Egzersiz Ekle & Kayda Başla
+                  <View style={styles.landingLiveDateCard}>
+                    <View style={styles.landingLiveDateHeader}>
+                      <Text style={styles.landingLiveDateLabel}>KAYIT TARİHİ</Text>
+                      <View style={styles.landingLiveDateBadge}>
+                        <Text style={styles.landingLiveDateBadgeText}>Canlı Tarih</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.landingLiveDateValue}>
+                      Bugün · {formatTrDate(todayIso)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.landingInfoText}>
+                    Salondasınız; antrenmanı başlattığınızda süre sayacı aktif olur ve egzersizlerinizi canlı olarak girersiniz.
                   </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </ScrollView>
+                </Reanimated.View>
+              ) : (
+                <Reanimated.View
+                  key="manual-content"
+                  entering={FadeIn.duration(280)}
+                  exiting={FadeOut.duration(180)}
+                  style={styles.landingManualArea}
+                  pointerEvents={sessionDropdownOpen ? 'none' : 'auto'}
+                >
+                  <WorkoutCalendarView
+                    selectedDate={draft.date || todayIso}
+                    workoutDatesSet={workoutDatesSet}
+                    onSelect={(dateIso) => workoutDraft.setDate(dateIso)}
+                    title="Hangi Günün Antrenmanı?"
+                  />
+
+                  <Text style={styles.landingInfoText}>
+                    Geçmiş antrenman notlarınızı süre sayacı olmadan doğrudan girmek için yukarıdan tarihi seçin.
+                  </Text>
+                </Reanimated.View>
+              )}
+            </ScrollView>
+
+            {/* ─── EKRANIN ALTINA SABİTLENMİŞ AKSİYON BUTONU ─── */}
+            <View
+              style={styles.landingFixedBottomBar}
+              pointerEvents={sessionDropdownOpen ? 'none' : 'auto'}
+            >
+              {entryMode === 'live' ? (
+                <Reanimated.View
+                  key="live-btn"
+                  entering={FadeIn.duration(240)}
+                  exiting={FadeOut.duration(160)}
+                >
+                  <TouchableOpacity
+                    style={styles.landingStartLiveBtn}
+                    onPress={handleStartFromLanding}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.landingStartLiveBtnText}>
+                      ⚡ Antrenmanı Başlat
+                    </Text>
+                  </TouchableOpacity>
+                </Reanimated.View>
+              ) : (
+                <Reanimated.View
+                  key="manual-btn"
+                  entering={FadeIn.duration(240)}
+                  exiting={FadeOut.duration(160)}
+                >
+                  <TouchableOpacity
+                    style={styles.landingStartManualBtn}
+                    onPress={handleStartFromLanding}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.landingStartManualBtnText}>
+                      📝 Egzersiz Ekle & Kayda Başla
+                    </Text>
+                  </TouchableOpacity>
+                </Reanimated.View>
+              )}
+            </View>
+          </>
         ) : (
           /* AKTİF ANTRENMAN EKRANI */
           <>
@@ -739,11 +1184,26 @@ export default function WorkoutScreen() {
                 {/* Temizle & Antrenmanı Kaydet Yan Yana */}
                 <View style={styles.manualActionsGroup}>
                   <TouchableOpacity
-                    style={styles.manualResetBtn}
-                    onPress={() => setResetDialogOpen(true)}
-                    activeOpacity={0.7}
+                    style={[
+                      styles.manualResetBtn,
+                      !hasExercises && styles.manualResetBtnDisabled,
+                    ]}
+                    onPress={() => {
+                      if (hasExercises) {
+                        setResetDialogOpen(true);
+                      }
+                    }}
+                    disabled={!hasExercises}
+                    activeOpacity={hasExercises ? 0.7 : 1}
                   >
-                    <Text style={styles.manualResetBtnText}>Temizle</Text>
+                    <Text
+                      style={[
+                        styles.manualResetBtnText,
+                        !hasExercises && styles.manualResetBtnTextDisabled,
+                      ]}
+                    >
+                      Temizle
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -790,15 +1250,15 @@ export default function WorkoutScreen() {
           selectedGymId={draft.gym_id}
           gyms={gyms}
           onSelectGym={(gymId, gymName) => workoutDraft.setGym(gymId, gymName)}
-          onManageGyms={() => router.push('/(app)/workout-preferences/gyms' as any)}
+          onManageGyms={hasStarted ? undefined : () => router.push('/(app)/workout-preferences/gyms' as any)}
         />
 
         {/* Antrenmanı Temizle Diyaloğu */}
         <ConfirmDialog
           visible={resetDialogOpen}
           title="Hareketleri Temizle"
-          message="Seçili tüm hareketler listeden kaldırılacak. Emin misiniz?"
-          confirmText="Evet, Temizle"
+          message="Seçili tüm hareketler listeden kaldırılacak ?"
+          confirmText="Temizle"
           destructive
           onConfirm={() => {
             workoutDraft.clearExercises();
@@ -811,8 +1271,8 @@ export default function WorkoutScreen() {
         <ConfirmDialog
           visible={cancelDialogOpen}
           title="Antrenmanı İptal Et"
-          message="Mevcut antrenman kaydı iptal edilecek, tüm işlemler sıfırlanarak ana sayfaya dönülecektir. Onaylıyor musunuz?"
-          confirmText="Evet, İptal Et"
+          message="Mevcut antrenman kaydı iptal edilecek, tüm işlemler sıfırlanacaktır. Onaylıyor musunuz?"
+          confirmText="İptal Et"
           cancelText="Vazgeç"
           destructive
           onConfirm={handleCancelWorkout}
@@ -837,51 +1297,190 @@ export default function WorkoutScreen() {
           onClose={() => setValidationModal((prev) => ({ ...prev, visible: false }))}
         />
 
-        {/* Seans Türü Seçim Modalı (3'lü Göstergeden Tıklandığında) */}
-        <Modal
-          visible={sessionPickerOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSessionPickerOpen(false)}
-          statusBarTranslucent
-        >
-          <Pressable
-            style={styles.sessionPickerModalBackdrop}
-            onPress={() => setSessionPickerOpen(false)}
+        {/* Seans Türü Seçim Modalı (3'lü Göstergeden Tıklandığında - Ekranın Ortasında Liste Panosu) */}
+        {sessionPickerOpen && (
+          <Modal
+            visible={sessionPickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => {
+              setCustomSessionOpen(false);
+              setSessionPickerOpen(false);
+            }}
+            statusBarTranslucent
           >
-            <Pressable style={styles.sessionPickerCard} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.sessionPickerTitle}>Seans Türünü Değiştir</Text>
-              <View style={styles.sessionPickerGrid}>
-                {DEFAULT_SESSION_TYPES.map((type) => {
-                  const isSelected = draft.session_type === type;
-                  return (
-                    <TouchableOpacity
-                      key={type}
-                      style={[
-                        styles.sessionPickerChip,
-                        isSelected && styles.sessionPickerChipActive,
-                      ]}
-                      onPress={() => {
-                        handleSelectSessionType(type);
-                        setSessionPickerOpen(false);
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <Text
-                        style={[
-                          styles.sessionPickerChipText,
-                          isSelected && styles.sessionPickerChipTextActive,
-                        ]}
+            <Pressable
+              style={styles.sessionPickerModalBackdrop}
+              onPress={() => {
+                setCustomSessionOpen(false);
+                setSessionPickerOpen(false);
+              }}
+            >
+              <Pressable
+                style={styles.sessionPickerCard}
+                onPress={(e) => e.stopPropagation()}
+              >
+                {/* Modal Başlık Satırı */}
+                <View style={styles.sessionPickerHeader}>
+                  <Text style={styles.sessionPickerTitle}>Seans Türünü Değiştir</Text>
+                  <Text style={styles.sessionPickerSubtitle}>
+                    Hedef kas grubunu güncellemek için listeden seçin
+                  </Text>
+                </View>
+
+                {/* Seans Listesi (Bizim Liste Tasarımıyla Birebir) */}
+                <ScrollView
+                  style={styles.sessionPickerScroll}
+                  contentContainerStyle={styles.dropdownScrollContent}
+                  showsVerticalScrollIndicator={true}
+                  persistentScrollbar={true}
+                  nestedScrollEnabled={true}
+                  keyboardShouldPersistTaps="handled"
+                  bounces={true}
+                >
+                  {availableSessionTypes.map((type, index) => {
+                    const info = getSessionInfo(type);
+                    const isSelected =
+                      draft.session_type === type ||
+                      (type === 'Upper' && draft.session_type === 'Üst Vücut') ||
+                      (type === 'Üst Vücut' && draft.session_type === 'Upper') ||
+                      (type === 'Lower' && draft.session_type === 'Alt Vücut') ||
+                      (type === 'Alt Vücut' && draft.session_type === 'Lower') ||
+                      (type === 'Full Body' && draft.session_type === 'Tam Vücut') ||
+                      (type === 'Tam Vücut' && draft.session_type === 'Full Body');
+                    const isLast = index === availableSessionTypes.length - 1;
+
+                    return (
+                      <Reanimated.View
+                        key={`picker-${type}`}
+                        entering={FadeInUp.delay(Math.min(index * 24, 200))
+                          .duration(180)
+                          .easing(ReanimatedEasing.out(ReanimatedEasing.cubic))}
+                        exiting={FadeOutUp.duration(110)
+                          .easing(ReanimatedEasing.in(ReanimatedEasing.cubic))}
                       >
-                        {type}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                        <TouchableOpacity
+                          style={[
+                            styles.dropdownItem,
+                            isSelected && styles.sessionPickerItemSelected,
+                            !isLast && styles.dropdownItemBorder,
+                          ]}
+                          onPress={() => {
+                            if (type === 'Diğer') {
+                              setCustomSessionOpen(true);
+                              return;
+                            }
+                            handleSelectSessionType(type);
+                            setSessionPickerOpen(false);
+                          }}
+                          activeOpacity={0.65}
+                        >
+                          {/* Boş Görsel Penceresi (Hedef kas görseli için) */}
+                          <View
+                            style={[
+                              styles.thumbnailWindowSmall,
+                              isSelected && styles.thumbnailWindowSmallSelected,
+                            ]}
+                          />
+
+                          {/* Seans Adı ve Hedef Kas Grubu */}
+                          <View style={styles.dropdownItemTextCol}>
+                            <View style={styles.dropdownItemTitleRow}>
+                              <Text
+                                style={[
+                                  styles.dropdownItemTitle,
+                                  isSelected && styles.sessionPickerItemTitleSelected,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {info.name}
+                              </Text>
+                              {info.tag ? (
+                                <View style={styles.dropdownItemTag}>
+                                  <Text style={styles.dropdownItemTagText}>
+                                    {info.tag}
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </View>
+                            <Text
+                              style={[
+                                styles.dropdownItemSubtitle,
+                                isSelected && styles.sessionPickerItemSubtitleSelected,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {info.subtitle}
+                            </Text>
+                          </View>
+
+                          {/* Sağ: Seçili kartın yeşil tik işareti (GymPickerModal ile birebir) */}
+                          <View
+                            style={[
+                              styles.sessionPickerCheckCircle,
+                              isSelected && styles.sessionPickerCheckCircleSelected,
+                            ]}
+                          >
+                            {isSelected && (
+                              <Text style={styles.sessionPickerCheckMark}>✓</Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      </Reanimated.View>
+                    );
+                  })}
+
+                  {/* Özel Seans Ekleme Alanı */}
+                  {customSessionOpen && (
+                    <Reanimated.View
+                      entering={FadeInUp.duration(180).easing(
+                        ReanimatedEasing.out(ReanimatedEasing.cubic)
+                      )}
+                      style={styles.dropdownCustomBox}
+                    >
+                      <TextInput
+                        style={styles.dropdownCustomInput}
+                        placeholder="Özel seans adı (örn: Kol Günü)..."
+                        placeholderTextColor="#64748B"
+                        value={customSessionText}
+                        onChangeText={setCustomSessionText}
+                        autoFocus
+                      />
+                      <TouchableOpacity
+                        style={[
+                          styles.dropdownCustomBtn,
+                          !customSessionText.trim() && styles.dropdownCustomBtnDisabled,
+                        ]}
+                        onPress={() => {
+                          handleCustomSessionSubmit();
+                          setSessionPickerOpen(false);
+                        }}
+                        disabled={!customSessionText.trim()}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.dropdownCustomBtnText}>Ekle</Text>
+                      </TouchableOpacity>
+                    </Reanimated.View>
+                  )}
+                </ScrollView>
+
+                {/* Alt Kapat Butonu (GymPickerModal ile birebir) */}
+                <View style={styles.sessionPickerActions}>
+                  <TouchableOpacity
+                    style={styles.sessionPickerCloseBtn}
+                    onPress={() => {
+                      setCustomSessionOpen(false);
+                      setSessionPickerOpen(false);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.sessionPickerCloseBtnText}>Kapat</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
             </Pressable>
-          </Pressable>
-        </Modal>
+          </Modal>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -930,16 +1529,11 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   gymHeaderSelector: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(168, 85, 247, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.3)',
+    marginTop: 0,
   },
   gymHeaderSelectorText: {
-    fontSize: 11.5,
-    fontWeight: '800',
+    fontSize: Typography.small,
+    fontWeight: '700',
     color: '#D8B4FE',
     maxWidth: 150,
   },
@@ -949,9 +1543,11 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   activeHeaderLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+    marginRight: Spacing.two,
   },
   cancelBtn: {
     paddingHorizontal: 14,
@@ -1045,6 +1641,254 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#D8B4FE',
   },
+  // ─── Seans Türü: Web Tasarımıyla Birebir Select Açılır Menü Stilleri ───
+  landingSessionSection: {
+    position: 'relative',
+    zIndex: 100,
+    elevation: Platform.OS === 'android' ? 30 : undefined,
+  },
+  dropdownBackdropOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 60,
+  },
+  sectionTitleWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionTitleIcon: {
+    fontSize: 13,
+  },
+  landingAddCustomSessionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#A78BFA',
+  },
+  selectContainer: {
+    position: 'relative',
+    zIndex: 100,
+  },
+  selectTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  selectTriggerOpen: {
+    borderColor: '#8B5CF6',
+    backgroundColor: '#0F172A',
+  },
+  thumbnailWindow: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1.2,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(139, 92, 246, 0.05)',
+  },
+  thumbnailWindowSmall: {
+    width: 34,
+    height: 34,
+    borderRadius: 7,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  thumbnailWindowSmallSelected: {
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  selectTriggerMiddle: {
+    flex: 1,
+    gap: 2,
+  },
+  selectTriggerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  selectTriggerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  selectTriggerSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  selectTagBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(168, 85, 247, 0.22)',
+    borderWidth: 1.2,
+    borderColor: '#C084FC',
+  },
+  selectTagBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#F5EEFF',
+    letterSpacing: 0.3,
+  },
+  selectChevron: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#A78BFA',
+  },
+  selectContainerActive: {
+    zIndex: 1000,
+    elevation: Platform.OS === 'android' ? 40 : undefined,
+  },
+  dropdownMenuFloating: {
+    marginTop: 6,
+    height: 280,
+    backgroundColor: '#121829',
+    borderWidth: 1.5,
+    borderColor: 'rgba(168, 85, 247, 0.45)',
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: Platform.OS === 'android' ? 50 : 25,
+    zIndex: 9999,
+  },
+  dropdownScroll: {
+    flex: 1,
+  },
+  dropdownScrollContent: {
+    paddingVertical: 4,
+    flexGrow: 1,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'transparent',
+    gap: 10,
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#2563EB', // Web ekran görüntüsündeki gibi seçili mavi vurgu
+  },
+  dropdownItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  dropdownItemTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  dropdownItemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dropdownItemTitle: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#E2E8F0',
+  },
+  dropdownItemTitleSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  dropdownItemSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  dropdownItemSubtitleSelected: {
+    color: '#DBEAFE',
+  },
+  dropdownItemTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(168, 85, 247, 0.22)',
+    borderWidth: 1.2,
+    borderColor: '#C084FC',
+  },
+  dropdownItemTagSelected: {
+    backgroundColor: 'rgba(168, 85, 247, 0.35)',
+    borderColor: '#E9D5FF',
+  },
+  dropdownItemTagText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#F5EEFF',
+    letterSpacing: 0.3,
+  },
+  dropdownItemTagTextSelected: {
+    color: '#FFFFFF',
+  },
+  dropdownItemCheck: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  dropdownItemArrow: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#64748B',
+    marginLeft: 4,
+  },
+  dropdownCustomBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  dropdownCustomInput: {
+    flex: 1,
+    height: 38,
+    backgroundColor: '#0A0D18',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 12.5,
+    color: '#FFFFFF',
+  },
+  dropdownCustomBtn: {
+    height: 38,
+    paddingHorizontal: 14,
+    backgroundColor: '#2563EB',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownCustomBtnDisabled: {
+    opacity: 0.5,
+  },
+  dropdownCustomBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  landingFixedBottomBar: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 14 : 12,
+    backgroundColor: '#080B14',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
   landingModeRow: {
     flexDirection: 'row',
     gap: 10,
@@ -1091,9 +1935,9 @@ const styles = StyleSheet.create({
   },
   landingLiveDateCard: {
     backgroundColor: '#0D111E',
-    borderRadius: 16,
-    borderWidth: 1.8,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     padding: 14,
     gap: 5,
   },
@@ -1112,9 +1956,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.18)',
-    borderWidth: 1.5,
-    borderColor: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
   },
   landingLiveDateBadgeText: {
     fontSize: 10,
@@ -1137,34 +1979,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   landingStartLiveBtn: {
-    height: 50,
+    height: 52,
     borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#10B981',
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   landingStartLiveBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#34D399',
+    color: '#FFFFFF',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   landingStartManualBtn: {
-    height: 50,
+    height: 52,
     borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#C084FC',
-    backgroundColor: 'rgba(168, 85, 247, 0.18)',
+    backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   landingStartManualBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#E9D5FF',
+    color: '#FFFFFF',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -1252,23 +2100,6 @@ const styles = StyleSheet.create({
   selectedSessionChipText: {
     color: '#FFFFFF',
   },
-  customSessionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    marginTop: Spacing.two,
-  },
-  customSessionInput: {
-    flex: 1,
-    backgroundColor: '#101524',
-    borderWidth: 1,
-    borderColor: AppColors.border,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 6,
-    fontSize: Typography.label,
-    color: Colors.light.text,
-  },
   // ─── Manuel Giriş Modu Alt Barı ───
   manualBottomBar: {
     backgroundColor: '#0C101D',
@@ -1331,10 +2162,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  manualResetBtnDisabled: {
+    borderColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: 'rgba(239, 68, 68, 0.03)',
+    opacity: 0.35,
+  },
   manualResetBtnText: {
     fontSize: 13.5,
     fontWeight: '800',
     color: '#FCA5A5',
+  },
+  manualResetBtnTextDisabled: {
+    color: 'rgba(252, 165, 165, 0.45)',
   },
   manualSaveBtn: {
     flex: 2.2,
@@ -1357,50 +2196,91 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.78)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   sessionPickerCard: {
     width: '100%',
-    maxWidth: 340,
-    backgroundColor: '#0D111E',
+    maxWidth: 370,
+    maxHeight: 520,
+    backgroundColor: '#0F1527',
     borderRadius: 18,
-    borderWidth: 1.8,
+    borderWidth: 1.6,
     borderColor: 'rgba(168, 85, 247, 0.45)',
-    padding: 18,
-    gap: 12,
+    overflow: 'hidden',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 35,
+  },
+  sessionPickerHeader: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
+    gap: 3,
   },
   sessionPickerTitle: {
-    fontSize: 15.5,
+    fontSize: 16,
     fontWeight: '800',
     color: '#F8FAFC',
-    textAlign: 'center',
+    letterSpacing: 0.2,
   },
-  sessionPickerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  sessionPickerSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  sessionPickerScroll: {
+    maxHeight: 390,
+  },
+  sessionPickerItemSelected: {
+    backgroundColor: 'rgba(168, 85, 247, 0.16)',
+  },
+  sessionPickerItemTitleSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  sessionPickerItemSubtitleSelected: {
+    color: '#C084FC',
+  },
+  sessionPickerCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  sessionPickerChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  sessionPickerCheckCircleSelected: {
+    borderColor: '#34D399',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  sessionPickerCheckMark: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#34D399',
+  },
+  sessionPickerActions: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  sessionPickerCloseBtn: {
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sessionPickerChipActive: {
-    backgroundColor: 'rgba(168, 85, 247, 0.22)',
-    borderWidth: 1.5,
-    borderColor: '#C084FC',
-  },
-  sessionPickerChipText: {
+  sessionPickerCloseBtnText: {
     fontSize: 12.5,
     fontWeight: '700',
     color: '#94A3B8',
-  },
-  sessionPickerChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
   },
 });

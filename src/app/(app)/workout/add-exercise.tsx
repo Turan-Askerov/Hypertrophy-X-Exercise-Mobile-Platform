@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -9,6 +9,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Reanimated, {
+  Easing as ReanimatedEasing,
+  FadeIn,
+  FadeInUp,
+  FadeOut,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  ZoomIn,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -30,6 +41,36 @@ export default function AddExerciseScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
   const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
+
+  // ─── Egzersizleri Seç -> Egzersizleri Ekle Yumuşak Renk Geçişi (Büyüme/Küçülme olmadan sabit çerçeve) ───
+  const hasSelection = selectedExercises.length > 0;
+  const selectionProgress = useSharedValue(hasSelection ? 1 : 0);
+
+  useEffect(() => {
+    selectionProgress.value = withTiming(hasSelection ? 1 : 0, {
+      duration: 220,
+      easing: ReanimatedEasing.bezier(0.25, 0.1, 0.25, 1),
+    });
+  }, [hasSelection, selectionProgress]);
+
+  const animatedBtnStyle = useAnimatedStyle(() => {
+    const borderColor = interpolateColor(
+      selectionProgress.value,
+      [0, 1],
+      ['rgba(255, 255, 255, 0.12)', '#10B981']
+    );
+
+    const backgroundColor = interpolateColor(
+      selectionProgress.value,
+      [0, 1],
+      ['rgba(255, 255, 255, 0.04)', 'rgba(16, 185, 129, 0.16)']
+    );
+
+    return {
+      borderColor,
+      backgroundColor,
+    };
+  });
 
   const filteredExercises = exercises.filter((ex) => {
     const matchesSearch =
@@ -217,74 +258,102 @@ export default function AddExerciseScreen() {
           />
         ) : (
           <FlatList
+            key={selectedMuscle || 'all'}
             data={filteredExercises}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
-              <EmptyState
-                title="Egzersiz bulunamadı"
-                description="Arama kriterinize uygun bir hareket mevcut değil."
-              />
+              <Reanimated.View entering={FadeInUp.duration(200)}>
+                <EmptyState
+                  title="Egzersiz bulunamadı"
+                  description="Arama kriterinize uygun bir hareket mevcut değil."
+                />
+              </Reanimated.View>
             }
-            renderItem={({ item }) => {
+            renderItem={({ item, index }) => {
               const isAlreadyInDraft = isReplaceMode
                 ? isExerciseAlreadyInDraft(item, replaceIndex)
                 : isExerciseAlreadyInDraft(item);
               const isSelected = selectedExercises.some((e) => e.id === item.id);
+              const isBw = Boolean(
+                item.is_bodyweight || item.bw || item.analysis?.load_mode === 'bodyweight'
+              );
+              const isWeighted = Boolean(
+                !isBw && (
+                  item.weighted ||
+                  item.analysis?.load_mode === 'bodyweight_plus_external' ||
+                  item.id.includes('weighted') ||
+                  item.name.toLowerCase().includes('ağırlıklı') ||
+                  item.name.toLowerCase().includes('weighted')
+                )
+              );
 
               return (
-                <TouchableOpacity
-                  style={[
-                    styles.itemCard,
-                    isSelected && styles.itemCardSelected,
-                    isAlreadyInDraft && styles.itemCardDisabled,
-                  ]}
-                  onPress={() => handleItemPress(item)}
-                  activeOpacity={0.75}
+                <Reanimated.View
+                  key={item.id}
+                  entering={FadeInUp.delay(Math.min(index * 22, 160))
+                    .duration(180)
+                    .easing(ReanimatedEasing.out(ReanimatedEasing.cubic))}
                 >
-                  <View style={styles.itemLeftGroup}>
-                    {/* Sol: Animasyonlu GIF / Egzersiz Görsel Çerçevesi (En Solda, Boş) */}
-                    <View style={styles.thumbnailFrame} />
+                  <TouchableOpacity
+                    style={[
+                      styles.itemCard,
+                      isSelected && styles.itemCardSelected,
+                      isAlreadyInDraft && styles.itemCardDisabled,
+                    ]}
+                    onPress={() => handleItemPress(item)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.itemLeftGroup}>
+                      {/* Sol: Animasyonlu GIF / Egzersiz Görsel Çerçevesi (En Solda, Boş) */}
+                      <View style={styles.thumbnailFrame} />
 
-                    {/* Egzersiz Bilgileri */}
-                    <View style={styles.itemInfo}>
-                      <Text
-                        style={[
-                          styles.itemName,
-                          isSelected && styles.itemNameSelected,
-                          isAlreadyInDraft && styles.itemNameDisabled,
-                        ]}
-                      >
-                        {item.name}
-                      </Text>
-                      <View style={styles.itemMeta}>
-                        <Text style={styles.itemMuscle}>
-                          {item.muscle || item.muscle_group}
+                      {/* Egzersiz Bilgileri */}
+                      <View style={styles.itemInfo}>
+                        <Text
+                          style={[
+                            styles.itemName,
+                            isSelected && styles.itemNameSelected,
+                            isAlreadyInDraft && styles.itemNameDisabled,
+                          ]}
+                        >
+                          {item.name}
                         </Text>
-                        {item.is_bodyweight || item.bw ? (
-                          <View style={styles.bwTag}>
-                            <Text style={styles.bwTagText}>BW</Text>
+                        <View style={styles.itemMeta}>
+                          <View style={styles.muscleBadge}>
+                            <Text style={styles.muscleBadgeText}>
+                              {item.muscle || item.muscle_group}
+                            </Text>
                           </View>
-                        ) : null}
+                          {isBw ? (
+                            <View style={styles.bwTag}>
+                              <Text style={styles.bwTagText}>Vücut Ağırlığı</Text>
+                            </View>
+                          ) : isWeighted ? (
+                            <View style={styles.weightedTag}>
+                              <Text style={styles.weightedTagText}>Ağırlıklı</Text>
+                            </View>
+                          ) : null}
+                        </View>
                       </View>
                     </View>
-                  </View>
 
-                  {/* Sağ Taraf: Ekli, Değiştirme Modunda 'Seç', Çoklu Seçimde + / ✓ */}
-                  {isAlreadyInDraft ? (
-                    <View style={styles.alreadyAddedBadge}>
-                      <Text style={styles.alreadyAddedText}>Ekli</Text>
-                    </View>
-                  ) : isReplaceMode ? (
-                    <View style={styles.replaceTag}>
-                      <Text style={styles.replaceTagText}>Seç</Text>
-                    </View>
-                  ) : (
-                    <Text style={[styles.addIcon, isSelected && styles.addIconSelected]}>
-                      {isSelected ? '✓' : '+'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                    {/* Sağ Taraf: Ekli, Değiştirme Modunda 'Seç', Çoklu Seçimde + / ✓ */}
+                    {isAlreadyInDraft ? (
+                      <View style={styles.alreadyAddedBadge}>
+                        <Text style={styles.alreadyAddedText}>Ekli</Text>
+                      </View>
+                    ) : isReplaceMode ? (
+                      <View style={styles.replaceTag}>
+                        <Text style={styles.replaceTagText}>Seç</Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.addIcon, isSelected && styles.addIconSelected]}>
+                        {isSelected ? '✓' : '+'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </Reanimated.View>
               );
             }}
           />
@@ -294,28 +363,41 @@ export default function AddExerciseScreen() {
         {!isReplaceMode && (
           <View style={styles.bottomBar}>
             <TouchableOpacity
-              style={[
-                styles.confirmBtn,
-                selectedExercises.length > 0
-                  ? styles.confirmBtnActive
-                  : styles.confirmBtnDisabled,
-              ]}
               onPress={handleConfirmSelection}
-              disabled={selectedExercises.length === 0}
-              activeOpacity={0.8}
+              disabled={!hasSelection}
+              activeOpacity={0.82}
+              style={styles.confirmTouchable}
             >
-              <Text
-                style={[
-                  styles.confirmBtnText,
-                  selectedExercises.length > 0
-                    ? styles.confirmBtnTextActive
-                    : styles.confirmBtnTextDisabled,
-                ]}
-              >
-                {selectedExercises.length > 0
-                  ? `Egzersizleri Ekle (${selectedExercises.length})`
-                  : 'Egzersizleri Seç'}
-              </Text>
+              <Reanimated.View style={[styles.confirmBtn, animatedBtnStyle]}>
+                {hasSelection ? (
+                  <Reanimated.View
+                    key="active"
+                    entering={FadeIn.duration(200)}
+                    exiting={FadeOut.duration(150)}
+                    style={styles.confirmContentRow}
+                  >
+                    <Text style={styles.confirmBtnTextActive}>Egzersizleri Ekle</Text>
+                    <Reanimated.View
+                      key={`count-${selectedExercises.length}`}
+                      entering={ZoomIn.duration(180)}
+                      style={styles.confirmCountBadge}
+                    >
+                      <Text style={styles.confirmCountBadgeText}>
+                        {selectedExercises.length}
+                      </Text>
+                    </Reanimated.View>
+                  </Reanimated.View>
+                ) : (
+                  <Reanimated.View
+                    key="idle"
+                    entering={FadeIn.duration(200)}
+                    exiting={FadeOut.duration(150)}
+                    style={styles.confirmContentRow}
+                  >
+                    <Text style={styles.confirmBtnTextDisabled}>Egzersizleri Seç</Text>
+                  </Reanimated.View>
+                )}
+              </Reanimated.View>
             </TouchableOpacity>
           </View>
         )}
@@ -505,25 +587,55 @@ const styles = StyleSheet.create({
   itemMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 6,
+    marginTop: 2,
   },
-  itemMuscle: {
-    fontSize: Typography.small,
+  muscleBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  muscleBadgeText: {
+    fontSize: 10.5,
     color: '#94A3B8',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   bwTag: {
-    backgroundColor: 'rgba(139, 92, 246, 0.16)',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.35)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
+    borderColor: 'rgba(16, 185, 129, 0.45)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bwTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#C084FC',
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#34D399',
+    letterSpacing: 0.2,
+  },
+  weightedTag: {
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.45)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weightedTagText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#38BDF8',
+    letterSpacing: 0.2,
   },
   // Sağdaki + ikonu (normalde mor, seçildiğinde yeşil)
   addIcon: {
@@ -554,30 +666,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  confirmTouchable: {
+    width: '100%',
+  },
   confirmBtn: {
     height: 48,
     borderRadius: 13,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  confirmBtnActive: {
-    borderColor: '#10B981', // Neon Yeşil Çerçeve (gölgesiz)
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-  },
-  confirmBtnDisabled: {
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  confirmBtnText: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    letterSpacing: -0.1,
+  confirmContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   confirmBtnTextActive: {
+    fontSize: 14.5,
+    fontWeight: '800',
     color: '#34D399',
+    letterSpacing: -0.1,
   },
   confirmBtnTextDisabled: {
+    fontSize: 14.5,
+    fontWeight: '700',
     color: '#64748B',
+    letterSpacing: -0.1,
+  },
+  confirmCountBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+    borderWidth: 1.2,
+    borderColor: '#34D399',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCountBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#34D399',
   },
 });

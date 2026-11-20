@@ -1,9 +1,9 @@
 import { Tabs } from 'expo-router';
+import { Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   DashboardIcon,
-  HistoryIcon,
   NutritionIcon,
   ProfileIcon,
   ProgramIcon,
@@ -23,6 +23,14 @@ export default function AppTabs() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        animation: 'fade',
+        transitionSpec: {
+          animation: 'timing',
+          config: {
+            duration: 200,
+            easing: Easing.out(Easing.cubic),
+          },
+        },
         tabBarActiveTintColor: AppColors.primary,
         tabBarInactiveTintColor: Colors.dark.textSecondary,
         tabBarStyle: {
@@ -60,14 +68,6 @@ export default function AppTabs() {
         options={{
           title: 'Özel Program',
           tabBarIcon: ({ color }) => <ProgramIcon color={color} size={20} />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: 'Geçmiş',
-          tabBarIcon: ({ color }) => <HistoryIcon color={color} size={20} />,
         }}
       />
 

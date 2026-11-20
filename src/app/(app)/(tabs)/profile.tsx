@@ -2215,7 +2215,7 @@ export default function ProfileScreen() {
               {/* 1. Bu Hafta */}
               <TouchableOpacity
                 style={styles.monthlySummaryStatCol}
-                onPress={() => router.push('/(app)/(tabs)/history' as any)}
+                onPress={() => router.push('/(app)/history' as any)}
                 activeOpacity={0.7}
                 accessibilityLabel="Bu Hafta Antrenman Seansları"
               >
@@ -2248,7 +2248,7 @@ export default function ProfileScreen() {
               {/* 3. Toplam */}
               <TouchableOpacity
                 style={styles.monthlySummaryStatCol}
-                onPress={() => router.push('/(app)/(tabs)/history' as any)}
+                onPress={() => router.push('/(app)/history' as any)}
                 activeOpacity={0.7}
                 accessibilityLabel="Toplam Antrenman Seansları"
               >

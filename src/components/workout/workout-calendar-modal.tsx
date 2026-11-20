@@ -31,14 +31,6 @@ function CalendarIcon({ size = 18, color = '#C084FC' }: { size?: number; color?:
   );
 }
 
-function CloseIcon({ size = 14, color = '#EF4444' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}>
-      <Path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M6 18L18 6M6 6l12 12" />
-    </Svg>
-  );
-}
-
 function formatMonthTR(yearMonth: string): string {
   const [y, m] = yearMonth.split('-').map(Number);
   const months = [
@@ -313,15 +305,6 @@ export function WorkoutCalendarModal({
                 </Text>
               </View>
             </View>
-
-            <TouchableOpacity
-              style={styles.calCloseBtn}
-              onPress={onClose}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <CloseIcon size={14} color="#EF4444" />
-            </TouchableOpacity>
           </View>
 
           {/* Ay Gezintisi (< > Butonları) */}
