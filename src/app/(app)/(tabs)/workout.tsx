@@ -35,10 +35,7 @@ import { RestTimer } from '@/components/workout/rest-timer';
 import { WorkoutCalendarModal } from '@/components/workout/workout-calendar-modal';
 import { WorkoutCalendarView } from '@/components/workout/workout-calendar-view';
 import { WorkoutValidationModal } from '@/components/workout/workout-validation-modal';
-import {
-  formatDurationHuman,
-  WorkoutTimerBar,
-} from '@/components/workout/workout-timer-bar';
+import { WorkoutTimerBar } from '@/components/workout/workout-timer-bar';
 import { WorkoutNote } from '@/components/workout/workout-note';
 import { AppColors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useExpertData } from '@/hooks/use-expert';
@@ -567,15 +564,12 @@ export default function WorkoutScreen() {
   // Onay Panosunda Onaylandığında DB'ye Kaydet
   const handleConfirmFinish = async () => {
     try {
-      const durationHuman = formatDurationHuman(effectiveDurationSeconds);
-      const modeLabel = entryMode === 'manual' ? '📝 Not Girişi' : '🟢 Canlı Seans';
-      const finalNotes = draft.notes?.trim()
-        ? `${draft.notes.trim()}\n\n⏱️ Antrenman Süresi: ${durationHuman} (${modeLabel})`
-        : `⏱️ Antrenman Süresi: ${durationHuman} (${modeLabel})`;
-
       const payload = {
         ...draft,
-        notes: finalNotes,
+        notes: draft.notes?.trim() || '',
+        duration_seconds: effectiveDurationSeconds,
+        rest_time_seconds: 90,
+        entry_mode: entryMode,
       };
 
       await saveWorkout(payload);

@@ -33,7 +33,7 @@ const RIR_OPTIONS = [
 export const SetRow = React.memo(function SetRow({
   index,
   set,
-  isBodyweight: _isBodyweight,
+  isBodyweight,
   onChange,
   onDelete,
   onAddSet,
@@ -105,16 +105,22 @@ export const SetRow = React.memo(function SetRow({
           </View>
         </View>
 
-        {/* Sütun 2: AĞIRLIK (KG) */}
+        {/* Sütun 2: AĞIRLIK (KG) veya VÜCUT AĞIRLIĞI (V.A.) */}
         <View style={styles.weightCol}>
-          <TextInput
-            style={styles.cellInput}
-            keyboardType="decimal-pad"
-            value={weightStr}
-            placeholder="0"
-            placeholderTextColor={Colors.light.textSecondary}
-            onChangeText={handleWeightChange}
-          />
+          {isBodyweight ? (
+            <View style={styles.bodyweightBadge}>
+              <Text style={styles.bodyweightText}>V.A.</Text>
+            </View>
+          ) : (
+            <TextInput
+              style={styles.cellInput}
+              keyboardType="decimal-pad"
+              value={weightStr}
+              placeholder="0"
+              placeholderTextColor={Colors.light.textSecondary}
+              onChangeText={handleWeightChange}
+            />
+          )}
         </View>
 
         {/* Sütun 3: TEKRAR */}
@@ -280,6 +286,21 @@ const styles = StyleSheet.create({
     width: '20%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bodyweightBadge: {
+    backgroundColor: 'rgba(53, 214, 159, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(53, 214, 159, 0.4)',
+    borderRadius: Radius.md,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bodyweightText: {
+    color: '#35D69F',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   cellInput: {
     backgroundColor: '#0F1528',

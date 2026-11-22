@@ -147,6 +147,11 @@ export const ExerciseCard = React.memo(function ExerciseCard({
               <View style={styles.muscleBadge}>
                 <Text style={styles.muscleText}>{entry.muscle_group}</Text>
               </View>
+              {entry.is_bodyweight && (
+                <View style={styles.bwBadge}>
+                  <Text style={styles.bwBadgeText}>V.A.</Text>
+                </View>
+              )}
             </View>
 
             {/* Süperset Etiketi (Hareket Adının Hemen Altında: SÜPERSET A, SÜPERSET B vb.) */}
@@ -192,10 +197,12 @@ export const ExerciseCard = React.memo(function ExerciseCard({
         </TouchableOpacity>
       </View>
 
-      {/* ─── SÜTUN BAŞLIKLARI ŞERİDİ (SET | AĞIRLIK (KG) | TEKRAR | RIR | İŞLEM) ─── */}
+      {/* ─── SÜTUN BAŞLIKLARI ŞERİDİ (SET | AĞIRLIK (KG) / YÜK | TEKRAR | RIR | İŞLEM) ─── */}
       <View style={styles.tableHeaderStrip}>
         <Text style={[styles.headerLabel, styles.setCol]}>SET</Text>
-        <Text style={[styles.headerLabel, styles.weightCol]}>AĞIRLIK (KG)</Text>
+        <Text style={[styles.headerLabel, styles.weightCol]}>
+          {entry.is_bodyweight ? 'YÜK' : 'AĞIRLIK (KG)'}
+        </Text>
         <Text style={[styles.headerLabel, styles.repsCol]}>TEKRAR</Text>
         <Text style={[styles.headerLabel, styles.rirCol]}>RIR</Text>
         <Text style={[styles.headerLabel, styles.actionCol]}>İŞLEM</Text>
@@ -316,6 +323,19 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '700',
     color: '#C084FC',
+  },
+  bwBadge: {
+    backgroundColor: 'rgba(53, 214, 159, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(53, 214, 159, 0.35)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  bwBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#35D69F',
   },
   supersetTagRow: {
     flexDirection: 'row',

@@ -1,9 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
   LayoutAnimation,
-  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   UIManager,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -346,92 +346,124 @@ export default function DashboardScreen() {
     return `Bugün, ${today.getDate()} ${monthNames[today.getMonth()]} ${dayNames[today.getDay()]}`;
   }, [today]);
 
-  // ─── AYLIK TAKVİM KAYDIRMA & GEÇMİŞ AYLAR YÖNETİMİ ───
-  const [viewMonth, setViewMonth] = useState<string>(() => todayIso.slice(0, 7));
-  const [selectedMonthIso, setSelectedMonthIso] = useState<string>(() => todayIso);
+  // ─── PAGER & GENİŞLİK YÖNETİMİ (MODERN YATAY AKIŞ) ───
+  const { width: windowWidth } = useWindowDimensions();
+  const initialContainerWidth = Math.max(300, windowWidth - 32);
+  const [containerWidth, setContainerWidth] = useState<number>(initialContainerWidth);
+  const [monthGridWidth, setMonthGridWidth] = useState<number>(initialContainerWidth - 28);
 
-  // Ay geçişinde yumuşak kayma (slide) ve opasite animasyonları
-  const [slideAnim] = useState(() => new Animated.Value(0));
-  const [opacityAnim] = useState(() => new Animated.Value(1));
+  // Haftalık Program Pager Ref & Aktif İndeks (0: 4 Hafta Önce, ..., 4: Bu Hafta)
+  const weekScrollRef = useRef<any>(null);
+  const [activeWeekIndex, setActiveWeekIndex] = useState<number>(4);
 
-  const changeMonth = React.useCallback(
-    (direction: 1 | -1) => {
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: direction === 1 ? -65 : 65,
-          duration: 120,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0.15,
-          duration: 120,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ]).start(() => {
-        setViewMonth((cur) => {
-          const [y, m] = cur.split('-').map(Number);
-          const target = new Date(y, m - 1 + direction, 1);
-          const tY = target.getFullYear();
-          const tM = String(target.getMonth() + 1).padStart(2, '0');
-          return `${tY}-${tM}`;
-        });
+  // Aylık Takip Pager Ref & Aktif İndeks (0: 11 Ay Önce, ..., 11: Bu Ay)
+  const monthScrollRef = useRef<any>(null);
+  const [activeMonthIndex, setActiveMonthIndex] = useState<number>(11);
+  const [selectedMonthIso, setSelectedMonthIso] = useState<string | null>(null);
 
-        slideAnim.setValue(direction === 1 ? 65 : -65);
+  // Seçili gün detay kartı için yumuşak geçiş animasyonu (Fade & Slide)
+  const [monthDetailFadeAnim] = useState(() => new Animated.Value(1));
+  const [monthDetailSlideAnim] = useState(() => new Animated.Value(0));
 
+  const handleSelectMonthDay = React.useCallback(
+    (cellIso: string) => {
+      if (cellIso === selectedMonthIso) {
+        // Seçili güne basılınca kart yumuşak animasyonla kapansın
         Animated.parallel([
-          Animated.timing(slideAnim, {
+          Animated.timing(monthDetailFadeAnim, {
             toValue: 0,
             duration: 180,
             useNativeDriver: Platform.OS !== 'web',
           }),
-          Animated.timing(opacityAnim, {
-            toValue: 1,
+          Animated.timing(monthDetailSlideAnim, {
+            toValue: 8,
             duration: 180,
             useNativeDriver: Platform.OS !== 'web',
           }),
-        ]).start();
-      });
+        ]).start(() => {
+          try {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          } catch {}
+          setSelectedMonthIso(null);
+        });
+        return;
+      }
+
+      // Yeni gün seçildiğinde yumuşak animasyonla açılsın
+      const isAlreadyOpen = selectedMonthIso !== null;
+      try {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      } catch {}
+
+      monthDetailFadeAnim.setValue(isAlreadyOpen ? 0.35 : 0);
+      monthDetailSlideAnim.setValue(isAlreadyOpen ? 4 : 8);
+      setSelectedMonthIso(cellIso);
+
+      Animated.parallel([
+        Animated.timing(monthDetailFadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(monthDetailSlideAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]).start();
     },
-    [slideAnim, opacityAnim]
+    [selectedMonthIso, monthDetailFadeAnim, monthDetailSlideAnim]
   );
 
-  const handlePrevMonth = React.useCallback(() => changeMonth(-1), [changeMonth]);
-  const handleNextMonth = React.useCallback(() => changeMonth(1), [changeMonth]);
+  const handlePrevWeek = () => {
+    if (activeWeekIndex > 0) {
+      const target = activeWeekIndex - 1;
+      setActiveWeekIndex(target);
+      weekScrollRef.current?.scrollTo({ x: target * containerWidth, animated: true });
+    }
+  };
 
-  // Sağa - Sola Kaydırma (Swipe PanResponder)
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) => {
-          return (
-            Math.abs(gestureState.dx) > 15 &&
-            Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5
-          );
-        },
-        onPanResponderMove: (_, gestureState) => {
-          slideAnim.setValue(gestureState.dx * 0.35);
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx < -45) {
-            changeMonth(1);
-          } else if (gestureState.dx > 45) {
-            changeMonth(-1);
-          } else {
-            Animated.spring(slideAnim, {
-              toValue: 0,
-              useNativeDriver: Platform.OS !== 'web',
-            }).start();
-          }
-        },
-        onPanResponderTerminate: () => {
-          Animated.spring(slideAnim, {
-            toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-          }).start();
-        },
-      }),
-    [slideAnim, changeMonth]
-  );
+  const handleNextWeek = () => {
+    if (activeWeekIndex < 4) {
+      const target = activeWeekIndex + 1;
+      setActiveWeekIndex(target);
+      weekScrollRef.current?.scrollTo({ x: target * containerWidth, animated: true });
+    }
+  };
+
+  const handlePrevMonth = () => {
+    if (activeMonthIndex > 0) {
+      const target = activeMonthIndex - 1;
+      setActiveMonthIndex(target);
+      monthScrollRef.current?.scrollTo({ x: target * monthGridWidth, animated: true });
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (activeMonthIndex < 11) {
+      const target = activeMonthIndex + 1;
+      setActiveMonthIndex(target);
+      monthScrollRef.current?.scrollTo({ x: target * monthGridWidth, animated: true });
+    }
+  };
+
+  const activeWeekIndexRef = useRef(activeWeekIndex);
+  activeWeekIndexRef.current = activeWeekIndex;
+  const activeMonthIndexRef = useRef(activeMonthIndex);
+  activeMonthIndexRef.current = activeMonthIndex;
+
+  // Sekme değiştiğinde pager konumunu koru ve hizala
+  useEffect(() => {
+    if (viewTab === 'weekly') {
+      requestAnimationFrame(() => {
+        weekScrollRef.current?.scrollTo({ x: activeWeekIndexRef.current * containerWidth, animated: false });
+      });
+    } else if (viewTab === 'monthly') {
+      requestAnimationFrame(() => {
+        monthScrollRef.current?.scrollTo({ x: activeMonthIndexRef.current * monthGridWidth, animated: false });
+      });
+    }
+  }, [viewTab, containerWidth, monthGridWidth]);
 
   // Kayıtlı gerçek antrenmanların haritası
   const workoutDatesMap = useMemo(() => {
@@ -470,173 +502,245 @@ export default function DashboardScreen() {
     };
   }, [userCustomSplit]);
 
-  const reconciledWeek = useMemo(() => {
-    // 2. Bu haftanın (Pazartesi - Pazar) gün tarihlerini hesapla
-    const dayOfWeek = today.getDay(); // 0: Pazar, 1: Pazartesi, ..., 5: Cuma
-    const distToMon = (dayOfWeek + 6) % 7; // Pazartesi = 0
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - distToMon);
+  const buildWeekSchedule = React.useCallback(
+    (offset: number) => {
+      // Haftanın (Pazartesi - Pazar) gün tarihlerini hesapla
+      const dayOfWeek = today.getDay(); // 0: Pazar, 1: Pazartesi
+      const distToMon = (dayOfWeek + 6) % 7; // Pazartesi = 0
 
-    const dayLabelsTR = ['PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CMT', 'PAZ'];
-    const fullDayLabelsTR = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+      const dayLabelsTR = ['PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CMT', 'PAZ'];
+      const fullDayLabelsTR = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
-    const weekDates = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const dateNum = String(d.getDate()).padStart(2, '0');
-      weekDates.push({
-        dateIso: `${y}-${m}-${dateNum}`,
-        dayNum: String(d.getDate()),
-        dayName: dayLabelsTR[i],
-        fullDayName: fullDayLabelsTR[i],
-        index: i,
+      const weekDates = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - distToMon + offset * 7 + i);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dateNum = String(d.getDate()).padStart(2, '0');
+        weekDates.push({
+          dateIso: `${y}-${m}-${dateNum}`,
+          dayNum: String(d.getDate()),
+          dayName: dayLabelsTR[i],
+          fullDayName: fullDayLabelsTR[i],
+          index: i,
+        });
+      }
+
+      // Başlangıç haftalık kartlarını oluştur
+      const result = weekDates.map((wDate, idx) => {
+        const base = baseProgram[idx] || DEFAULT_WEEKLY_SCHEDULE[idx];
+        return {
+          dayNum: wDate.dayNum,
+          dayName: wDate.dayName,
+          fullDayName: wDate.fullDayName,
+          dateIso: wDate.dateIso,
+          title: base.type || (base.isRest ? 'Dinlenme Günü' : 'Antrenman'),
+          subtitle: base.focus || (base.isRest ? 'Toparlanma ve dinlenme' : 'Genel antrenman'),
+          isRest: !!base.isRest,
+          exercises: base.exercises || [],
+          status: 'planned' as 'done' | 'today' | 'missed' | 'rest' | 'planned',
+          badgeText: 'Planlandı',
+          actualWorkout: undefined as (typeof workouts)[0] | undefined,
+        };
       });
-    }
 
-    // 3. Başlangıç haftalık kartlarını oluştur
-    const result = weekDates.map((wDate, idx) => {
-      const base = baseProgram[idx] || DEFAULT_WEEKLY_SCHEDULE[idx];
-      return {
-        dayNum: wDate.dayNum,
-        dayName: wDate.dayName,
-        fullDayName: wDate.fullDayName,
-        dateIso: wDate.dateIso,
-        title: base.type || (base.isRest ? 'Dinlenme Günü' : 'Antrenman'),
-        subtitle: base.focus || (base.isRest ? 'Toparlanma ve dinlenme' : 'Genel antrenman'),
-        isRest: !!base.isRest,
-        exercises: base.exercises || [],
-        status: 'planned' as 'done' | 'today' | 'missed' | 'rest' | 'planned',
-        badgeText: 'Planlandı',
-        actualWorkout: undefined as (typeof workouts)[0] | undefined,
-      };
-    });
-
-    // 4. Bu hafta yapılmış gerçek antrenmanları eşle
-    const actualSlots = new Map<number, (typeof workouts)[0]>();
-    for (let i = 0; i < 7; i++) {
-      const w = workoutDatesMap.get(weekDates[i].dateIso);
-      if (w) {
-        actualSlots.set(i, w);
-      }
-    }
-
-    // 5. Adaptif Seans Yer Değiştirme (Dinamik Reconcile & Swap Logic)
-    // "Ben leg day için push seansı girersem eğer leg day ile push day kartlarda yer değiştirmeli otomatik"
-    for (const [sourceIndex, actual] of actualSlots.entries()) {
-      const actualKind = getSessionKind(actual.session_type);
-      if (!actualKind || actualKind === 'rest') continue;
-
-      const plannedKind = getSessionKind(result[sourceIndex].title);
-
-      if (plannedKind === actualKind && !result[sourceIndex].isRest) {
-        // Planlanan seans ile girilen seans aynı: doğrudan tamamlandı
-        result[sourceIndex].title = formatSessionTitle(actual.session_type || result[sourceIndex].title);
-        result[sourceIndex].status = 'done';
-        result[sourceIndex].badgeText = 'Yapıldı ✓';
-        result[sourceIndex].actualWorkout = actual;
-        if (actual.exercises && actual.exercises.length > 0) {
-          result[sourceIndex].exercises = actual.exercises;
+      // Bu haftaya denk gelen gerçek antrenmanları eşle
+      const actualSlots = new Map<number, (typeof workouts)[0]>();
+      for (let i = 0; i < 7; i++) {
+        const w = workoutDatesMap.get(weekDates[i].dateIso);
+        if (w) {
+          actualSlots.set(i, w);
         }
-        continue;
       }
 
-      // PLANLANANDAN FARKLI BİR SEANS GİRİLMİŞ (Örn: Legs Day yerine Push girilmiş)
-      // Bu durumda girilen seans ile planlanan seans yer değiştirir:
-      const candidates = [
-        ...Array.from({ length: 7 - sourceIndex - 1 }, (_, k) => sourceIndex + 1 + k),
-        ...Array.from({ length: sourceIndex }, (_, k) => sourceIndex - 1 - k),
+      if (offset === 0) {
+        // 5. Adaptif Seans Yer Değiştirme (Dinamik Reconcile & Swap Logic - Sadece Bu Hafta için)
+        for (const [sourceIndex, actual] of actualSlots.entries()) {
+          const actualKind = getSessionKind(actual.session_type);
+          if (!actualKind || actualKind === 'rest') continue;
+
+          const plannedKind = getSessionKind(result[sourceIndex].title);
+
+          if (plannedKind === actualKind && !result[sourceIndex].isRest) {
+            result[sourceIndex].title = formatSessionTitle(actual.session_type || result[sourceIndex].title);
+            result[sourceIndex].status = 'done';
+            result[sourceIndex].badgeText = 'Yapıldı ✓';
+            result[sourceIndex].actualWorkout = actual;
+            if (actual.exercises && actual.exercises.length > 0) {
+              result[sourceIndex].exercises = actual.exercises;
+            }
+            continue;
+          }
+
+          const candidates = [
+            ...Array.from({ length: 7 - sourceIndex - 1 }, (_, k) => sourceIndex + 1 + k),
+            ...Array.from({ length: sourceIndex }, (_, k) => sourceIndex - 1 - k),
+          ];
+
+          let targetIndex = candidates.find(
+            (idx) =>
+              !actualSlots.has(idx) &&
+              !result[idx].isRest &&
+              getSessionKind(result[idx].title) === actualKind
+          );
+
+          if (targetIndex === undefined) {
+            targetIndex = candidates.find((idx) => !actualSlots.has(idx));
+          }
+
+          if (targetIndex !== undefined) {
+            const displacedContent = {
+              title: result[sourceIndex].title,
+              subtitle: result[sourceIndex].subtitle,
+              isRest: result[sourceIndex].isRest,
+              exercises: result[sourceIndex].exercises,
+            };
+
+            result[sourceIndex].title = formatSessionTitle(actual.session_type);
+            result[sourceIndex].subtitle = actual.exercises?.length
+              ? `${actual.exercises.length} Egzersiz Tamamlandı`
+              : (SESSION_DEFAULT_FOCUS[actualKind] || result[sourceIndex].subtitle);
+            result[sourceIndex].isRest = false;
+            result[sourceIndex].status = 'done';
+            result[sourceIndex].badgeText = 'Yapıldı ✓';
+            result[sourceIndex].actualWorkout = actual;
+            if (actual.exercises && actual.exercises.length > 0) {
+              result[sourceIndex].exercises = actual.exercises;
+            }
+
+            result[targetIndex].title = displacedContent.title;
+            result[targetIndex].subtitle = displacedContent.subtitle;
+            result[targetIndex].isRest = displacedContent.isRest;
+            result[targetIndex].exercises = displacedContent.exercises;
+          } else {
+            result[sourceIndex].title = formatSessionTitle(actual.session_type);
+            result[sourceIndex].status = 'done';
+            result[sourceIndex].badgeText = 'Yapıldı ✓';
+            result[sourceIndex].actualWorkout = actual;
+          }
+        }
+
+        // 6. Bu haftanın boş günlerini finalize et
+        const todayIndex = distToMon;
+        for (let i = 0; i < 7; i++) {
+          if (!actualSlots.has(i)) {
+            if (i < todayIndex) {
+              if (result[i].isRest) {
+                result[i].status = 'rest';
+                result[i].badgeText = 'Dinlenme ☾';
+              } else {
+                result[i].status = 'missed';
+                result[i].badgeText = 'Kaçırıldı !';
+              }
+            } else if (i === todayIndex) {
+              if (result[i].isRest) {
+                result[i].status = 'rest';
+                result[i].badgeText = 'Dinlenme ☾';
+              } else {
+                result[i].status = 'today';
+                result[i].badgeText = 'BUGÜN 🔥';
+              }
+            } else {
+              if (result[i].isRest) {
+                result[i].status = 'rest';
+                result[i].badgeText = 'Dinlenme ☾';
+              } else {
+                result[i].status = 'planned';
+                result[i].badgeText = 'Planlandı';
+              }
+            }
+          }
+        }
+      } else {
+        // GEÇMİŞ HAFTALAR İÇİN (offset < 0)
+        // Hangi günler antrenman yapılmışsa doğrudan gösterilir
+        for (let i = 0; i < 7; i++) {
+          const actual = actualSlots.get(i);
+          if (actual) {
+            result[i].title = formatSessionTitle(actual.session_type || result[i].title);
+            result[i].subtitle = actual.exercises?.length
+              ? `${actual.exercises.length} Egzersiz Tamamlandı`
+              : (result[i].subtitle || 'Antrenman tamamlandı');
+            result[i].isRest = false;
+            result[i].status = 'done';
+            result[i].badgeText = 'Yapıldı ✓';
+            result[i].actualWorkout = actual;
+            if (actual.exercises && actual.exercises.length > 0) {
+              result[i].exercises = actual.exercises;
+            }
+          } else {
+            if (result[i].isRest) {
+              result[i].status = 'rest';
+              result[i].badgeText = 'Dinlenme ☾';
+            } else {
+              result[i].status = 'missed';
+              result[i].badgeText = 'Kaçırıldı !';
+            }
+          }
+        }
+      }
+
+      return result;
+    },
+    [baseProgram, today, workoutDatesMap]
+  );
+
+  const getWeekInfo = React.useCallback(
+    (offset: number) => {
+      const dayOfWeek = today.getDay();
+      const distToMon = (dayOfWeek + 6) % 7;
+      const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - distToMon + offset * 7);
+      const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - distToMon + offset * 7 + 6);
+
+      const monthNamesTR = [
+        'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+        'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
       ];
 
-      let targetIndex = candidates.find(
-        (idx) =>
-          !actualSlots.has(idx) &&
-          !result[idx].isRest &&
-          getSessionKind(result[idx].title) === actualKind
-      );
+      let label = 'Bu Hafta';
+      if (offset === -1) label = 'Geçen Hafta';
+      else if (offset === -2) label = '2 Hafta Önce';
+      else if (offset === -3) label = '3 Hafta Önce';
+      else if (offset === -4) label = '4 Hafta Önce';
 
-      // Eğer aynı türde boş bir kart yoksa, gelecekteki ilk boş antrenman veya dinlenme gününü bul
-      if (targetIndex === undefined) {
-        targetIndex = candidates.find((idx) => !actualSlots.has(idx));
-      }
+      const mMonth = monthNamesTR[monday.getMonth()];
+      const sMonth = monthNamesTR[sunday.getMonth()];
 
-      if (targetIndex !== undefined) {
-        // Kartların içeriklerini (title, subtitle, isRest, exercises) takas et
-        const displacedContent = {
-          title: result[sourceIndex].title,
-          subtitle: result[sourceIndex].subtitle,
-          isRest: result[sourceIndex].isRest,
-          exercises: result[sourceIndex].exercises,
-        };
-
-        // Girilen gün yapılan seans olur (Örn: Push Day)
-        result[sourceIndex].title = formatSessionTitle(actual.session_type);
-        result[sourceIndex].subtitle = actual.exercises?.length
-          ? `${actual.exercises.length} Egzersiz Tamamlandı`
-          : (SESSION_DEFAULT_FOCUS[actualKind] || result[sourceIndex].subtitle);
-        result[sourceIndex].isRest = false;
-        result[sourceIndex].status = 'done';
-        result[sourceIndex].badgeText = 'Yapıldı ✓';
-        result[sourceIndex].actualWorkout = actual;
-        if (actual.exercises && actual.exercises.length > 0) {
-          result[sourceIndex].exercises = actual.exercises;
-        }
-
-        // Takas edilen hedef gün, yerinden olan planı devralır (Örn: Legs Day)
-        result[targetIndex].title = displacedContent.title;
-        result[targetIndex].subtitle = displacedContent.subtitle;
-        result[targetIndex].isRest = displacedContent.isRest;
-        result[targetIndex].exercises = displacedContent.exercises;
+      let rangeText = '';
+      if (mMonth === sMonth) {
+        rangeText = `${monday.getDate()} - ${sunday.getDate()} ${sMonth}`;
       } else {
-        result[sourceIndex].title = formatSessionTitle(actual.session_type);
-        result[sourceIndex].status = 'done';
-        result[sourceIndex].badgeText = 'Yapıldı ✓';
-        result[sourceIndex].actualWorkout = actual;
+        rangeText = `${monday.getDate()} ${mMonth} - ${sunday.getDate()} ${sMonth}`;
       }
-    }
 
-    // 6. Gerçek antrenman kaydedilmemiş günlerin durumlarını finalize et
-    const todayIndex = distToMon; // Bugünün haftadaki indeksi (0-6)
-    for (let i = 0; i < 7; i++) {
-      if (!actualSlots.has(i)) {
-        if (i < todayIndex) {
-          if (result[i].isRest) {
-            result[i].status = 'rest';
-            result[i].badgeText = 'Dinlenme ☾';
-          } else {
-            result[i].status = 'missed';
-            result[i].badgeText = 'Kaçırıldı !';
-          }
-        } else if (i === todayIndex) {
-          if (result[i].isRest) {
-            result[i].status = 'rest';
-            result[i].badgeText = 'Dinlenme ☾';
-          } else {
-            result[i].status = 'today';
-            result[i].badgeText = 'BUGÜN 🔥';
-          }
-        } else {
-          if (result[i].isRest) {
-            result[i].status = 'rest';
-            result[i].badgeText = 'Dinlenme ☾';
-          } else {
-            result[i].status = 'planned';
-            result[i].badgeText = 'Planlandı';
-          }
-        }
-      }
-    }
+      return { label, rangeText };
+    },
+    [today]
+  );
 
-    return result;
-  }, [baseProgram, today, workoutDatesMap]);
+  const WEEK_OFFSETS = useMemo(() => [-4, -3, -2, -1, 0] as const, []);
 
-  // Bugünün planı kartı için veriler (Haftalık uyumlaştırılmış plandan otomatik çekilir)
+  // 5 Haftalık Tüm Veriler Önceden Hazırlanır (Yatay kaydırma anında yan yana durur)
+  const allWeeksData = useMemo(() => {
+    return WEEK_OFFSETS.map((offset) => {
+      const schedule = buildWeekSchedule(offset);
+      const info = getWeekInfo(offset);
+      return {
+        offset,
+        schedule,
+        info,
+      };
+    });
+  }, [WEEK_OFFSETS, buildWeekSchedule, getWeekInfo]);
+
+  const currentWeekItem = allWeeksData[activeWeekIndex] || allWeeksData[4];
+
+  // Bugünün planı kartı için veriler (Haftalık uyumlaştırılmış plandan otomatik çekilir - daima mevcut hafta)
+  const currentWeekSchedule = useMemo(() => buildWeekSchedule(0), [buildWeekSchedule]);
   const todayIndex = useMemo(() => (today.getDay() + 6) % 7, [today]);
   const todayCard = useMemo(
-    () => reconciledWeek[todayIndex] || reconciledWeek[0],
-    [reconciledWeek, todayIndex]
+    () => currentWeekSchedule[todayIndex] || currentWeekSchedule[0],
+    [currentWeekSchedule, todayIndex]
   );
 
   const todaySilhouetteTarget = useMemo((): 'legs' | 'push' | 'pull' => {
@@ -662,53 +766,63 @@ export default function DashboardScreen() {
     return DEFAULT_EXERCISES_BY_KIND[kind || 'legs'] || DEFAULT_EXERCISES_BY_KIND.legs;
   }, [todayCard]);
 
-  const weeklyCompletedCount = useMemo(() => {
-    return reconciledWeek.filter((d) => d.status === 'done').length;
-  }, [reconciledWeek]);
+  // 12 Aylık Tüm Takvim Verileri Önceden Hazırlanır (Yatay kaydırırken aylar anında görünür)
+  const MONTH_OFFSETS = useMemo(
+    () => [-11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0] as const,
+    []
+  );
 
-  const weeklyPlannedCount = useMemo(() => {
-    return reconciledWeek.filter((d) => !d.isRest).length;
-  }, [reconciledWeek]);
+  const allMonthsData = useMemo(() => {
+    return MONTH_OFFSETS.map((offset) => {
+      const target = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+      const y = target.getFullYear();
+      const m = String(target.getMonth() + 1).padStart(2, '0');
+      const monthIso = `${y}-${m}`;
 
-  // Görüntülenen ayın takvim hücreleri (Pzt-Paz 7 sütun, her zaman 42 hücreye sabitlenir)
-  const calendarCells = useMemo(() => {
-    const [y, m] = viewMonth.split('-').map(Number);
-    const firstDay = new Date(y, m - 1, 1);
-    const lastDay = new Date(y, m, 0);
+      const firstDay = new Date(y, target.getMonth(), 1);
+      const lastDay = new Date(y, target.getMonth() + 1, 0);
 
-    let startDayIdx = firstDay.getDay() - 1;
-    if (startDayIdx === -1) startDayIdx = 6; // Pazar -> 6
+      let startDayIdx = firstDay.getDay() - 1;
+      if (startDayIdx === -1) startDayIdx = 6;
 
-    const totalDays = lastDay.getDate();
-    const cells: (number | null)[] = [];
+      const totalDays = lastDay.getDate();
+      const cells: (number | null)[] = [];
 
-    for (let i = 0; i < startDayIdx; i++) {
-      cells.push(null);
-    }
-    for (let d = 1; d <= totalDays; d++) {
-      cells.push(d);
-    }
-    // Her ay için tam 6 satır (42 hücre) sabit tutulur, pano boyutu asla oynamaz
-    while (cells.length < 42) {
-      cells.push(null);
-    }
-    return cells;
-  }, [viewMonth]);
+      for (let i = 0; i < startDayIdx; i++) {
+        cells.push(null);
+      }
+      for (let d = 1; d <= totalDays; d++) {
+        cells.push(d);
+      }
+      while (cells.length < 42) {
+        cells.push(null);
+      }
 
-  // Görüntülenen ayın gerçek istatistikleri (YAPILDI, KAÇIRILDI, DİNLENME)
+      return {
+        offset,
+        monthIso,
+        title: formatMonthTR(monthIso),
+        cells,
+      };
+    });
+  }, [MONTH_OFFSETS, today]);
+
+  const currentMonthItem = allMonthsData[activeMonthIndex] || allMonthsData[allMonthsData.length - 1];
+
+  // Aktif görüntülenen ayın gerçek istatistikleri (YAPILDI, KAÇIRILDI, DİNLENME)
   const monthStats = useMemo(() => {
     let completed = 0;
     let missed = 0;
     let rest = 0;
 
-    const [y, m] = viewMonth.split('-').map(Number);
+    const currentMonthIso = currentMonthItem.monthIso;
+    const [y, m] = currentMonthIso.split('-').map(Number);
     const totalDays = new Date(y, m, 0).getDate();
 
     for (let d = 1; d <= totalDays; d++) {
       const dayStr = String(d).padStart(2, '0');
-      const iso = `${viewMonth}-${dayStr}`;
+      const iso = `${currentMonthIso}-${dayStr}`;
 
-      // Gelecek günlerin istatistiği henüz oluşmamıştır (gelecek günün verisi olmasın)
       if (iso > todayIso) {
         continue;
       }
@@ -730,16 +844,18 @@ export default function DashboardScreen() {
           if (plannedDay.isRest) {
             rest++;
           }
-          // Bugün antrenman günüyse henüz gün bitmediği için 'kaçırıldı' sayılmaz
         }
       }
     }
 
     return { completed, missed, rest };
-  }, [viewMonth, workoutDatesMap, todayIso, baseProgram]);
+  }, [currentMonthItem.monthIso, todayIso, workoutDatesMap, baseProgram]);
 
   // Seçili günün seans detay bilgileri (Tarih yok; Oturum Tipi, Toplam Set ve Hedef Kaslar)
   const selectedDayInfo = useMemo(() => {
+    if (!selectedMonthIso) {
+      return null;
+    }
     const realW = workoutDatesMap.get(selectedMonthIso);
     const isToday = selectedMonthIso === todayIso;
     const isFuture = selectedMonthIso > todayIso;
@@ -815,7 +931,7 @@ export default function DashboardScreen() {
       }
       return {
         sessionType: formatSessionTitle(planned.type),
-        totalSets: '0 Set (Yapılmadı)',
+        totalSets: '0',
         targetMuscles: focusMuscles,
         statusBadge: 'Kaçırıldı !',
         statusType: 'missed' as const,
@@ -857,6 +973,7 @@ export default function DashboardScreen() {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled={true}
       >
         {/* ─── 1. ÜST HEADER: AVATAR, SELAMLAMA & SERİ ─── */}
         <View style={styles.topHeader}>
@@ -1001,11 +1118,6 @@ export default function DashboardScreen() {
               <Text style={styles.programSourceText}>{programBadgeText}</Text>
             </TouchableOpacity>
           </View>
-          {viewTab === 'weekly' && (
-            <Text style={styles.sectionSubtitle}>
-              Bu hafta · {weeklyCompletedCount} / {weeklyPlannedCount} tamamlandı
-            </Text>
-          )}
         </View>
 
         {/* Hafta / Ay Geçiş Düğmeleri */}
@@ -1038,11 +1150,18 @@ export default function DashboardScreen() {
             transform: [{ translateX: tabSlideAnim }],
           }}
         >
-          {/* ─── 4A. HAFTALIK PROGRAM KARTLARI ─── */}
+          {/* ─── 4A. HAFTALIK PROGRAM KARTLARI (YATAY MODERN PAGER) ─── */}
           {viewTab === 'weekly' && (
-            <View style={styles.weekBoard}>
-              {/* Eğer özel programı yoksa Web stili yönlendirici banner */}
-              {!hasCustomProgram && (
+            <View
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                if (w > 0 && Math.abs(w - containerWidth) > 1) {
+                  setContainerWidth(w);
+                }
+              }}
+            >
+              {/* Eğer özel programı yoksa Web stili yönlendirici banner (Sadece bu haftada) */}
+              {activeWeekIndex === 4 && !hasCustomProgram && (
                 <TouchableOpacity
                   style={styles.noProgramBanner}
                   activeOpacity={0.8}
@@ -1061,112 +1180,135 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               )}
 
-              {reconciledWeek.map((item, idx) => {
-                const isToday = item.status === 'today';
-                const isDone = item.status === 'done';
-                const isMissed = item.status === 'missed';
-                const isRest = item.status === 'rest';
+              {/* Hafta Gezinme Başlığı (Aylık Takvim gibi Oklar & Başlık) */}
+              <View style={styles.weekCenterNav}>
+                <TouchableOpacity
+                  style={[styles.weekArrowBtn, activeWeekIndex <= 0 && styles.arrowBtnDisabled]}
+                  onPress={handlePrevWeek}
+                  disabled={activeWeekIndex <= 0}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.weekArrowText, activeWeekIndex <= 0 && styles.arrowTextDisabled]}>‹</Text>
+                </TouchableOpacity>
 
-                return (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.programCard,
-                      isDone && styles.cardDone,
-                      isMissed && styles.cardMissed,
-                      isRest && styles.cardRest,
-                      isToday && styles.cardToday,
-                    ]}
-                  >
-                    <View style={styles.cardTopRow}>
-                      <View
-                        style={[
-                          styles.dateBox,
-                          isDone && styles.dateBoxDone,
-                          isMissed && styles.dateBoxMissed,
-                          isRest && styles.dateBoxRest,
-                          isToday && styles.dateBoxToday,
-                        ]}
-                      >
-                        <Text style={styles.dateBoxNum}>{item.dayNum}</Text>
-                        <Text style={styles.dateBoxName}>{item.dayName}</Text>
-                      </View>
+                <View style={styles.weekTitleWrap}>
+                  <Text style={styles.weekTitleText}>{currentWeekItem.info.label}</Text>
+                  <Text style={styles.weekRangeText}>{currentWeekItem.info.rangeText}</Text>
+                </View>
 
-                      <View style={styles.cardCopy}>
-                        <Text style={styles.cardTitle}>{item.title}</Text>
-                        <Text style={styles.cardSub}>{item.subtitle}</Text>
-                      </View>
-
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          isDone && styles.statusBadgeDone,
-                          isMissed && styles.statusBadgeMissed,
-                          isRest && styles.statusBadgeRest,
-                          isToday && styles.statusBadgeToday,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.statusBadgeText,
-                            isDone && styles.statusBadgeTextDone,
-                            isMissed && styles.statusBadgeTextMissed,
-                            isRest && styles.statusBadgeTextRest,
-                            isToday && styles.statusBadgeTextToday,
-                          ]}
-                        >
-                          {item.badgeText}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-
-            {/* Web Panelinden Gelen Güç Hedefleri (PR İlerlemesi) */}
-            <View style={styles.prBox}>
-              <View style={styles.prHeader}>
-                <Text style={styles.prTitle}>Güç Hedeflerim (PR)</Text>
-                <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(app)/history')}>
-                  <Text style={styles.prActionText}>Tümünü Gör ↗</Text>
+                <TouchableOpacity
+                  style={[styles.weekArrowBtn, activeWeekIndex >= 4 && styles.arrowBtnDisabled]}
+                  onPress={handleNextWeek}
+                  disabled={activeWeekIndex >= 4}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.weekArrowText, activeWeekIndex >= 4 && styles.arrowTextDisabled]}>›</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Bench Press */}
-              <View style={styles.prItem}>
-                <View style={styles.prMeta}>
-                  <Text style={styles.prName}>Bench Press (Göğüs)</Text>
-                  <Text style={[styles.prScore, { color: '#55D6FF' }]}>80 / 100 kg (%80)</Text>
-                </View>
-                <View style={styles.prBarBg}>
-                  <View style={[styles.prBarFill, { width: '80%', backgroundColor: '#55D6FF' }]} />
-                </View>
-              </View>
+              {/* Modern Yatay Paging ScrollView: Diğer haftalar daima hazır ve kaydırırken yan yana görünür */}
+              <View style={styles.weekContainer}>
+                <ScrollView
+                  ref={weekScrollRef}
+                  horizontal
+                  pagingEnabled={true}
+                  decelerationRate="fast"
+                  showsHorizontalScrollIndicator={false}
+                  nestedScrollEnabled={true}
+                  directionalLockEnabled={true}
+                  overScrollMode="never"
+                  scrollEventThrottle={16}
+                  contentOffset={{ x: 4 * containerWidth, y: 0 }}
+                  onScroll={(e) => {
+                    const x = e.nativeEvent.contentOffset.x;
+                    const idx = Math.max(0, Math.min(4, Math.round(x / containerWidth)));
+                    if (idx !== activeWeekIndex) {
+                      setActiveWeekIndex(idx);
+                    }
+                  }}
+                  onMomentumScrollEnd={(e) => {
+                    const x = e.nativeEvent.contentOffset.x;
+                    const idx = Math.max(0, Math.min(4, Math.round(x / containerWidth)));
+                    setActiveWeekIndex(idx);
+                  }}
+                >
+                  {allWeeksData.map((weekItem) => (
+                    <View
+                      key={`week-${weekItem.offset}`}
+                      style={{
+                        width: containerWidth,
+                        paddingHorizontal: 8,
+                      }}
+                    >
+                      <View style={styles.weekBoard}>
+                        {weekItem.schedule.map((item, idx) => {
+                          const isToday = item.status === 'today';
+                          const isDone = item.status === 'done';
+                          const isMissed = item.status === 'missed';
+                          const isRest = item.status === 'rest';
 
-              {/* Squat */}
-              <View style={styles.prItem}>
-                <View style={styles.prMeta}>
-                  <Text style={styles.prName}>Squat (Bacak)</Text>
-                  <Text style={[styles.prScore, { color: '#A98BFF' }]}>80 / 120 kg (%67)</Text>
-                </View>
-                <View style={styles.prBarBg}>
-                  <View style={[styles.prBarFill, { width: '67%', backgroundColor: '#A98BFF' }]} />
-                </View>
-              </View>
+                          return (
+                            <View
+                              key={`${item.dateIso}-${idx}`}
+                              style={[
+                                styles.programCard,
+                                isDone && styles.cardDone,
+                                isMissed && styles.cardMissed,
+                                isRest && styles.cardRest,
+                                isToday && styles.cardToday,
+                              ]}
+                            >
+                              <View style={styles.cardTopRow}>
+                                <View
+                                  style={[
+                                    styles.dateBox,
+                                    isDone && styles.dateBoxDone,
+                                    isMissed && styles.dateBoxMissed,
+                                    isRest && styles.dateBoxRest,
+                                    isToday && styles.dateBoxToday,
+                                  ]}
+                                >
+                                  <Text style={styles.dateBoxNum}>{item.dayNum}</Text>
+                                  <Text style={styles.dateBoxName}>{item.dayName}</Text>
+                                </View>
 
-              {/* Deadlift */}
-              <View style={styles.prItem}>
-                <View style={styles.prMeta}>
-                  <Text style={styles.prName}>Deadlift (Sırt & Arka Bacak)</Text>
-                  <Text style={[styles.prScore, { color: '#35D69F' }]}>75 / 100 kg (%75)</Text>
-                </View>
-                <View style={styles.prBarBg}>
-                  <View style={[styles.prBarFill, { width: '75%', backgroundColor: '#35D69F' }]} />
-                </View>
+                                <View style={styles.cardCopy}>
+                                  <Text style={styles.cardTitle}>{item.title}</Text>
+                                  <Text style={styles.cardSub}>{item.subtitle}</Text>
+                                </View>
+
+                                <View
+                                  style={[
+                                    styles.statusBadge,
+                                    isDone && styles.statusBadgeDone,
+                                    isMissed && styles.statusBadgeMissed,
+                                    isRest && styles.statusBadgeRest,
+                                    isToday && styles.statusBadgeToday,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.statusBadgeText,
+                                      isDone && styles.statusBadgeTextDone,
+                                      isMissed && styles.statusBadgeTextMissed,
+                                      isRest && styles.statusBadgeTextRest,
+                                      isToday && styles.statusBadgeTextToday,
+                                    ]}
+                                  >
+                                    {item.badgeText}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
             </View>
-          </View>
-        )}
+          )}
 
         {/* ─── 4B. AYLIK TAKİP GÖRÜNÜMÜ (KAYDIRILABİLİR PANORAMA) ─── */}
         {viewTab === 'monthly' && (
@@ -1193,26 +1335,28 @@ export default function DashboardScreen() {
             <View style={styles.monthCenterNav}>
               <TouchableOpacity
                 onPress={handlePrevMonth}
-                style={styles.monthArrowBtn}
+                style={[styles.monthArrowBtn, activeMonthIndex <= 0 && styles.arrowBtnDisabled]}
+                disabled={activeMonthIndex <= 0}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.monthArrowText}>‹</Text>
+                <Text style={[styles.monthArrowText, activeMonthIndex <= 0 && styles.arrowTextDisabled]}>‹</Text>
               </TouchableOpacity>
 
-              <Text style={styles.monthTitleText}>{formatMonthTR(viewMonth)}</Text>
+              <Text style={styles.monthTitleText}>{currentMonthItem.title}</Text>
 
               <TouchableOpacity
                 onPress={handleNextMonth}
-                style={styles.monthArrowBtn}
+                style={[styles.monthArrowBtn, activeMonthIndex >= allMonthsData.length - 1 && styles.arrowBtnDisabled]}
+                disabled={activeMonthIndex >= allMonthsData.length - 1}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.monthArrowText}>›</Text>
+                <Text style={[styles.monthArrowText, activeMonthIndex >= allMonthsData.length - 1 && styles.arrowTextDisabled]}>›</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Gün Kısaltmaları (Pzt Sal Çar Per Cum Cmt Paz) */}
+            {/* Gün Kısaltmaları (Pzt Sal Çar Per Cum Cmt Paz) - Üstte Sabit */}
             <View style={styles.monthDaysHeadRow}>
               {['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'].map((d, i) => (
                 <View key={i} style={styles.monthDayHeadCol}>
@@ -1221,129 +1365,196 @@ export default function DashboardScreen() {
               ))}
             </View>
 
-            {/* Parmakla Kaydırılabilir & Animasyonlu Takvim Matrisi */}
-            <View style={styles.gridContainer} {...panResponder.panHandlers}>
+            {/* Modern Yatay Paging ScrollView: Diğer aylar daima yan yana hazır durur, kaydırırken anında görünür */}
+            <View
+              style={styles.gridContainer}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                if (w > 0 && Math.abs(w - monthGridWidth) > 1) {
+                  setMonthGridWidth(w);
+                }
+              }}
+            >
+              <ScrollView
+                ref={monthScrollRef}
+                horizontal
+                pagingEnabled={true}
+                decelerationRate="fast"
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                directionalLockEnabled={true}
+                overScrollMode="never"
+                scrollEventThrottle={16}
+                contentOffset={{ x: (allMonthsData.length - 1) * monthGridWidth, y: 0 }}
+                onScroll={(e) => {
+                  const x = e.nativeEvent.contentOffset.x;
+                  const idx = Math.max(0, Math.min(allMonthsData.length - 1, Math.round(x / monthGridWidth)));
+                  if (idx !== activeMonthIndex) {
+                    setActiveMonthIndex(idx);
+                    if (selectedMonthIso && !selectedMonthIso.startsWith(allMonthsData[idx].monthIso)) {
+                      setSelectedMonthIso(null);
+                    }
+                  }
+                }}
+                onMomentumScrollEnd={(e) => {
+                  const x = e.nativeEvent.contentOffset.x;
+                  const idx = Math.max(0, Math.min(allMonthsData.length - 1, Math.round(x / monthGridWidth)));
+                  setActiveMonthIndex(idx);
+                  if (selectedMonthIso && !selectedMonthIso.startsWith(allMonthsData[idx].monthIso)) {
+                    setSelectedMonthIso(null);
+                  }
+                }}
+              >
+                {allMonthsData.map((mItem) => (
+                  <View
+                    key={`month-${mItem.monthIso}`}
+                    style={{
+                      width: monthGridWidth,
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <View style={styles.animatedMonthGrid}>
+                      {mItem.cells.map((day, idx) => {
+                        if (day === null) {
+                          return <View key={`empty-${mItem.monthIso}-${idx}`} style={styles.monthCellEmpty} />;
+                        }
+
+                        const dayStr = String(day).padStart(2, '0');
+                        const cellIso = `${mItem.monthIso}-${dayStr}`;
+                        const isSelected = selectedMonthIso === cellIso;
+                        const isToday = cellIso === todayIso;
+
+                        // Antrenman durumu belirleme (Tamamen Gerçek Veritabanı ve Program Mantığı)
+                        const hasRealWorkout = workoutDatesMap.has(cellIso);
+                        const isFuture = cellIso > todayIso;
+                        let isDone = hasRealWorkout;
+                        let isMissed = false;
+                        let isRest = false;
+
+                        if (!hasRealWorkout && !isFuture) {
+                          const [y, m] = mItem.monthIso.split('-').map(Number);
+                          const cellDate = new Date(y, m - 1, day);
+                          const dayIdx = (cellDate.getDay() + 6) % 7;
+                          const plannedDay = baseProgram[dayIdx] || DEFAULT_WEEKLY_SCHEDULE[dayIdx];
+
+                          if (cellIso < todayIso) {
+                            if (plannedDay.isRest) {
+                              isRest = true;
+                            } else {
+                              isMissed = true;
+                            }
+                          } else if (isToday) {
+                            if (plannedDay.isRest) {
+                              isRest = true;
+                            }
+                          }
+                        }
+
+                        return (
+                          <TouchableOpacity
+                            key={`day-${cellIso}`}
+                            style={styles.monthCell}
+                            activeOpacity={0.7}
+                            onPress={() => handleSelectMonthDay(cellIso)}
+                          >
+                            <View
+                              style={[
+                                styles.monthDot,
+                                isToday && styles.dotToday,
+                                isDone && styles.dotDone,
+                                isMissed && styles.dotMissed,
+                                isRest && styles.dotRest,
+                                isSelected && (
+                                  isDone ? styles.dotDoneSelected :
+                                  isMissed ? styles.dotMissedSelected :
+                                  isRest ? styles.dotRestSelected :
+                                  isToday ? styles.dotTodaySelected :
+                                  styles.dotDefaultSelected
+                                ),
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.dotText,
+                                  isToday && styles.dotTextToday,
+                                  isSelected && styles.dotTextSelected,
+                                ]}
+                              >
+                                {day}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Seçili Günün Seans Detayı (Yumuşak Animasyonlu & Net Bilgi Sunumu - Yalnızca bir gün seçildiğinde açılır) */}
+            {selectedMonthIso && selectedDayInfo ? (
               <Animated.View
                 style={[
-                  styles.animatedMonthGrid,
+                  styles.monthDetailCard,
                   {
-                    transform: [{ translateX: slideAnim }],
-                    opacity: opacityAnim,
+                    opacity: monthDetailFadeAnim,
+                    transform: [{ translateY: monthDetailSlideAnim }],
                   },
                 ]}
               >
-                {calendarCells.map((day, idx) => {
-                  if (day === null) {
-                    return <View key={`empty-${idx}`} style={styles.monthCellEmpty} />;
-                  }
-
-                  const dayStr = String(day).padStart(2, '0');
-                  const cellIso = `${viewMonth}-${dayStr}`;
-                  const isSelected = selectedMonthIso === cellIso;
-                  const isToday = cellIso === todayIso;
-
-                  // Antrenman durumu belirleme (Tamamen Gerçek Veritabanı ve Program Mantığı)
-                  const hasRealWorkout = workoutDatesMap.has(cellIso);
-                  const isFuture = cellIso > todayIso;
-                  let isDone = hasRealWorkout;
-                  let isMissed = false;
-                  let isRest = false;
-
-                  if (!hasRealWorkout && !isFuture) {
-                    const [y, m] = viewMonth.split('-').map(Number);
-                    const cellDate = new Date(y, m - 1, day);
-                    const dayIdx = (cellDate.getDay() + 6) % 7;
-                    const plannedDay = baseProgram[dayIdx] || DEFAULT_WEEKLY_SCHEDULE[dayIdx];
-
-                    if (cellIso < todayIso) {
-                      if (plannedDay.isRest) {
-                        isRest = true;
-                      } else {
-                        isMissed = true;
-                      }
-                    } else if (isToday) {
-                      if (plannedDay.isRest) {
-                        isRest = true;
-                      }
-                    }
-                  }
-
-                  const icon = isDone ? '✓' : isMissed ? '!' : isRest ? '☾' : day;
-
-                  return (
-                    <TouchableOpacity
-                      key={`day-${cellIso}`}
-                      style={[styles.monthCell, isSelected && styles.monthCellSelected]}
-                      activeOpacity={0.7}
-                      onPress={() => setSelectedMonthIso(cellIso)}
-                    >
-                      <Text style={styles.monthCellLabel}>{day}</Text>
-                      <View
-                        style={[
-                          styles.monthDot,
-                          isDone && styles.dotDone,
-                          isMissed && styles.dotMissed,
-                          isRest && styles.dotRest,
-                          isToday && styles.dotToday,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.dotText,
-                            isDone && styles.dotTextDone,
-                            isMissed && styles.dotTextMissed,
-                            isRest && styles.dotTextRest,
-                            isToday && styles.dotTextToday,
-                          ]}
-                        >
-                          {icon}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </Animated.View>
-            </View>
-
-            {/* Seçili Günün Seans Detayı (Tarihsiz, Net Bilgi Sunumu) */}
-            <View style={styles.monthDetailCard}>
-              <View style={styles.detailCardTopRow}>
-                <View style={styles.detailTypeWrap}>
-                  <Text style={styles.detailSessionType}>{selectedDayInfo.sessionType}</Text>
-                  <View
-                    style={[
-                      styles.detailStatusBadge,
-                      selectedDayInfo.statusType === 'done' && styles.detailBadgeDone,
-                      selectedDayInfo.statusType === 'today' && styles.detailBadgeToday,
-                      selectedDayInfo.statusType === 'rest' && styles.detailBadgeRest,
-                      selectedDayInfo.statusType === 'missed' && styles.detailBadgeMissed,
-                    ]}
-                  >
-                    <Text
+                <View style={styles.detailLeftCol}>
+                  <View style={styles.detailTypeWrap}>
+                    <Text style={styles.detailSessionType} numberOfLines={1}>
+                      {selectedDayInfo.sessionType}
+                    </Text>
+                    <View
                       style={[
-                        styles.detailStatusText,
-                        selectedDayInfo.statusType === 'done' && styles.detailTextDone,
-                        selectedDayInfo.statusType === 'today' && styles.detailTextToday,
-                        selectedDayInfo.statusType === 'rest' && styles.detailTextRest,
-                        selectedDayInfo.statusType === 'missed' && styles.detailTextMissed,
+                        styles.detailStatusBadge,
+                        selectedDayInfo.statusType === 'done' && styles.detailBadgeDone,
+                        selectedDayInfo.statusType === 'today' && styles.detailBadgeToday,
+                        selectedDayInfo.statusType === 'rest' && styles.detailBadgeRest,
+                        selectedDayInfo.statusType === 'missed' && styles.detailBadgeMissed,
                       ]}
                     >
-                      {selectedDayInfo.statusBadge}
+                      <Text
+                        style={[
+                          styles.detailStatusText,
+                          selectedDayInfo.statusType === 'done' && styles.detailTextDone,
+                          selectedDayInfo.statusType === 'today' && styles.detailTextToday,
+                          selectedDayInfo.statusType === 'rest' && styles.detailTextRest,
+                          selectedDayInfo.statusType === 'missed' && styles.detailTextMissed,
+                        ]}
+                      >
+                        {selectedDayInfo.statusBadge}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailMuscleRow}>
+                    <Text style={styles.detailMuscleLabel}>Hedef Kaslar:</Text>
+                    <Text style={styles.detailMuscleVal} numberOfLines={1}>
+                      {selectedDayInfo.targetMuscles}
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.detailSetBox}>
-                  <Text style={styles.detailSetLabel}>TOPLAM SET</Text>
-                  <Text style={styles.detailSetVal}>{selectedDayInfo.totalSets}</Text>
+                  <View style={styles.detailSetRow}>
+                    <Text style={styles.detailSetLabel}>TOPLAM SET</Text>
+                    <Text style={styles.detailSetVal}>{selectedDayInfo.totalSets}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.detailHistoryBtn}
+                    activeOpacity={0.65}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    onPress={() => router.push('/(app)/history')}
+                  >
+                    <Text style={styles.detailHistoryBtnText}>Detayları Gör →</Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
-
-              <View style={styles.detailMuscleRow}>
-                <Text style={styles.detailMuscleLabel}>Hedef Kaslar:</Text>
-                <Text style={styles.detailMuscleVal}>{selectedDayInfo.targetMuscles}</Text>
-              </View>
-            </View>
+              </Animated.View>
+            ) : null}
           </View>
         )}
         </Animated.View>
@@ -1681,11 +1892,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#A98BFF',
   },
-  sectionSubtitle: {
-    fontSize: 10,
-    color: '#8E99B5',
-    fontWeight: '600',
-  },
   segmentedTabs: {
     flexDirection: 'row',
     gap: 6,
@@ -1714,8 +1920,57 @@ const styles = StyleSheet.create({
   },
 
   // 4A. HAFTALIK PROGRAM KARTLARI
+  weekContainer: {
+    overflow: 'hidden',
+  },
   weekBoard: {
-    gap: 8,
+    gap: 6,
+  },
+  weekCenterNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  weekArrowBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekArrowText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#A98BFF',
+    lineHeight: 20,
+  },
+  arrowBtnDisabled: {
+    opacity: 0.25,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'transparent',
+  },
+  arrowTextDisabled: {
+    color: '#8E99B5',
+  },
+  weekTitleWrap: {
+    alignItems: 'center',
+  },
+  weekTitleText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  weekRangeText: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#8E99B5',
+    marginTop: 2,
   },
   noProgramBanner: {
     flexDirection: 'row',
@@ -1759,170 +2014,120 @@ const styles = StyleSheet.create({
     color: '#55D6FF',
   },
   programCard: {
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: '#11192F',
-    padding: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   cardToday: {
-    borderColor: 'rgba(169, 139, 255, 0.65)',
-    backgroundColor: '#161836',
+    borderColor: 'rgba(169, 139, 255, 0.45)',
+    backgroundColor: 'rgba(169, 139, 255, 0.06)',
   },
   cardDone: {
-    borderColor: 'rgba(53, 214, 159, 0.4)',
+    borderColor: 'rgba(53, 214, 159, 0.35)',
+    backgroundColor: 'rgba(53, 214, 159, 0.04)',
   },
   cardMissed: {
-    borderColor: 'rgba(255, 113, 136, 0.4)',
-    backgroundColor: '#201522',
+    borderColor: 'rgba(255, 113, 136, 0.35)',
+    backgroundColor: 'rgba(255, 113, 136, 0.04)',
   },
   cardRest: {
-    borderColor: 'rgba(244, 195, 92, 0.4)',
-    backgroundColor: '#211D18',
+    borderColor: 'rgba(244, 195, 92, 0.35)',
+    backgroundColor: 'rgba(244, 195, 92, 0.04)',
   },
 
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 9,
   },
   dateBox: {
-    width: 44,
-    borderRadius: 10,
+    width: 36,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(169, 139, 255, 0.35)',
-    backgroundColor: 'rgba(169, 139, 255, 0.1)',
-    paddingVertical: 5,
+    backgroundColor: 'rgba(169, 139, 255, 0.08)',
+    paddingVertical: 3,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   dateBoxDone: {
     borderColor: 'rgba(53, 214, 159, 0.4)',
-    backgroundColor: 'rgba(53, 214, 159, 0.1)',
+    backgroundColor: 'rgba(53, 214, 159, 0.12)',
   },
   dateBoxMissed: {
     borderColor: 'rgba(255, 113, 136, 0.4)',
-    backgroundColor: 'rgba(255, 113, 136, 0.1)',
+    backgroundColor: 'rgba(255, 113, 136, 0.12)',
   },
   dateBoxRest: {
     borderColor: 'rgba(244, 195, 92, 0.4)',
-    backgroundColor: 'rgba(244, 195, 92, 0.1)',
+    backgroundColor: 'rgba(244, 195, 92, 0.12)',
   },
   dateBoxToday: {
-    borderColor: '#A98BFF',
-    backgroundColor: 'rgba(169, 139, 255, 0.2)',
+    borderColor: 'rgba(169, 139, 255, 0.45)',
+    backgroundColor: 'rgba(169, 139, 255, 0.12)',
   },
   dateBoxNum: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   dateBoxName: {
-    fontSize: 8,
+    fontSize: 7.5,
     fontWeight: '700',
     color: '#8E99B5',
-    marginTop: 1,
+    marginTop: 0.5,
   },
 
   cardCopy: {
     flex: 1,
   },
   cardTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   cardSub: {
-    fontSize: 9.5,
+    fontSize: 9,
     color: '#8E99B5',
-    marginTop: 2,
+    marginTop: 1,
   },
 
   statusBadge: {
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 7,
     borderWidth: 1,
     borderColor: 'rgba(169, 139, 255, 0.35)',
-    backgroundColor: 'rgba(169, 139, 255, 0.1)',
+    backgroundColor: 'rgba(169, 139, 255, 0.08)',
   },
   statusBadgeDone: {
     borderColor: 'rgba(53, 214, 159, 0.4)',
-    backgroundColor: 'rgba(53, 214, 159, 0.1)',
+    backgroundColor: 'rgba(53, 214, 159, 0.12)',
   },
   statusBadgeMissed: {
     borderColor: 'rgba(255, 113, 136, 0.4)',
-    backgroundColor: 'rgba(255, 113, 136, 0.1)',
+    backgroundColor: 'rgba(255, 113, 136, 0.12)',
   },
   statusBadgeRest: {
     borderColor: 'rgba(244, 195, 92, 0.4)',
-    backgroundColor: 'rgba(244, 195, 92, 0.1)',
+    backgroundColor: 'rgba(244, 195, 92, 0.12)',
   },
   statusBadgeToday: {
-    borderColor: '#A98BFF',
-    backgroundColor: 'rgba(169, 139, 255, 0.2)',
+    borderColor: 'rgba(169, 139, 255, 0.45)',
+    backgroundColor: 'rgba(169, 139, 255, 0.12)',
   },
   statusBadgeText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
     color: '#A98BFF',
   },
   statusBadgeTextDone: { color: '#35D69F' },
   statusBadgeTextMissed: { color: '#FF7188' },
   statusBadgeTextRest: { color: '#F4C35C' },
-  statusBadgeTextToday: { color: '#FFFFFF' },
-
-  // PR / GÜÇ HEDEFLERİM KARTI
-  prBox: {
-    marginTop: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: '#10162A',
-    padding: 14,
-  },
-  prHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  prTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  prActionText: {
-    fontSize: 9.5,
-    fontWeight: '600',
-    color: '#A98BFF',
-  },
-  prItem: {
-    marginTop: 10,
-  },
-  prMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  prName: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#CBD5E1',
-  },
-  prScore: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  prBarBg: {
-    height: 6,
-    backgroundColor: '#1C2438',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  prBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
+  statusBadgeTextToday: { color: '#BFA7FF' },
 
   // 4B. AYLIK TAKİP GÖRÜNÜMÜ
   monthBoard: {
@@ -1936,19 +2141,19 @@ const styles = StyleSheet.create({
   // 1. Neon Rozetler (Kartın Üstünde - Kompakt ve Yan Yana)
   neonBadgesRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
+    gap: 6,
+    marginBottom: 10,
   },
   neonBadge: {
     flex: 1,
     flexDirection: 'row',
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    paddingVertical: 5,
-    paddingHorizontal: 6,
+    paddingVertical: 3.5,
+    paddingHorizontal: 5,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4.5,
   },
   neonBadgeGreen: {
     borderColor: 'rgba(53, 214, 159, 0.45)',
@@ -1963,35 +2168,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(244, 195, 92, 0.1)',
   },
   neonBadgeLabelGreen: {
-    fontSize: 8.5,
+    fontSize: 7.5,
     fontWeight: '800',
     color: '#8E99B5',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   neonBadgeValGreen: {
-    fontSize: 13.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#35D69F',
   },
   neonBadgeLabelRed: {
-    fontSize: 8.5,
+    fontSize: 7.5,
     fontWeight: '800',
     color: '#8E99B5',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   neonBadgeValRed: {
-    fontSize: 13.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#FF7188',
   },
   neonBadgeLabelYellow: {
-    fontSize: 8.5,
+    fontSize: 7.5,
     fontWeight: '800',
     color: '#8E99B5',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   neonBadgeValYellow: {
-    fontSize: 13.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#F4C35C',
   },
@@ -2049,30 +2254,20 @@ const styles = StyleSheet.create({
   },
   monthCellEmpty: {
     width: '14.2857%',
-    height: 42,
-    marginBottom: 3,
+    height: 38,
+    marginBottom: 4,
   },
   monthCell: {
     width: '14.2857%',
-    height: 42,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    marginBottom: 3,
-  },
-  monthCellSelected: {
-    backgroundColor: 'rgba(169, 139, 255, 0.15)',
-  },
-  monthCellLabel: {
-    fontSize: 7.5,
-    color: '#8E99B5',
-    marginBottom: 2,
-    fontWeight: '600',
+    marginBottom: 4,
   },
   monthDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -2092,38 +2287,67 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(244, 195, 92, 0.12)',
   },
   dotToday: {
+    borderColor: 'rgba(169, 139, 255, 0.45)',
+    backgroundColor: 'rgba(169, 139, 255, 0.12)',
+  },
+  // Kartın kendi rengindeki çerçevenin seçildiğinde daha parlak görünmesi (sadece seçilince parlak)
+  dotDoneSelected: {
+    borderColor: '#35D69F',
+    borderWidth: 2,
+  },
+  dotMissedSelected: {
+    borderColor: '#FF7188',
+    borderWidth: 2,
+  },
+  dotRestSelected: {
+    borderColor: '#F4C35C',
+    borderWidth: 2,
+  },
+  dotTodaySelected: {
     borderColor: '#BFA7FF',
-    backgroundColor: 'rgba(169, 139, 255, 0.25)',
+    borderWidth: 2,
+  },
+  dotDefaultSelected: {
+    borderColor: '#55D6FF',
+    borderWidth: 2,
   },
   dotText: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#8E99B5',
+    color: '#CBD5E1',
   },
-  dotTextDone: { color: '#35D69F' },
-  dotTextMissed: { color: '#FF7188' },
-  dotTextRest: { color: '#F4C35C' },
-  dotTextToday: { color: '#FFFFFF' },
+  dotTextToday: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  dotTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
 
   monthDetailCard: {
-    marginTop: 10,
+    marginTop: 8,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(169, 139, 255, 0.35)',
     backgroundColor: '#151B32',
-    padding: 12,
-  },
-  detailCardTopRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  detailLeftCol: {
+    flex: 1,
+    paddingRight: 10,
+    justifyContent: 'center',
   },
   detailTypeWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flex: 1,
+    gap: 7,
+    marginBottom: 4,
   },
   detailSessionType: {
     fontSize: 13.5,
@@ -2133,7 +2357,7 @@ const styles = StyleSheet.create({
   },
   detailStatusBadge: {
     paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingVertical: 2.5,
     borderRadius: 7,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
@@ -2164,28 +2388,10 @@ const styles = StyleSheet.create({
   detailTextToday: { color: '#BFA7FF' },
   detailTextRest: { color: '#F4C35C' },
   detailTextMissed: { color: '#FF7188' },
-  detailSetBox: {
-    alignItems: 'flex-end',
-  },
-  detailSetLabel: {
-    fontSize: 7.5,
-    fontWeight: '700',
-    color: '#8E99B5',
-    letterSpacing: 0.5,
-  },
-  detailSetVal: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#55D6FF',
-    marginTop: 1,
-  },
   detailMuscleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingTop: 7,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 4,
   },
   detailMuscleLabel: {
     fontSize: 9,
@@ -2197,5 +2403,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#D8CAFF',
     flex: 1,
+  },
+  detailSetBox: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  detailSetRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+  },
+  detailSetLabel: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#8E99B5',
+    letterSpacing: 0.5,
+  },
+  detailSetVal: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#55D6FF',
+  },
+  detailHistoryBtn: {
+    marginTop: 3,
+    paddingVertical: 1,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+  },
+  detailHistoryBtnText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#A98BFF',
+    letterSpacing: 0.2,
   },
 });

@@ -65,6 +65,11 @@ export function HistoryCard({ workout, onPress, onEdit, onDelete }: Props) {
         <Text style={styles.metaBadge}>{totalSets} set</Text>
         <Text style={styles.metaBadge}>{volumeText}</Text>
         <Text style={styles.metaBadge}>{exercises.length} hareket</Text>
+        {workout.duration_seconds && workout.duration_seconds > 0 ? (
+          <Text style={styles.metaBadge}>
+            ⏱️ {Math.round(workout.duration_seconds / 60)} dk
+          </Text>
+        ) : null}
       </View>
 
       {exercises.length > 0 && (

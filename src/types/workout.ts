@@ -4,6 +4,7 @@ export type SetData = {
   reps: number;
   weight_kg: number;
   rir?: number | null;
+  rest_seconds?: number | null;
   _id?: string;
 };
 
@@ -26,16 +27,25 @@ export type WorkoutCreate = {
   exercises: ExerciseEntry[];
   gym_id?: string | null;
   gym_name?: string | null;
+  duration_seconds?: number;
+  rest_time_seconds?: number;
+  entry_mode?: 'live' | 'manual';
 };
 
 export type WorkoutUpdate = Partial<Omit<WorkoutCreate, "exercises">> & {
   exercises?: ExerciseEntry[];
+  duration_seconds?: number;
+  rest_time_seconds?: number;
+  entry_mode?: 'live' | 'manual';
 };
 
 export type Workout = WorkoutCreate & {
   id: number;
   user_id: number;
   total_volume: number;
+  duration_seconds?: number;
+  rest_time_seconds?: number;
+  entry_mode?: 'live' | 'manual';
   created_at?: string;
   updated_at?: string;
 };
