@@ -1,10 +1,9 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated as RNAnimated,
   KeyboardAvoidingView,
-  LayoutAnimation,
   Modal,
   PanResponder,
   Platform,
@@ -14,16 +13,17 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from 'react-native';
 import Animated, {
   Easing,
-  FadeIn,
-  FadeOut,
   Keyframe,
-  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -34,32 +34,101 @@ import { useWorkouts } from '@/hooks/use-workouts';
 import { workoutDraft } from '@/lib/workout-draft';
 import type { ExerciseEntry, Workout } from '@/types/workout';
 
-// Android için donanım hızlandırmalı LayoutAnimation etkinleştirme
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-// Web platformundaki css animasyonlarıyla birebir uyumlu 400ms süzülme tetikleyicisi
-const triggerSmoothTransition = () => {
-  try {
-    LayoutAnimation.configureNext({
-      duration: 400,
-      create: {
-        type: LayoutAnimation.Types.easeInEaseOut,
-        property: LayoutAnimation.Properties.opacity,
-      },
-      update: {
-        type: LayoutAnimation.Types.easeInEaseOut,
-      },
-      delete: {
-        type: LayoutAnimation.Types.easeInEaseOut,
-        property: LayoutAnimation.Properties.opacity,
-      },
-    });
-  } catch {
-    // LayoutAnimation hata verirse sessizce devam et
+// 120Hz Saf UI-Thread Reanimated Akordiyon (Ana sayfa Detay Kartı ile birebir aynı yumuşak ve akıcı geçiş)
+const SmoothAccordion = React.memo(function SmoothAccordion({
+  isOpen,
+  children,
+}: {
+  isOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [isMounted, setIsMounted] = useState(isOpen);
+  if (isOpen && !isMounted) {
+    setIsMounted(true);
   }
-};
+
+  const measuredHeight = useSharedValue(0);
+  const heightProgress = useSharedValue(isOpen ? 1 : 0);
+  const contentOpacity = useSharedValue(isOpen ? 1 : 0);
+  const contentDriftY = useSharedValue(isOpen ? 0 : -8);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
+    if (isOpen) {
+      heightProgress.value = withTiming(1, {
+        duration: 480,
+        easing: Easing.inOut(Easing.quad),
+      });
+      contentOpacity.value = withDelay(
+        90,
+        withTiming(1, {
+          duration: 540,
+          easing: Easing.inOut(Easing.quad),
+        })
+      );
+      contentDriftY.value = withDelay(
+        90,
+        withTiming(0, {
+          duration: 540,
+          easing: Easing.inOut(Easing.quad),
+        })
+      );
+    } else {
+      contentOpacity.value = withTiming(0, {
+        duration: 240,
+        easing: Easing.out(Easing.ease),
+      });
+      contentDriftY.value = withTiming(-6, {
+        duration: 240,
+        easing: Easing.out(Easing.ease),
+      });
+      heightProgress.value = withDelay(
+        60,
+        withTiming(
+          0,
+          {
+            duration: 480,
+            easing: Easing.inOut(Easing.quad),
+          },
+          (finished) => {
+            if (finished) {
+              scheduleOnRN(setIsMounted, false);
+            }
+          }
+        )
+      );
+    }
+  }, [isOpen, isMounted, heightProgress, contentOpacity, contentDriftY]);
+
+  const outerStyle = useAnimatedStyle(() => ({
+    height: measuredHeight.value * heightProgress.value,
+    overflow: 'hidden',
+  }));
+
+  const innerStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+    transform: [{ translateY: contentDriftY.value }],
+  }));
+
+  if (!isMounted) return null;
+
+  return (
+    <Animated.View style={[styles.accordionOuter, outerStyle]}>
+      <Animated.View
+        onLayout={(e) => {
+          const h = Math.ceil(e.nativeEvent.layout.height);
+          if (h > 0 && Math.abs(h - measuredHeight.value) > 1) {
+            measuredHeight.value = h;
+          }
+        }}
+        style={[styles.accordionInner, innerStyle]}
+      >
+        {children}
+      </Animated.View>
+    </Animated.View>
+  );
+});
 
 // Daha uzun, akıcı ve yumuşak süzülme animasyonu (Hızı düşürülmüş, yumuşak iniş)
 const createSlideDownHistoryCard = (index: number) =>
@@ -852,7 +921,6 @@ const SessionCardItem = React.memo(function SessionCardItem({
   return (
     <Animated.View
       entering={enteringAnim}
-      layout={LinearTransition.duration(400).easing(Easing.bezier(0.25, 1, 0.5, 1))}
       style={styles.sessionCard}
     >
       {/* ─── Seans Kartı Üst Barı (Header) ─── */}
@@ -937,12 +1005,9 @@ const SessionCardItem = React.memo(function SessionCardItem({
         </Text>
       </PressableScale>
 
-      {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ ─── */}
-      {isSummaryOpen && (
-        <Animated.View
-          entering={FadeIn.duration(260)}
-          exiting={FadeOut.duration(180)}
-        >
+      {/* ─── 1. AŞAMA: ÖZET GÖRÜNÜMÜ (120Hz Saf Reanimated Akordiyon) ─── */}
+      <SmoothAccordion isOpen={isSummaryOpen}>
+        <View style={styles.summaryTopSpacer}>
           <View style={styles.summaryContainer}>
             {/* Hareketler Listesi: Ad ve Set Sayısı Rozeti */}
             {exercises.map((ex, exIdx) => (
@@ -994,146 +1059,144 @@ const SessionCardItem = React.memo(function SessionCardItem({
               </Text>
             </PressableScale>
           </View>
+        </View>
+      </SmoothAccordion>
 
-          {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ ─── */}
-          {isFullOpen && (
-            <Animated.View
-              entering={FadeIn.duration(260)}
-              exiting={FadeOut.duration(180)}
-              style={styles.fullDetailsContainer}
-            >
-              {/* Detay Başlığı */}
-              <View style={styles.fullDetailsHeaderRow}>
-                <Text style={styles.fullDetailsTitle}>
-                  ⚡ DETAYLI SET & TEKRAR VERİLERİ
-                </Text>
-                {isEditing && (
-                  <PressableScale
-                    style={[styles.saveInlineBtn, isSaving && { opacity: 0.6 }]}
-                    onPress={() => onSaveEdit(workout.id)}
-                    disabled={isSaving}
-                    activeScale={0.92}
-                    unstable_pressDelay={0}
-                  >
-                    {isSaving ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.saveInlineBtnText}>Kaydet</Text>
-                    )}
-                  </PressableScale>
-                )}
-              </View>
+      {/* ─── 2. AŞAMA: DETAYLI SET & TEKRAR VERİLERİ (120Hz Saf Reanimated Akordiyon) ─── */}
+      <SmoothAccordion isOpen={isSummaryOpen && isFullOpen}>
+        <View style={styles.fullDetailsTopSpacer}>
+          <View style={styles.fullDetailsContainer}>
+            {/* Detay Başlığı */}
+            <View style={styles.fullDetailsHeaderRow}>
+              <Text style={styles.fullDetailsTitle}>
+                ⚡ DETAYLI SET & TEKRAR VERİLERİ
+              </Text>
+              {isEditing && (
+                <PressableScale
+                  style={[styles.saveInlineBtn, isSaving && { opacity: 0.6 }]}
+                  onPress={() => onSaveEdit(workout.id)}
+                  disabled={isSaving}
+                  activeScale={0.92}
+                  unstable_pressDelay={0}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveInlineBtnText}>Kaydet</Text>
+                  )}
+                </PressableScale>
+              )}
+            </View>
 
-              {/* Her Egzersiz İçin Tablo Kartı */}
-              {currentExercises.map((ex, exIdx) => {
-                const sets = ex.sets_data || [];
+            {/* Her Egzersiz İçin Tablo Kartı */}
+            {currentExercises.map((ex, exIdx) => {
+              const sets = ex.sets_data || [];
 
-                return (
-                  <View key={exIdx} style={styles.exerciseSetsCard}>
-                    <Text style={styles.exerciseSetsCardTitle}>
-                      {exIdx + 1}. {ex.exercise_name}
-                    </Text>
+              return (
+                <View key={exIdx} style={styles.exerciseSetsCard}>
+                  <Text style={styles.exerciseSetsCardTitle}>
+                    {exIdx + 1}. {ex.exercise_name}
+                  </Text>
 
-                    <View style={styles.tableHeaderRow}>
-                      <Text style={[styles.thText, styles.colSet]}>SET</Text>
-                      <Text style={[styles.thText, styles.colWeight]}>AĞIRLIK</Text>
-                      <Text style={[styles.thText, styles.colReps]}>TEKRAR</Text>
-                      <Text style={[styles.thText, styles.colRir]}>RIR</Text>
-                    </View>
-
-                    {sets.map((set, sIdx) => {
-                      const wKg = parseFloat(String(set.weight_kg)) || 0;
-                      const isBw = !!ex.is_bodyweight;
-
-                      return (
-                        <View key={sIdx} style={styles.tableRow}>
-                          <Text style={styles.colSetText}>{sIdx + 1}. Set</Text>
-
-                          <View style={styles.colWeightContainer}>
-                            {isEditing ? (
-                              <View style={styles.editInputBox}>
-                                <TextInput
-                                  style={styles.editTextInput}
-                                  value={set.weight_kg !== undefined ? String(set.weight_kg) : ''}
-                                  onChangeText={(txt) =>
-                                    onSetChange(workout.id, exIdx, sIdx, 'weight_kg', txt)
-                                  }
-                                  keyboardType="numeric"
-                                  placeholder="0"
-                                  placeholderTextColor={colors.textDim}
-                                />
-                                <Text style={styles.editUnitLabel}>kg</Text>
-                              </View>
-                            ) : (
-                              <View style={styles.weightBadge}>
-                                <Text style={styles.weightBadgeText}>
-                                  {isBw ? 'V. Ağ.' : `${wKg} kg`}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-
-                          <View style={styles.colRepsContainer}>
-                            {isEditing ? (
-                              <View style={styles.editInputBox}>
-                                <TextInput
-                                  style={styles.editTextInput}
-                                  value={set.reps !== undefined ? String(set.reps) : ''}
-                                  onChangeText={(txt) =>
-                                    onSetChange(workout.id, exIdx, sIdx, 'reps', txt)
-                                  }
-                                  keyboardType="numeric"
-                                  placeholder="0"
-                                  placeholderTextColor={colors.textDim}
-                                />
-                                <Text style={styles.editUnitLabel}>Tkr</Text>
-                              </View>
-                            ) : (
-                              <View style={styles.repsBadge}>
-                                <Text style={styles.repsBadgeText}>
-                                  {set.reps || 0} Tekrar
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-
-                          <View style={styles.colRirContainer}>
-                            {isEditing ? (
-                              <View style={[styles.editInputBox, styles.editRirInputBox]}>
-                                <TextInput
-                                  style={[styles.editTextInput, styles.editRirTextInput]}
-                                  value={
-                                    set.rir !== undefined && set.rir !== null
-                                      ? String(set.rir)
-                                      : ''
-                                  }
-                                  onChangeText={(txt) =>
-                                    onSetChange(workout.id, exIdx, sIdx, 'rir', txt)
-                                  }
-                                  keyboardType="numeric"
-                                  placeholder="—"
-                                  placeholderTextColor={colors.textDim}
-                                />
-                                <Text style={styles.editRirUnitLabel}>RIR</Text>
-                              </View>
-                            ) : (
-                              <View style={styles.rirBadge}>
-                                <Text style={styles.rirBadgeText}>
-                                  {set.rir === 0 || set.rir ? `${set.rir} RIR` : '—'}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      );
-                    })}
+                  <View style={styles.tableHeaderRow}>
+                    <Text style={[styles.thText, styles.colSet]}>SET</Text>
+                    <Text style={[styles.thText, styles.colWeight]}>AĞIRLIK</Text>
+                    <Text style={[styles.thText, styles.colReps]}>TEKRAR</Text>
+                    <Text style={[styles.thText, styles.colRir]}>RIR</Text>
                   </View>
-                );
-              })}
-            </Animated.View>
-          )}
-        </Animated.View>
-      )}
+
+                  {sets.map((set, sIdx) => {
+                    const wKg = parseFloat(String(set.weight_kg)) || 0;
+                    const isBw = !!ex.is_bodyweight;
+
+                    return (
+                      <View key={sIdx} style={styles.tableRow}>
+                        <Text style={styles.colSetText}>{sIdx + 1}. Set</Text>
+
+                        <View style={styles.colWeightContainer}>
+                          {isEditing ? (
+                            <View style={styles.editInputBox}>
+                              <TextInput
+                                style={styles.editTextInput}
+                                value={set.weight_kg !== undefined ? String(set.weight_kg) : ''}
+                                onChangeText={(txt) =>
+                                  onSetChange(workout.id, exIdx, sIdx, 'weight_kg', txt)
+                                }
+                                keyboardType="numeric"
+                                placeholder="0"
+                                placeholderTextColor={colors.textDim}
+                              />
+                              <Text style={styles.editUnitLabel}>kg</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.weightBadge}>
+                              <Text style={styles.weightBadgeText}>
+                                {isBw ? 'V. Ağ.' : `${wKg} kg`}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.colRepsContainer}>
+                          {isEditing ? (
+                            <View style={styles.editInputBox}>
+                              <TextInput
+                                style={styles.editTextInput}
+                                value={set.reps !== undefined ? String(set.reps) : ''}
+                                onChangeText={(txt) =>
+                                  onSetChange(workout.id, exIdx, sIdx, 'reps', txt)
+                                }
+                                keyboardType="numeric"
+                                placeholder="0"
+                                placeholderTextColor={colors.textDim}
+                              />
+                              <Text style={styles.editUnitLabel}>Tkr</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.repsBadge}>
+                              <Text style={styles.repsBadgeText}>
+                                {set.reps || 0} Tekrar
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.colRirContainer}>
+                          {isEditing ? (
+                            <View style={[styles.editInputBox, styles.editRirInputBox]}>
+                              <TextInput
+                                style={[styles.editTextInput, styles.editRirTextInput]}
+                                value={
+                                  set.rir !== undefined && set.rir !== null
+                                    ? String(set.rir)
+                                    : ''
+                                }
+                                onChangeText={(txt) =>
+                                  onSetChange(workout.id, exIdx, sIdx, 'rir', txt)
+                                }
+                                keyboardType="numeric"
+                                placeholder="—"
+                                placeholderTextColor={colors.textDim}
+                              />
+                              <Text style={styles.editRirUnitLabel}>RIR</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.rirBadge}>
+                              <Text style={styles.rirBadgeText}>
+                                {set.rir === 0 || set.rir ? `${set.rir} RIR` : '—'}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </SmoothAccordion>
     </Animated.View>
   );
 });
@@ -1177,6 +1240,10 @@ export default function HistoryScreen() {
   // Düzenleme Modu Durumları: Record<workoutId, boolean>
   const [editModes, setEditModes] = useState<Record<number, boolean>>({});
   const [editingData, setEditingData] = useState<Record<number, ExerciseEntry[]>>({});
+  const editingDataRef = useRef(editingData);
+  useEffect(() => {
+    editingDataRef.current = editingData;
+  }, [editingData]);
   const [savingWorkoutIds, setSavingWorkoutIds] = useState<Record<number, boolean>>({});
 
   // Antrenman tarihlerinin Set'i (Arama filtresi varsa sadece aranan seans/hareket günlerini yeşil noktayla işaretler)
@@ -1221,9 +1288,8 @@ export default function HistoryScreen() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [workouts, selectedDate, searchQuery]);
 
-  // Özet Açma / Kapama (Karta basıldığında hem açık kart hem diğer kartlar 400ms yumuşakça süzülür)
+  // Özet Açma / Kapama (120Hz saf Reanimated worklet düzen geçişi)
   const toggleSummary = useCallback((workoutId: number) => {
-    triggerSmoothTransition();
     setOpenSummaries((prev) => ({
       ...prev,
       [workoutId]: !prev[workoutId],
@@ -1232,7 +1298,6 @@ export default function HistoryScreen() {
 
   // Detaylı Set & Tekrar Görünümünü Açma / Kapama ("Daha Fazla" Butonu)
   const toggleFull = useCallback((workoutId: number) => {
-    triggerSmoothTransition();
     setOpenFullDetails((prev) => {
       const next = !prev[workoutId];
       if (next) {
@@ -1245,7 +1310,6 @@ export default function HistoryScreen() {
   // Düzenleme Modunu Açma / Kapatma (Kalem İkonu)
   const toggleEdit = useCallback((workout: Workout) => {
     const wId = workout.id;
-    triggerSmoothTransition();
     setEditModes((prev) => {
       const next = !prev[wId];
       if (next) {
@@ -1284,7 +1348,7 @@ export default function HistoryScreen() {
 
   // Düzenlenen Seansı Kaydet
   const handleSaveEdit = useCallback(async (workoutId: number) => {
-    const currentExercises = editingData[workoutId];
+    const currentExercises = editingDataRef.current[workoutId];
     if (!currentExercises) return;
 
     setSavingWorkoutIds((prev) => ({ ...prev, [workoutId]: true }));
@@ -1303,7 +1367,7 @@ export default function HistoryScreen() {
     } finally {
       setSavingWorkoutIds((prev) => ({ ...prev, [workoutId]: false }));
     }
-  }, [editingData, updateWorkout]);
+  }, [updateWorkout]);
 
   // Silme Onay Panosu Durumu
   const [workoutToDelete, setWorkoutToDelete] = useState<Workout | null>(null);
@@ -1314,7 +1378,6 @@ export default function HistoryScreen() {
     if (!workoutToDelete) return;
     setIsDeletingWorkout(true);
     try {
-      triggerSmoothTransition();
       await deleteWorkout(workoutToDelete.id);
       setWorkoutToDelete(null);
     } catch (err: any) {
@@ -1775,9 +1838,22 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
+  accordionOuter: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  accordionInner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+
   /* ─── 1. Aşama: Özet Görünüm (Görsel 1) ─── */
+  summaryTopSpacer: {
+    paddingTop: 10,
+  },
   summaryContainer: {
-    marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
@@ -1858,8 +1934,10 @@ const styles = StyleSheet.create({
   },
 
   /* ─── 2. Aşama: Detaylı Set & Tekrar Verileri (Görsel 2) ─── */
+  fullDetailsTopSpacer: {
+    paddingTop: 14,
+  },
   fullDetailsContainer: {
-    marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(139, 92, 246, 0.2)',

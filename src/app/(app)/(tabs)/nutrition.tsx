@@ -221,6 +221,22 @@ function PressableScale({
 }: PressableScaleProps) {
   const [scale] = useState(() => new Animated.Value(1));
   const [opacity] = useState(() => new Animated.Value(1));
+  const [disabledOpacity] = useState(() => new Animated.Value(disabled ? 0.34 : 1));
+
+  useEffect(() => {
+    disabledOpacity.stopAnimation();
+    Animated.timing(disabledOpacity, {
+      toValue: disabled ? 0.34 : 1,
+      duration: 360,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }, [disabled, disabledOpacity]);
+
+  const combinedOpacity = useMemo(
+    () => Animated.multiply(opacity, disabledOpacity),
+    [opacity, disabledOpacity]
+  );
 
   const handlePressIn = () => {
     if (disabled) return;
@@ -274,7 +290,7 @@ function PressableScale({
         style={[
           flattenedStyle.flex !== undefined ? { width: '100%' } : null,
           style,
-          { transform: [{ scale }], opacity },
+          { transform: [{ scale }], opacity: combinedOpacity },
         ]}
       >
         {children}
@@ -1437,6 +1453,7 @@ const DailyInputForm = React.memo(function DailyInputForm({
   const pNum = Math.min(MAX_MACRO_LIMITS.protein, Number(protein) || 0);
   const cNum = Math.min(MAX_MACRO_LIMITS.carbs, Number(carbs) || 0);
   const fNum = Math.min(MAX_MACRO_LIMITS.fat, Number(fat) || 0);
+  const hasAnyInput = pNum > 0 || cNum > 0 || fNum > 0 || notes.trim().length > 0;
 
   // Otomatik hesaplanan kalori (p*4 + c*4 + f*9) - Max 20.000 kcal tavanı
   const calculatedCalories = useMemo(() => {
@@ -1733,26 +1750,23 @@ const DailyInputForm = React.memo(function DailyInputForm({
         </View>
       </View>
 
-      {/* Kaydet ve Sil Butonları (Kaydetme Butonu da Temizle ile Birebir Aynı Tasarımda - Zümrüt Yeşili) */}
+      {/* Kaydet ve Sil Butonları (Kendi renklerini koruyarak yumuşakça soluklaşır / canlanır) */}
       <View style={styles.actionButtonsRow}>
         <PressableScale
           style={[styles.actionBtn, styles.clearBtn]}
           onPress={handleClear}
           activeScale={0.96}
+          disabled={!hasAnyInput}
         >
           <TrashIcon size={16} color="#FB7185" />
           <Text style={styles.clearBtnText}>Temizle</Text>
         </PressableScale>
 
         <PressableScale
-          style={[
-            styles.actionBtn,
-            styles.saveBtnGreen,
-            isSaving && { opacity: 0.65 },
-          ]}
+          style={[styles.actionBtn, styles.saveBtnGreen]}
           onPress={handleSavePress}
           activeScale={0.96}
-          disabled={isSaving}
+          disabled={!hasAnyInput || isSaving}
         >
           <SaveIcon size={16} color="#10B981" />
           <Text style={styles.saveBtnGreenText}>
