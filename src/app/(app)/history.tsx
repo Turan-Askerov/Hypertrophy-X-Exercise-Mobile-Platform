@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated as RNAnimated,
+  BackHandler,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -31,29 +32,50 @@ import Svg, { Path, Rect } from 'react-native-svg';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkouts } from '@/hooks/use-workouts';
+import {
+  buildWorkoutHierarchy,
+  extractWorkoutDateIso,
+  formatWeekdayShortTR,
+  MONTHS_TR,
+} from '@/lib/history-groups';
 import { workoutDraft } from '@/lib/workout-draft';
 import type { ExerciseEntry, Workout } from '@/types/workout';
 
-// 120Hz Saf UI-Thread Reanimated Akordiyon (Ana sayfa Detay Kartı ile birebir aynı yumuşak ve akıcı geçiş)
-const SmoothAccordion = React.memo(function SmoothAccordion({
-  isOpen,
-  children,
-}: {
+type SmoothAccordionBodyProps = {
   isOpen: boolean;
+  animateOnMount: boolean;
+  naturalHeightWhenSettled: boolean;
+  onExited: () => void;
   children: React.ReactNode;
-}) {
-  const [isMounted, setIsMounted] = useState(isOpen);
-  if (isOpen && !isMounted) {
-    setIsMounted(true);
+};
+
+function SmoothAccordionBody({
+  isOpen,
+  animateOnMount,
+  naturalHeightWhenSettled,
+  onExited,
+  children,
+}: SmoothAccordionBodyProps) {
+  const [isSettledOpen, setIsSettledOpen] = useState(
+    naturalHeightWhenSettled && isOpen && !animateOnMount
+  );
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+
+  if (prevIsOpen !== isOpen) {
+    setPrevIsOpen(isOpen);
+    if (isSettledOpen) {
+      setIsSettledOpen(false);
+    }
   }
 
+  const startOpenImmediate = isOpen && !animateOnMount;
   const measuredHeight = useSharedValue(0);
-  const heightProgress = useSharedValue(isOpen ? 1 : 0);
-  const contentOpacity = useSharedValue(isOpen ? 1 : 0);
-  const contentDriftY = useSharedValue(isOpen ? 0 : -8);
+  const heightProgress = useSharedValue(startOpenImmediate ? 1 : 0);
+  const contentOpacity = useSharedValue(startOpenImmediate ? 1 : 0);
+  const contentDriftY = useSharedValue(startOpenImmediate ? 0 : -8);
 
   useEffect(() => {
-    if (!isMounted) return;
+    if (isSettledOpen) return;
 
     if (isOpen) {
       heightProgress.value = withTiming(1, {
@@ -62,10 +84,18 @@ const SmoothAccordion = React.memo(function SmoothAccordion({
       });
       contentOpacity.value = withDelay(
         90,
-        withTiming(1, {
-          duration: 540,
-          easing: Easing.inOut(Easing.quad),
-        })
+        withTiming(
+          1,
+          {
+            duration: 540,
+            easing: Easing.inOut(Easing.quad),
+          },
+          (finished) => {
+            if (finished && naturalHeightWhenSettled) {
+              scheduleOnRN(setIsSettledOpen, true);
+            }
+          }
+        )
       );
       contentDriftY.value = withDelay(
         90,
@@ -93,13 +123,21 @@ const SmoothAccordion = React.memo(function SmoothAccordion({
           },
           (finished) => {
             if (finished) {
-              scheduleOnRN(setIsMounted, false);
+              scheduleOnRN(onExited);
             }
           }
         )
       );
     }
-  }, [isOpen, isMounted, heightProgress, contentOpacity, contentDriftY]);
+  }, [
+    isOpen,
+    isSettledOpen,
+    naturalHeightWhenSettled,
+    heightProgress,
+    contentOpacity,
+    contentDriftY,
+    onExited,
+  ]);
 
   const outerStyle = useAnimatedStyle(() => ({
     height: measuredHeight.value * heightProgress.value,
@@ -111,10 +149,13 @@ const SmoothAccordion = React.memo(function SmoothAccordion({
     transform: [{ translateY: contentDriftY.value }],
   }));
 
-  if (!isMounted) return null;
-
   return (
-    <Animated.View style={[styles.accordionOuter, outerStyle]}>
+    <Animated.View
+      style={[
+        styles.accordionOuter,
+        isSettledOpen ? styles.accordionOuterNatural : outerStyle,
+      ]}
+    >
       <Animated.View
         onLayout={(e) => {
           const h = Math.ceil(e.nativeEvent.layout.height);
@@ -122,20 +163,60 @@ const SmoothAccordion = React.memo(function SmoothAccordion({
             measuredHeight.value = h;
           }
         }}
-        style={[styles.accordionInner, innerStyle]}
+        style={[
+          isSettledOpen ? styles.accordionInnerNatural : styles.accordionInner,
+          innerStyle,
+        ]}
       >
         {children}
       </Animated.View>
     </Animated.View>
   );
+}
+
+// 120Hz Saf UI-Thread Reanimated Akordiyon (Kapalıyken 0 hook / 0 worklet maliyeti)
+const SmoothAccordion = React.memo(function SmoothAccordion({
+  isOpen,
+  naturalHeightWhenSettled = false,
+  children,
+}: {
+  isOpen: boolean;
+  naturalHeightWhenSettled?: boolean;
+  children: React.ReactNode;
+}) {
+  const [hasMounted, setHasMounted] = useState(isOpen);
+  const [animateOnMount, setAnimateOnMount] = useState(false);
+
+  if (isOpen && !hasMounted) {
+    setHasMounted(true);
+    setAnimateOnMount(true);
+  }
+
+  const handleExited = useCallback(() => {
+    setHasMounted(false);
+    setAnimateOnMount(false);
+  }, []);
+
+  if (!hasMounted) return null;
+
+  return (
+    <SmoothAccordionBody
+      isOpen={isOpen}
+      animateOnMount={animateOnMount}
+      naturalHeightWhenSettled={naturalHeightWhenSettled}
+      onExited={handleExited}
+    >
+      {children}
+    </SmoothAccordionBody>
+  );
 });
 
-// Daha uzun, akıcı ve yumuşak süzülme animasyonu (Hızı düşürülmüş, yumuşak iniş)
-const createSlideDownHistoryCard = (index: number) =>
+// Önceden önbelleğe alınmış giriş animasyonları (her kart için ayrı Keyframe allocate etmez)
+const SLIDE_DOWN_KEYFRAMES = Array.from({ length: 9 }, (_, i) =>
   new Keyframe({
     0: {
       opacity: 0,
-      transform: [{ translateY: -26 }],
+      transform: [{ translateY: -22 }],
     },
     100: {
       opacity: 1,
@@ -143,8 +224,36 @@ const createSlideDownHistoryCard = (index: number) =>
       easing: Easing.bezier(0.16, 1, 0.3, 1),
     },
   })
-    .duration(680)
-    .delay(Math.min(index, 10) * 110);
+    .duration(480)
+    .delay(i * 55)
+);
+
+const getSlideDownKeyframe = (index: number) =>
+  SLIDE_DOWN_KEYFRAMES[Math.min(Math.max(index, 0), SLIDE_DOWN_KEYFRAMES.length - 1)];
+
+// Sayfa geçişlerinde donmasız 120Hz yumuşak aşağı süzülme + opaklık geçişi
+function SoftPageReveal({ children }: { children: React.ReactNode }) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(-14);
+
+  useEffect(() => {
+    opacity.value = withTiming(1, {
+      duration: 540,
+      easing: Easing.inOut(Easing.quad),
+    });
+    translateY.value = withTiming(0, {
+      duration: 540,
+      easing: Easing.inOut(Easing.quad),
+    });
+  }, [opacity, translateY]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return <Animated.View style={animStyle}>{children}</Animated.View>;
+}
 
 // ─── Web Tema Renkleri (Web Platformuna Birebir Uyumlu Cyber Dark) ───
 const colors = {
@@ -212,53 +321,18 @@ function PressableScale({
   disabled,
   unstable_pressDelay = 0,
 }: PressableScaleProps) {
-  const [scale] = useState(() => new RNAnimated.Value(1));
-  const [opacity] = useState(() => new RNAnimated.Value(1));
-
-  const handlePressIn = () => {
-    if (disabled) return;
-    RNAnimated.parallel([
-      RNAnimated.timing(scale, {
-        toValue: activeScale,
-        duration: 80,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-      RNAnimated.timing(opacity, {
-        toValue: 0.82,
-        duration: 80,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-    ]).start();
-  };
-
-  const handlePressOut = () => {
-    if (disabled) return;
-    RNAnimated.parallel([
-      RNAnimated.timing(scale, {
-        toValue: 1,
-        duration: 90,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-      RNAnimated.timing(opacity, {
-        toValue: 1,
-        duration: 90,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-    ]).start();
-  };
-
   return (
     <Pressable
       onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
       hitSlop={hitSlop}
       disabled={disabled}
       unstable_pressDelay={unstable_pressDelay}
+      style={({ pressed }) => [
+        style,
+        pressed && !disabled && { transform: [{ scale: activeScale }], opacity: 0.84 },
+      ]}
     >
-      <RNAnimated.View style={[style, { transform: [{ scale }], opacity }]}>
-        {children}
-      </RNAnimated.View>
+      {children}
     </Pressable>
   );
 }
@@ -280,16 +354,28 @@ function ArrowBackIcon({ size = 18, color = colors.text }: { size?: number; colo
 }
 
 
-function CalendarIcon({ size = 14, color = colors.textMuted }: { size?: number; color?: string }) {
+const CalendarIcon = React.memo(function CalendarIcon({
+  size = 14,
+  color = colors.textMuted,
+}: {
+  size?: number;
+  color?: string;
+}) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="4" width="18" height="18" rx="2" stroke={color} strokeWidth={2} />
       <Path d="M16 2v4M8 2v4M3 10h18" stroke={color} strokeWidth={2} strokeLinecap="round" />
     </Svg>
   );
-}
+});
 
-function PencilEditIcon({ size = 14, color = colors.purple }: { size?: number; color?: string }) {
+const PencilEditIcon = React.memo(function PencilEditIcon({
+  size = 14,
+  color = colors.purple,
+}: {
+  size?: number;
+  color?: string;
+}) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -301,9 +387,15 @@ function PencilEditIcon({ size = 14, color = colors.purple }: { size?: number; c
       />
     </Svg>
   );
-}
+});
 
-function TuneSlidersIcon({ size = 14, color = colors.cyanAction }: { size?: number; color?: string }) {
+const TuneSlidersIcon = React.memo(function TuneSlidersIcon({
+  size = 14,
+  color = colors.cyanAction,
+}: {
+  size?: number;
+  color?: string;
+}) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -315,9 +407,15 @@ function TuneSlidersIcon({ size = 14, color = colors.cyanAction }: { size?: numb
       />
     </Svg>
   );
-}
+});
 
-function TrashIcon({ size = 14, color = colors.danger }: { size?: number; color?: string }) {
+const TrashIcon = React.memo(function TrashIcon({
+  size = 14,
+  color = colors.danger,
+}: {
+  size?: number;
+  color?: string;
+}) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -329,7 +427,7 @@ function TrashIcon({ size = 14, color = colors.danger }: { size?: number; color?
       />
     </Svg>
   );
-}
+});
 
 function CloseIcon({ size = 16, color = colors.textMuted }: { size?: number; color?: string }) {
   return (
@@ -359,10 +457,29 @@ function CautionTriangleIcon({ size = 18, color = '#F87171' }: { size?: number; 
   );
 }
 
+function ChevronRightIcon({ size = 16, color = colors.purple }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M9 18l6-6-6-6"
+        stroke={color}
+        strokeWidth={2.3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 // ─── Tarih Formatlama Yardımcıları ───
 
 function formatDateTR(dateString: string): string {
   if (!dateString) return '';
+  const iso = extractWorkoutDateIso(dateString);
+  if (iso) {
+    const [year, month, day] = iso.split('-');
+    return `${day}.${month}.${year}`;
+  }
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return dateString;
   const day = String(d.getDate()).padStart(2, '0');
@@ -373,11 +490,7 @@ function formatDateTR(dateString: string): string {
 
 function formatMonthTR(yearMonth: string): string {
   const [y, m] = yearMonth.split('-').map(Number);
-  const months = [
-    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
-  ];
-  return `${months[m - 1]} ${y}`;
+  return `${MONTHS_TR[m - 1]} ${y}`;
 }
 
 // ─── Web Tarzı Tarih Seçim Panosu (Modal) ───
@@ -876,6 +989,7 @@ function DeleteWorkoutConfirmModal({
 type SessionCardItemProps = {
   workout: Workout;
   index: number;
+  disableEntering?: boolean;
   isSummaryOpen: boolean;
   isFullOpen: boolean;
   isEditing: boolean;
@@ -899,6 +1013,7 @@ type SessionCardItemProps = {
 const SessionCardItem = React.memo(function SessionCardItem({
   workout,
   index,
+  disableEntering = false,
   isSummaryOpen,
   isFullOpen,
   isEditing,
@@ -915,14 +1030,8 @@ const SessionCardItem = React.memo(function SessionCardItem({
   const exercises = workout.exercises || [];
   const currentExercises = isEditing && editingExercises ? editingExercises : exercises;
 
-  // Web platformundaki slideDownHistoryCard animasyonu ile birebir uyumlu bağımsız Keyframe örneği
-  const enteringAnim = useMemo(() => createSlideDownHistoryCard(index), [index]);
-
-  return (
-    <Animated.View
-      entering={enteringAnim}
-      style={styles.sessionCard}
-    >
+  const cardBody = (
+    <>
       {/* ─── Seans Kartı Üst Barı (Header) ─── */}
       <View style={styles.cardHeader}>
         {/* Sol Kısım: Başlık, Hareket Sayısı Rozeti, Tarih & Mekan (Dokunmatik - Kapatır/Açar) */}
@@ -945,11 +1054,16 @@ const SessionCardItem = React.memo(function SessionCardItem({
 
           <View style={styles.subtitleRow}>
             <CalendarIcon size={12} color={colors.textMuted} />
-            <Text style={styles.subtitleDateText}>
+            <Text style={styles.subtitleDateText} numberOfLines={1}>
               {formatDateTR(workout.date)}
+              {formatWeekdayShortTR(workout.date) ? ` (${formatWeekdayShortTR(workout.date)})` : ''}
             </Text>
             {workout.gym_name ? (
-              <Text style={styles.subtitleGymText}>
+              <Text
+                style={styles.subtitleGymText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 • 📍 {workout.gym_name}
               </Text>
             ) : null}
@@ -1197,7 +1311,102 @@ const SessionCardItem = React.memo(function SessionCardItem({
           </View>
         </View>
       </SmoothAccordion>
+    </>
+  );
+
+  if (disableEntering) {
+    return <View style={styles.sessionCard}>{cardBody}</View>;
+  }
+
+  return (
+    <Animated.View entering={getSlideDownKeyframe(index)} style={styles.sessionCard}>
+      {cardBody}
     </Animated.View>
+  );
+});
+
+// ─── Kompakt Yıl / Ay / Hafta Şerit Kartı (Seans kartı ile birebir aynı oranlarda) ───
+
+type CompactGroupCardProps = {
+  title: string;
+  badgeText: string;
+  metaText: string;
+  hintText: string;
+  index: number;
+  onPress: () => void;
+};
+
+const CompactGroupCard = React.memo(function CompactGroupCard({
+  title,
+  badgeText,
+  metaText,
+  hintText,
+  index,
+  onPress,
+}: CompactGroupCardProps) {
+  const enteringAnim = getSlideDownKeyframe(index);
+
+  return (
+    <Animated.View entering={enteringAnim}>
+      <PressableScale
+        style={styles.sessionCard}
+        activeScale={0.985}
+        onPress={onPress}
+        unstable_pressDelay={0}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderLeft}>
+            <View style={styles.titleRow}>
+              <Text style={styles.sessionTitle}>{title}</Text>
+              <View style={styles.movementBadge}>
+                <Text style={styles.movementBadgeText}>{badgeText}</Text>
+              </View>
+            </View>
+
+            <View style={styles.subtitleRow}>
+              <CalendarIcon size={12} color={colors.textMuted} />
+              <Text style={styles.subtitleDateText} numberOfLines={1}>
+                {metaText}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.cardHeaderRight}>
+            <View style={[styles.headerActionBtn, styles.editActionBtn]}>
+              <ChevronRightIcon size={15} color={colors.purple} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.hintBar}>
+          <Text style={styles.hintBarText}>{hintText}</Text>
+        </View>
+      </PressableScale>
+    </Animated.View>
+  );
+});
+
+const RestDayStripCard = React.memo(function RestDayStripCard({
+  formattedDate,
+  weekdayShort,
+  isFuture,
+}: {
+  formattedDate: string;
+  weekdayShort: string;
+  isFuture: boolean;
+}) {
+  return (
+    <View style={styles.restDayCard}>
+      <View style={styles.restDayLeft}>
+        <CalendarIcon size={12} color={colors.textDim} />
+        <Text style={styles.restDayDateText}>
+          {formattedDate} • {weekdayShort}
+        </Text>
+      </View>
+      <Text style={styles.restDayStatusText}>
+        {isFuture ? 'Yaklaşan Gün' : 'Dinlenme / Kayıt Yok'}
+      </Text>
+    </View>
   );
 });
 
@@ -1210,6 +1419,12 @@ export default function HistoryScreen() {
   // Sayfaya her girildiğinde kartların webdeki gibi yukardan aşağı sıralı süzülmesini tetikleyen anahtar
   const [animKey, setAnimKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // 3 Seviyeli Gezinti: Yıl -> Ay -> Ay İçi Tüm Günler (Haftalık Gruplu)
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
+  const [weekOpenOverrides, setWeekOpenOverrides] = useState<Record<string, boolean>>({});
+  const [renderedWeekLimit, setRenderedWeekLimit] = useState(3);
 
   useFocusEffect(
     useCallback(() => {
@@ -1227,11 +1442,80 @@ export default function HistoryScreen() {
     }
   }, [refetch]);
 
-
   // Filtreler
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
+
+  const isFilterActive = selectedDate !== null || searchQuery.trim().length > 0;
+
+  // Ekran açılışında ilk görünen haftalar anında açık yüklenir, alttaki haftalar 1 kare sonra tamamlanır
+  useEffect(() => {
+    if (!selectedMonthId || isFilterActive) return;
+
+    const rafId = requestAnimationFrame(() => {
+      setRenderedWeekLimit(99);
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [selectedMonthId, isFilterActive]);
+
+  // Gerçek antrenmanlardan Yıl -> Ay -> Pzt-Paz Haftalık Gruplu Tüm Günler
+  const yearGroups = useMemo(() => buildWorkoutHierarchy(workouts), [workouts]);
+
+  const activeYear = useMemo(
+    () => (selectedYear !== null ? yearGroups.find((y) => y.year === selectedYear) ?? null : null),
+    [yearGroups, selectedYear]
+  );
+
+  const activeMonth = useMemo(
+    () =>
+      activeYear && selectedMonthId
+        ? activeYear.months.find((m) => m.id === selectedMonthId) ?? null
+        : null,
+    [activeYear, selectedMonthId]
+  );
+
+  const handleOpenMonth = useCallback((monthId: string) => {
+    setRenderedWeekLimit(3);
+    setSelectedMonthId(monthId);
+  }, []);
+
+  const handleBackNavigation = useCallback(() => {
+    if (!isFilterActive) {
+      if (activeMonth) {
+        setRenderedWeekLimit(3);
+        setSelectedMonthId(null);
+        return true;
+      }
+      if (activeYear) {
+        setSelectedYear(null);
+        return true;
+      }
+    }
+    return false;
+  }, [isFilterActive, activeMonth, activeYear]);
+
+  const toggleWeekCollapse = useCallback((weekId: string, currentlyOpen: boolean) => {
+    setWeekOpenOverrides((prev) => ({
+      ...prev,
+      [weekId]: !currentlyOpen,
+    }));
+  }, []);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackNavigation);
+    return () => subscription.remove();
+  }, [handleBackNavigation]);
+
+  const handleTopBackPress = useCallback(() => {
+    if (handleBackNavigation()) return;
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(app)/(tabs)/workout');
+    }
+  }, [handleBackNavigation, router]);
 
   // Kart Genişletme Durumları (Görseldeki gibi varsayılan olarak hepsi KAPALI özet çubuğu)
   const [openSummaries, setOpenSummaries] = useState<Record<number, boolean>>({});
@@ -1251,7 +1535,8 @@ export default function HistoryScreen() {
     const set = new Set<string>();
     const q = searchQuery.trim().toLowerCase();
     for (const w of workouts) {
-      if (!w.date) continue;
+      const dateIso = extractWorkoutDateIso(w.date);
+      if (!dateIso) continue;
       if (q) {
         const matchSession = (w.session_type || '').toLowerCase().includes(q);
         const matchGym = (w.gym_name || '').toLowerCase().includes(q);
@@ -1260,20 +1545,19 @@ export default function HistoryScreen() {
         );
         if (!matchSession && !matchGym && !matchEx) continue;
       }
-      set.add(w.date.slice(0, 10));
+      set.add(dateIso);
     }
     return set;
   }, [workouts, searchQuery]);
 
-  // Filtrelenmiş ve Sıralanmış Seanslar
+  // Filtrelenmiş ve Sıralanmış Seanslar (Arama veya Takvim filtresi aktifken)
   const filteredWorkouts = useMemo(() => {
     return workouts
       .filter((w) => {
-        // Tarih filtresi
-        if (selectedDate && w.date && !w.date.startsWith(selectedDate)) {
-          return false;
+        if (selectedDate) {
+          const dateIso = extractWorkoutDateIso(w.date);
+          if (dateIso !== selectedDate) return false;
         }
-        // Arama sorgusu
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchSession = (w.session_type || '').toLowerCase().includes(q);
@@ -1287,6 +1571,14 @@ export default function HistoryScreen() {
       })
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [workouts, selectedDate, searchQuery]);
+
+  const headerSessionCount = isFilterActive
+    ? filteredWorkouts.length
+    : activeMonth
+      ? activeMonth.sessionsCount
+      : activeYear
+        ? activeYear.sessionsCount
+        : workouts.length;
 
   // Özet Açma / Kapama (120Hz saf Reanimated worklet düzen geçişi)
   const toggleSummary = useCallback((workoutId: number) => {
@@ -1378,8 +1670,25 @@ export default function HistoryScreen() {
     if (!workoutToDelete) return;
     setIsDeletingWorkout(true);
     try {
-      await deleteWorkout(workoutToDelete.id);
+      const deletedId = workoutToDelete.id;
+      await deleteWorkout(deletedId);
       setWorkoutToDelete(null);
+
+      // Silinen seans sonrası seçili ay/yıl boşaldıysa bir üst seviyeye güvenle dön
+      const remaining = workouts.filter((w) => w.id !== deletedId);
+      const nextGroups = buildWorkoutHierarchy(remaining);
+      const nextYear =
+        selectedYear !== null ? nextGroups.find((y) => y.year === selectedYear) ?? null : null;
+      const nextMonth =
+        nextYear && selectedMonthId
+          ? nextYear.months.find((m) => m.id === selectedMonthId) ?? null
+          : null;
+      if (selectedYear !== null && !nextYear) {
+        setSelectedYear(null);
+        setSelectedMonthId(null);
+      } else if (selectedMonthId && !nextMonth) {
+        setSelectedMonthId(null);
+      }
     } catch (err: any) {
       Alert.alert('Hata', err?.message || 'Antrenman silinemedi.');
     } finally {
@@ -1421,7 +1730,7 @@ export default function HistoryScreen() {
             <View style={styles.titleWithIcon}>
               <PressableScale
                 style={styles.backButton}
-                onPress={() => (router.canGoBack() ? router.back() : router.replace('/(app)/(tabs)/workout'))}
+                onPress={handleTopBackPress}
                 activeScale={0.9}
                 hitSlop={8}
               >
@@ -1430,10 +1739,10 @@ export default function HistoryScreen() {
               <Text style={styles.screenTitle} numberOfLines={1}>Antrenman Geçmişi</Text>
             </View>
 
-            {/* Sağ: Toplam Seans Sayacı Rozeti (Taşma yapmayan, sola kaydırılmış ve net görünür) */}
+            {/* Sağ: Bağlama Göre Seans Sayacı Rozeti */}
             <View style={styles.totalSessionsBadge}>
               <Text style={styles.totalBadgeText}>
-                {workouts.length} Seans
+                {headerSessionCount} Seans
               </Text>
             </View>
           </View>
@@ -1456,7 +1765,7 @@ export default function HistoryScreen() {
               )}
             </View>
 
-            {/* Takvim Açıcı Buton */}
+            {/* Tarih Seçim Butonu */}
             <PressableScale
               style={[
                 styles.calTriggerBtn,
@@ -1497,50 +1806,223 @@ export default function HistoryScreen() {
             </View>
           )}
 
-          {/* ─── 3. Seans Kartları Listesi (Görseldeki Kapalı Kompakt Şerit Tasarımı) ─── */}
+          {/* Hiyerarşi Konum Yolu (Breadcrumb): Yıllar › 2026 › Kasım 2026 */}
+          {!isFilterActive && activeYear && (
+            <View style={styles.breadcrumbRow}>
+              <PressableScale
+                activeScale={0.94}
+                onPress={() => {
+                  setRenderedWeekLimit(3);
+                  setSelectedYear(null);
+                  setSelectedMonthId(null);
+                }}
+              >
+                <Text style={styles.breadcrumbLink}>Yıllar</Text>
+              </PressableScale>
+
+              <Text style={styles.breadcrumbSep}>›</Text>
+
+              {activeMonth ? (
+                <PressableScale
+                  activeScale={0.94}
+                  onPress={() => {
+                    setRenderedWeekLimit(3);
+                    setSelectedMonthId(null);
+                  }}
+                >
+                  <Text style={styles.breadcrumbLink}>{activeYear.year}</Text>
+                </PressableScale>
+              ) : (
+                <Text style={styles.breadcrumbCurrent}>{activeYear.year}</Text>
+              )}
+
+              {activeMonth && (
+                <>
+                  <Text style={styles.breadcrumbSep}>›</Text>
+                  <Text style={styles.breadcrumbCurrent}>{activeMonth.title}</Text>
+                </>
+              )}
+            </View>
+          )}
+
+          {/* ─── 3. İçerik Alanı: Yıl -> Ay (Alt Alta) -> Ay İçi Tüm Günler (Haftalık Gruplu) ─── */}
           {loading ? (
             <View style={styles.skeletonContainer}>
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} height={84} radius={16} style={styles.skeletonItem} />
               ))}
             </View>
-          ) : filteredWorkouts.length === 0 ? (
+          ) : isFilterActive ? (
+            filteredWorkouts.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>🏋️</Text>
+                <Text style={styles.emptyTitle}>Kayıtlı Seans Bulunamadı</Text>
+                <Text style={styles.emptySubtitle}>
+                  {selectedDate
+                    ? `${formatDateTR(selectedDate)} tarihinde kayıtlı antrenman seansı yok.`
+                    : 'Aramanızla eşleşen antrenman seansı bulunamadı.'}
+                </Text>
+                <PressableScale
+                  style={styles.clearFilterBtn}
+                  activeScale={0.95}
+                  onPress={() => {
+                    setSelectedDate(null);
+                    setSearchQuery('');
+                  }}
+                >
+                  <Text style={styles.clearFilterBtnText}>Filtreleri Temizle</Text>
+                </PressableScale>
+              </View>
+            ) : (
+              filteredWorkouts.map((w, index) => (
+                <SessionCardItem
+                  key={`session-${w.id}-${animKey}-${selectedDate || 'search'}`}
+                  workout={w}
+                  index={index}
+                  disableEntering={index >= 10}
+                  isSummaryOpen={!!openSummaries[w.id]}
+                  isFullOpen={!!openFullDetails[w.id]}
+                  isEditing={!!editModes[w.id]}
+                  isSaving={!!savingWorkoutIds[w.id]}
+                  editingExercises={editingData[w.id]}
+                  onToggleSummary={toggleSummary}
+                  onToggleFull={toggleFull}
+                  onToggleEdit={toggleEdit}
+                  onLoadToDraft={handleLoadToDraft}
+                  onDelete={handleDelete}
+                  onSetChange={handleSetChange}
+                  onSaveEdit={handleSaveEdit}
+                />
+              ))
+            )
+          ) : yearGroups.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>🏋️</Text>
               <Text style={styles.emptyTitle}>Kayıtlı Seans Bulunamadı</Text>
               <Text style={styles.emptySubtitle}>
-                {selectedDate
-                  ? `${formatDateTR(selectedDate)} tarihinde kayıtlı antrenman seansı yok.`
-                  : 'Henüz kaydedilmiş antrenman bulunmuyor.'}
+                Henüz kaydedilmiş antrenman bulunmuyor.
               </Text>
-              {selectedDate && (
-                <PressableScale
-                  style={styles.clearFilterBtn}
-                  activeScale={0.95}
-                  onPress={() => setSelectedDate(null)}
-                >
-                  <Text style={styles.clearFilterBtnText}>Tüm Seansları Göster</Text>
-                </PressableScale>
-              )}
             </View>
-          ) : (
-            filteredWorkouts.map((w, index) => (
-              <SessionCardItem
-                key={`session-${w.id}-${animKey}-${selectedDate || 'all'}`}
-                workout={w}
+          ) : activeMonth ? (
+            <SoftPageReveal key={`month-stage-${activeMonth.id}-${animKey}`}>
+              <View style={styles.monthMetaBar}>
+                <Text style={styles.monthMetaText}>
+                  {activeMonth.title} · {activeMonth.daysCount} Gün
+                </Text>
+                <Text style={styles.monthMetaText}>
+                  {activeMonth.weeks.length} Haftalık Grup
+                </Text>
+              </View>
+
+              {activeMonth.weeks.slice(0, renderedWeekLimit).map((week) => {
+                // Antrenman olan haftalar başlangıçtan itibaren AÇIK, kayıtsız haftalar KAPALI
+                const isWeekOpen = weekOpenOverrides[week.id] ?? week.sessionsCount > 0;
+
+                return (
+                  <View key={`week-box-${week.id}`} style={styles.weekGroupBox}>
+                    <PressableScale
+                      style={styles.weekGroupHeader}
+                      activeScale={0.985}
+                      onPress={() => toggleWeekCollapse(week.id, isWeekOpen)}
+                      unstable_pressDelay={0}
+                    >
+                      <View style={styles.weekGroupHeaderLeft}>
+                        <Text style={styles.weekGroupTitle}>{week.title}</Text>
+                        <Text style={styles.weekGroupRange}>• {week.rangeLabel}</Text>
+                      </View>
+
+                      <View style={styles.weekGroupHeaderRight}>
+                        <View
+                          style={
+                            week.sessionsCount > 0
+                              ? styles.weekGroupPillActive
+                              : styles.weekGroupPillEmpty
+                          }
+                        >
+                          <Text
+                            style={
+                              week.sessionsCount > 0
+                                ? styles.weekGroupPillTextActive
+                                : styles.weekGroupPillTextEmpty
+                            }
+                          >
+                            {week.sessionsCount > 0
+                              ? `${week.sessionsCount} İdman · ${week.totalSets} Set`
+                              : 'İdman Yok'}
+                          </Text>
+                        </View>
+                        <Text style={styles.weekGroupChevron}>
+                          {isWeekOpen ? '▴' : '▾'}
+                        </Text>
+                      </View>
+                    </PressableScale>
+
+                    <SmoothAccordion isOpen={isWeekOpen} naturalHeightWhenSettled>
+                      <View style={styles.weekGroupBody}>
+                        {week.days.map((day) => {
+                          if (day.workouts.length === 0) {
+                            return (
+                              <RestDayStripCard
+                                key={`rest-${day.dateIso}`}
+                                formattedDate={day.formattedDate}
+                                weekdayShort={day.weekdayShort}
+                                isFuture={day.isFuture}
+                              />
+                            );
+                          }
+
+                          return day.workouts.map((w) => (
+                            <SessionCardItem
+                              key={`month-${activeMonth.id}-session-${w.id}`}
+                              workout={w}
+                              index={0}
+                              disableEntering
+                              isSummaryOpen={!!openSummaries[w.id]}
+                              isFullOpen={!!openFullDetails[w.id]}
+                              isEditing={!!editModes[w.id]}
+                              isSaving={!!savingWorkoutIds[w.id]}
+                              editingExercises={editingData[w.id]}
+                              onToggleSummary={toggleSummary}
+                              onToggleFull={toggleFull}
+                              onToggleEdit={toggleEdit}
+                              onLoadToDraft={handleLoadToDraft}
+                              onDelete={handleDelete}
+                              onSetChange={handleSetChange}
+                              onSaveEdit={handleSaveEdit}
+                            />
+                          ));
+                        })}
+                      </View>
+                    </SmoothAccordion>
+                  </View>
+                );
+              })}
+            </SoftPageReveal>
+          ) : activeYear ? (
+            activeYear.months.map((month, index) => (
+              <CompactGroupCard
+                key={`month-card-${month.id}-${animKey}`}
                 index={index}
-                isSummaryOpen={!!openSummaries[w.id]}
-                isFullOpen={!!openFullDetails[w.id]}
-                isEditing={!!editModes[w.id]}
-                isSaving={!!savingWorkoutIds[w.id]}
-                editingExercises={editingData[w.id]}
-                onToggleSummary={toggleSummary}
-                onToggleFull={toggleFull}
-                onToggleEdit={toggleEdit}
-                onLoadToDraft={handleLoadToDraft}
-                onDelete={handleDelete}
-                onSetChange={handleSetChange}
-                onSaveEdit={handleSaveEdit}
+                title={month.title}
+                badgeText={`${month.sessionsCount} Antrenman`}
+                metaText={`${month.daysCount} Gün (${month.weeks.length} Hafta)  •  ${month.totalSets} Toplam Set`}
+                hintText={`Tüm ${month.daysCount} günü haftalık gruplarla görmek için tıkla ▸`}
+                onPress={() => handleOpenMonth(month.id)}
+              />
+            ))
+          ) : (
+            yearGroups.map((yearGroup, index) => (
+              <CompactGroupCard
+                key={`year-card-${yearGroup.year}-${animKey}`}
+                index={index}
+                title={String(yearGroup.year)}
+                badgeText={`${yearGroup.sessionsCount} Antrenman`}
+                metaText={`${yearGroup.activeMonthsCount} Aktif Ay  •  ${yearGroup.totalSets} Toplam Set`}
+                hintText="Ayları görmek için tıkla ▸"
+                onPress={() => {
+                  setSelectedYear(yearGroup.year);
+                  setSelectedMonthId(null);
+                }}
               />
             ))
           )}
@@ -1725,6 +2207,149 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
+  /* Hiyerarşi Breadcrumb & Grup Kartları */
+  breadcrumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  breadcrumbLink: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  breadcrumbSep: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textDim,
+  },
+  breadcrumbCurrent: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.purple,
+  },
+  monthMetaBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  monthMetaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  weekGroupBox: {
+    backgroundColor: 'rgba(16, 21, 36, 0.36)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.18)',
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(192, 132, 252, 0.68)',
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 6,
+    marginBottom: 14,
+  },
+  weekGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 2,
+    paddingBottom: 4,
+  },
+  weekGroupHeaderLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
+  weekGroupTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: colors.purple,
+  },
+  weekGroupRange: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textMuted,
+  },
+  weekGroupHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  weekGroupPillActive: {
+    backgroundColor: colors.weightGreenBg,
+    borderWidth: 1,
+    borderColor: colors.weightGreenBorder,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  weekGroupPillTextActive: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.weightGreen,
+  },
+  weekGroupPillEmpty: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  weekGroupPillTextEmpty: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textDim,
+  },
+  weekGroupChevron: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
+  weekGroupBody: {
+    marginTop: 8,
+  },
+  restDayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(16, 21, 36, 0.45)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    marginBottom: 8,
+    gap: 8,
+  },
+  restDayLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  restDayDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  restDayStatusText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: colors.textDim,
+  },
+
   /* ─── 3. Seans Kartları (Kompakt Şerit Tasarımı) ─── */
   sessionCard: {
     backgroundColor: colors.cardBg,
@@ -1751,6 +2376,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderLeft: {
     flex: 1,
+    minWidth: 0,
     paddingRight: 8,
   },
   titleRow: {
@@ -1783,16 +2409,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
     gap: 5,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    minWidth: 0,
   },
   subtitleDateText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: colors.textMuted,
     fontWeight: '500',
+    flexShrink: 0,
   },
   subtitleGymText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: colors.textMuted,
+    flexShrink: 1,
+    minWidth: 0,
   },
 
   /* Kart Üst Sağ (Sadece 3 Aksiyon Butonu) */
@@ -1842,11 +2472,17 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
+  accordionOuterNatural: {
+    overflow: 'visible',
+  },
   accordionInner: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+  },
+  accordionInnerNatural: {
+    position: 'relative',
   },
 
   /* ─── 1. Aşama: Özet Görünüm (Görsel 1) ─── */
