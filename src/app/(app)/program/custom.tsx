@@ -220,7 +220,6 @@ export default function CustomProgramBuilderScreen() {
     if (!user) return;
     try {
       await saveCustomProgram({
-        username: user.username,
         program: weeks,
       });
       Alert.alert('Başarılı! 🎉', 'Özel programınız başarıyla kaydedildi.', [

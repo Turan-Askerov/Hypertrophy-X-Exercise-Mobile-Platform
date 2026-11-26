@@ -349,7 +349,6 @@ export default function ProgramPoolScreen() {
     setSavingProgramId(program.id);
     try {
       await saveCustomProgram({
-        username: user.username,
         program: [program.days],
       });
       Alert.alert(

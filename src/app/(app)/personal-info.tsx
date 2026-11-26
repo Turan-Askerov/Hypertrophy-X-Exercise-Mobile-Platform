@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
@@ -824,7 +825,9 @@ export default function PersonalInfoScreen() {
     setFormAge(user?.age ? String(user?.age) : '');
     setFormHeight(user?.height ? String(user?.height) : '');
     setFormWeight(user?.weight ? String(user?.weight) : '');
-    setFormTargetWeight(user?.target_weight ? String(user.target_weight) : '');
+    setFormTargetWeight(
+      user?.target_weight != null && user.target_weight > 0 ? String(user.target_weight) : ''
+    );
     setFormGoal(user?.goal || 'hypertrophy');
     setFormFitnessLevel(user?.fitness_level || 'Advanced');
     setFormDaysPerWeek(user?.days_per_week || 4);
@@ -907,7 +910,7 @@ export default function PersonalInfoScreen() {
     setFormAge('0');
     setFormHeight('0');
     setFormWeight('0');
-    setFormTargetWeight('0');
+    setFormTargetWeight('');
     setFormGoal('hypertrophy');
     setFormFitnessLevel('Advanced');
     setFormDaysPerWeek(4);
@@ -929,22 +932,31 @@ export default function PersonalInfoScreen() {
     Keyboard.dismiss();
     if (!user) return;
 
-    // Hedef Kilo henüz veritabanında aktif değilse hata fırlat / uyar
-    if (formTargetWeight.trim()) {
-      Alert.alert(
-        'Veritabanı Hatası',
-        'Hedef kilo alanı henüz veritabanında tanımlı değil. Lütfen bu alanı boş bırakın.'
-      );
-      return;
+    const normalizeNum = (val: string) => val.trim().replace(',', '.');
+    const rawTarget = normalizeNum(formTargetWeight);
+    let parsedTargetWeight = 0;
+    if (rawTarget !== '') {
+      const n = parseFloat(rawTarget);
+      if (!Number.isFinite(n) || n < 0 || n > 400) {
+        Alert.alert(
+          'Geçersiz Hedef Kilo',
+          'Lütfen 0 ile 400 kg arasında geçerli bir hedef kilo değeri girin.'
+        );
+        return;
+      }
+      parsedTargetWeight = n;
     }
+
+    const rawHeight = normalizeNum(formHeight);
+    const rawWeight = normalizeNum(formWeight);
 
     try {
       await updateProfile({
-        username: user.username,
         gender: formGender,
         age: formAge ? parseInt(formAge, 10) : null,
-        height: formHeight ? parseFloat(formHeight) : null,
-        weight: formWeight ? parseFloat(formWeight) : null,
+        height: rawHeight ? parseFloat(rawHeight) : null,
+        weight: rawWeight ? parseFloat(rawWeight) : null,
+        target_weight: parsedTargetWeight,
         fitness_level: formFitnessLevel,
         goal: formGoal,
         days_per_week: formDaysPerWeek,
@@ -990,23 +1002,35 @@ export default function PersonalInfoScreen() {
         {/* ─── En Üst Kullanıcı Kartı (Avatar, İsim, E-posta, Düzenle) ─── */}
         <Card style={styles.topUserCard}>
           <View style={styles.topAvatarCircle}>
-            <Svg width={52} height={52} viewBox="0 0 52 52" style={StyleSheet.absoluteFill}>
-              <Defs>
-                <LinearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <Stop offset="0%" stopColor="#8B5CF6" />
-                  <Stop offset="100%" stopColor="#06B6D4" />
-                </LinearGradient>
-              </Defs>
-              <Circle cx="26" cy="26" r="26" fill="url(#avatarGrad)" />
-            </Svg>
-            <Text style={styles.topAvatarText}>
-              {(user?.username || 'T').charAt(0).toUpperCase()}
-            </Text>
+            {user?.avatar_url?.trim() ? (
+              <Image
+                source={{ uri: user.avatar_url.trim() }}
+                style={styles.topAvatarImage}
+                contentFit="cover"
+              />
+            ) : (
+              <>
+                <Svg width={52} height={52} viewBox="0 0 52 52" style={StyleSheet.absoluteFill}>
+                  <Defs>
+                    <LinearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <Stop offset="0%" stopColor="#8B5CF6" />
+                      <Stop offset="100%" stopColor="#06B6D4" />
+                    </LinearGradient>
+                  </Defs>
+                  <Circle cx="26" cy="26" r="26" fill="url(#avatarGrad)" />
+                </Svg>
+                <Text style={styles.topAvatarText}>
+                  {(user?.nickname?.trim() || user?.username || 'T').charAt(0).toUpperCase()}
+                </Text>
+              </>
+            )}
           </View>
 
           <View style={styles.topUserInfo}>
             <View style={styles.topNameRow}>
-              <Text style={styles.topUsername}>{user?.username || 'Turan'}</Text>
+              <Text style={styles.topUsername}>
+                {user?.nickname?.trim() || user?.username || 'Turan'}
+              </Text>
               <CheckBadgeSolidIcon size={16} color="#10B981" />
             </View>
             <Text style={styles.topEmail}>{user?.email || 'turanaskerov2004@gmail.com'}</Text>
@@ -1095,7 +1119,9 @@ export default function PersonalInfoScreen() {
             </View>
             <Text style={styles.measureLabel}>Hedef Kilo</Text>
             <Text style={styles.measureValue}>
-              {user?.target_weight ? `${user.target_weight} kg` : '--'}
+              {user?.target_weight != null && user.target_weight > 0
+                ? `${String(user.target_weight).replace('.', ',')} kg`
+                : '--'}
             </Text>
           </Card>
         </View>
@@ -1773,6 +1799,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  topAvatarImage: {
+    width: '100%',
+    height: '100%',
   },
   topUserInfo: {
     flex: 1,

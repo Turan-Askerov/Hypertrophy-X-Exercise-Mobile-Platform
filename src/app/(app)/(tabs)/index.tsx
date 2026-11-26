@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import Svg, {
   Circle,
@@ -688,7 +689,11 @@ export default function DashboardScreen() {
   });
 
   // Kullanıcı Bilgisi
-  const username = user?.username || (state.status === 'signedIn' ? state.user.username : 'Turan');
+  const username =
+    user?.nickname?.trim() ||
+    user?.username ||
+    (state.status === 'signedIn' ? state.user.username : 'Turan');
+  const avatarUrl = (user?.avatar_url ?? '').trim();
   const userInitials = username.slice(0, 1).toUpperCase();
 
   // Tarih Bilgisi
@@ -1451,7 +1456,15 @@ export default function DashboardScreen() {
             activeOpacity={0.8}
             onPress={() => router.push('/(app)/(tabs)/profile')}
           >
-            <Text style={styles.avatarText}>{userInitials}</Text>
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImageFill}
+                contentFit="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>{userInitials}</Text>
+            )}
           </TouchableOpacity>
 
           <View style={styles.greetingCol}>
@@ -2068,11 +2081,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#7049DF',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#8C5CFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 4,
+  },
+  avatarImageFill: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 16,

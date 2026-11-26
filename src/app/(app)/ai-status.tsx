@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import Svg, {
   Circle,
@@ -117,7 +118,11 @@ export default function AiStatusScreen() {
 
   const [filterPeriod, setFilterPeriod] = useState<'weekly' | 'monthly'>('weekly');
 
-  const username = user?.username || (state.status === 'signedIn' ? state.user.username : 'Sporcu');
+  const username =
+    user?.nickname?.trim() ||
+    user?.username ||
+    (state.status === 'signedIn' ? state.user.username : 'Sporcu');
+  const avatarUrl = (user?.avatar_url ?? '').trim();
   const userInitials = username.slice(0, 2).toUpperCase();
 
   // Yarı Dairesel Hız Göstergesi (Radial Gauge) Hesaplaması
@@ -151,7 +156,15 @@ export default function AiStatusScreen() {
 
           <View style={styles.avatarWrap}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>{userInitials}</Text>
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.avatarImageFill}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text style={styles.avatarText}>{userInitials}</Text>
+              )}
             </View>
           </View>
 
@@ -419,6 +432,11 @@ const styles = StyleSheet.create({
     borderColor: '#C084FC',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImageFill: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 15,

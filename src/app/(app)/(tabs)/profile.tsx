@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
@@ -1855,7 +1856,6 @@ export default function ProfileScreen() {
     if (!user) return;
     try {
       await updateProfile({
-        username: user.username,
         fitness_level: newLevel,
       });
       setActiveModal(null);
@@ -1869,7 +1869,6 @@ export default function ProfileScreen() {
     if (!user) return;
     try {
       await updateProfile({
-        username: user.username,
         goal: newGoal,
       });
       setActiveModal(null);
@@ -2116,10 +2115,10 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitle}>Profil</Text>
         <TouchableOpacity
           style={styles.headerCircleBtn}
-          onPress={() => router.push('/(app)/personal-info' as any)}
+          onPress={() => router.push('/(app)/profile-edit' as any)}
           activeOpacity={0.7}
           hitSlop={10}
-          accessibilityLabel="Kişisel Bilgiler"
+          accessibilityLabel="Kişisel Bilgileri Güncelle"
         >
           <EditPencilIcon size={18} color={colors.purpleLight} />
         </TouchableOpacity>
@@ -2137,20 +2136,32 @@ export default function ProfileScreen() {
         <Card style={styles.userCard}>
           <View style={styles.userCardTopRow}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>
-                {(user.username || 'HX').slice(0, 2).toUpperCase()}
-              </Text>
+              {user.avatar_url?.trim() ? (
+                <Image
+                  source={{ uri: user.avatar_url.trim() }}
+                  style={styles.avatarImageFill}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {(user.nickname?.trim() || user.username || 'HX').slice(0, 2).toUpperCase()}
+                </Text>
+              )}
             </View>
 
             <View style={styles.userInfo}>
               <View style={styles.nameRow}>
-                <Text style={styles.username}>{user.username}</Text>
+                <Text style={styles.username}>{user.nickname?.trim() || user.username}</Text>
                 <View style={[styles.levelBadge, { backgroundColor: `${levelBadgeInfo.color}20` }]}>
                   <Text style={[styles.levelBadgeText, { color: levelBadgeInfo.color }]}>
                     {levelBadgeInfo.label}
                   </Text>
                 </View>
               </View>
+
+              {user.nickname?.trim() && user.nickname.trim() !== user.username ? (
+                <Text style={styles.handleSubtext}>@{user.username}</Text>
+              ) : null}
 
               <Text style={styles.emailText}>{user.email || 'E-posta eklenmedi'}</Text>
 
@@ -2905,6 +2916,11 @@ const styles = StyleSheet.create({
     borderColor: colors.purpleLight,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImageFill: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 20,
@@ -2925,6 +2941,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: colors.text,
+  },
+  handleSubtext: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.purpleLight,
   },
   levelBadge: {
     paddingHorizontal: 8,

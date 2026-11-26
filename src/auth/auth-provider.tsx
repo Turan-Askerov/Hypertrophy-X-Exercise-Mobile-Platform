@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { User } from "@/types/user";
 import { authApi } from "@/api/auth";
 import { setUnauthorizedHandler } from "@/api/client";
 import { usersApi } from "@/api/users";
+import { USER_QUERY_KEY } from "@/hooks/use-user";
 
 import { createSessionService, type SessionState } from "./create-session-service";
 import { tokenStorage } from "./token-storage";
@@ -21,6 +23,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<SessionState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
 
@@ -28,29 +31,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     service.restore().then((next) => {
-      if (!cancelled) setState(next);
+      if (cancelled) return;
+      if (next.status === "signedIn") {
+        queryClient.setQueryData(USER_QUERY_KEY, next.user);
+      }
+      setState(next);
     });
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [attempt, queryClient]);
 
   // Oturum kullanım sırasında biterse (token'lı istek 401 alırsa) çıkış yap
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      service.signOut().then(setState);
+      service.signOut().then((next) => {
+        queryClient.clear();
+        setState(next);
+      });
     });
     return () => setUnauthorizedHandler(() => {});
-  }, []);
+  }, [queryClient]);
+
+  const applySignedInState = (next: SessionState) => {
+    queryClient.clear();
+    if (next.status === "signedIn") {
+      queryClient.setQueryData(USER_QUERY_KEY, next.user);
+    }
+    setState(next);
+  };
 
   const value: AuthContextValue = {
     state,
-    signIn: async (username, password) => setState(await service.signIn(username, password)),
+    signIn: async (username, password) => applySignedInState(await service.signIn(username, password)),
     register: async (username, password, email) =>
-      setState(await service.register(username, password, email)),
-        completeSignIn: async (token, user) =>
-      setState(await service.completeSignIn(token, user)),
-    signOut: async () => setState(await service.signOut()),
+      applySignedInState(await service.register(username, password, email)),
+    completeSignIn: async (token, user) =>
+      applySignedInState(await service.completeSignIn(token, user)),
+    signOut: async () => {
+      const next = await service.signOut();
+      queryClient.clear();
+      setState(next);
+    },
     retry: () => {
       setState({ status: "loading" });
       setAttempt((n) => n + 1);

@@ -25,7 +25,7 @@ export type NutritionHistoryItem = {
 };
 
 export type NutritionLogPayload = {
-  username: string;
+  username?: string | null;
   log_date: string;
   calories: number;
   protein: number;

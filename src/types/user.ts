@@ -18,6 +18,8 @@ export type User = {
   // çıktıdaki 22 alanın hepsi, çıktıdaki sırayla:
   id: number;
   username: string;
+  nickname?: string | null;
+  avatar_url?: string | null;
   email: string;
   role: string;
   is_active: number;
@@ -51,7 +53,9 @@ export type AdminLoginResponse = {
 
 export type LoginResponse = UserLoginResponse | AdminLoginResponse;
 export type UserProfile = {
-  username: string;
+  username?: string | null;
+  nickname?: string | null;
+  avatar_url?: string | null;
   email?: string | null;
   age?: number | null;
   gender?: string | null;

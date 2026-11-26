@@ -8,7 +8,7 @@ export type CustomDay = {
 };
 
 export type CustomProgramRequest = {
-  username: string;
+  username?: string | null;
   program: CustomDay[][]; // Haftalar listesi (her hafta 7 gün)
 };
 

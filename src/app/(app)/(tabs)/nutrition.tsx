@@ -2536,7 +2536,6 @@ export default function NutritionScreen() {
 
       try {
         await saveLog({
-          username: user?.username || 'user',
           log_date: selectedDate,
           calories: safeCalories,
           protein: safeProtein,
@@ -2550,7 +2549,7 @@ export default function NutritionScreen() {
         Alert.alert('Hata', err?.message || 'Beslenme verisi kaydedilemedi.');
       }
     },
-    [user, selectedDate, saveLog]
+    [selectedDate, saveLog]
   );
 
   return (

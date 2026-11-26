@@ -438,7 +438,9 @@ export default function SecurityScreen() {
 
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={styles.heroUsername}>{user?.username || 'Sporcu'}</Text>
+                <Text style={styles.heroUsername}>
+                  {user?.nickname?.trim() || user?.username || 'Sporcu'}
+                </Text>
               </View>
 
               <Text style={styles.heroEmailText}>
