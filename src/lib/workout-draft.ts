@@ -14,7 +14,7 @@ function getTodayIso(): string {
 
 const initialDraft: WorkoutCreate = {
   date: getTodayIso(),
-  session_type: "Üst Vücut",
+  session_type: "",
   notes: "",
   exercises: [],
 };
@@ -243,7 +243,7 @@ export const workoutDraft = {
   reset() {
     currentDraft = {
       date: getTodayIso(),
-      session_type: "Üst Vücut",
+      session_type: "",
       notes: "",
       exercises: [],
       gym_id: null,

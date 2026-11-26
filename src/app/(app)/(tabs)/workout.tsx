@@ -1,8 +1,18 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  type ComponentRef,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import {
   Alert,
   Animated,
-  Easing,
+  Keyboard,
+  KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
   Platform,
@@ -21,9 +31,14 @@ import Reanimated, {
   FadeInUp,
   FadeOut,
   FadeOutUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Svg, { Path } from 'react-native-svg';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ExerciseList } from '@/components/workout/exercise-list';
@@ -39,15 +54,52 @@ import { WorkoutTimerBar } from '@/components/workout/workout-timer-bar';
 import { WorkoutNote } from '@/components/workout/workout-note';
 import { AppColors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useExpertData } from '@/hooks/use-expert';
+import { useUser } from '@/hooks/use-user';
 import { useWorkouts } from '@/hooks/use-workouts';
+import {
+  addCustomSessionTypeToList,
+  normalizeSessionTypeLabel,
+  removeCustomSessionTypeFromList,
+  renameCustomSessionTypeInList,
+} from '@/lib/custom-session-types';
 import { formatTrDate } from '@/lib/rpe';
-import { exerciseVolume } from '@/lib/volume';
+import {
+  exerciseVolume,
+  formatVolume,
+  workoutSetCount,
+  workoutVolume,
+} from '@/lib/volume';
 import { workoutDraft } from '@/lib/workout-draft';
+import type { Workout } from '@/types/workout';
 
 // Android için donanım hızlandırmalı LayoutAnimation etkinleştirme
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+const PencilEditIcon = memo(function PencilEditIcon({
+  size = 14,
+  color = '#C084FC',
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+});
+
+const SESSION_DROPDOWN_GAP = 6;
+const SESSION_DROPDOWN_CARD_HEIGHT = 280;
+const SESSION_DROPDOWN_ANIM_DURATION = 260;
 
 const triggerSmoothTransition = () => {
   try {
@@ -183,7 +235,6 @@ export const ORDERED_SESSION_TYPES = [
   'Core',
   'Rotatorlar',
   'Kardiyo',
-  'Diğer',
 ] as const;
 
 export default function WorkoutScreen() {
@@ -193,7 +244,8 @@ export default function WorkoutScreen() {
     workoutDraft.getSnapshot
   );
 
-  const { workouts, saveWorkout, isSaving } = useWorkouts();
+  const { workouts, saveWorkout, isSaving, updateWorkout, isUpdating } = useWorkouts();
+  const { customSessionTypes, updateCustomSessionTypes } = useUser();
   const { data: expertData } = useExpertData();
   const gyms = useMemo(() => expertData?.gyms || [], [expertData?.gyms]);
 
@@ -209,11 +261,20 @@ export default function WorkoutScreen() {
     return new Set((workouts || []).map((w) => w.date));
   }, [workouts]);
 
+  const selectedManualDate = draft.date || todayIso;
+  const selectedDateWorkouts = useMemo(() => {
+    return (workouts || []).filter((w) => w.date === selectedManualDate);
+  }, [workouts, selectedManualDate]);
+  const isSelectedManualEditDay =
+    selectedManualDate !== todayIso && selectedDateWorkouts.length > 0;
+
   // ─── Kayıt Modu: 'live' (Salonda Canlı) veya 'manual' (Not Defterinden / Geçmişten Giriş) ───
   const [entryMode, setEntryMode] = useState<'live' | 'manual'>(() =>
     draft.date < todayIso ? 'manual' : 'live'
   );
   const [manualDurationMinutes, setManualDurationMinutes] = useState<number>(45);
+  const [editingWorkoutId, setEditingWorkoutId] = useState<number | null>(null);
+  const [dayWorkoutPickerOpen, setDayWorkoutPickerOpen] = useState(false);
 
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
   const [gymModalOpen, setGymModalOpen] = useState(false);
@@ -225,13 +286,76 @@ export default function WorkoutScreen() {
   const [customSessionOpen, setCustomSessionOpen] = useState(false);
   const [customSessionText, setCustomSessionText] = useState('');
   const [sessionDropdownOpen, setSessionDropdownOpen] = useState(false);
+  const [editingCustomSession, setEditingCustomSession] = useState<string | null>(null);
+  const [editCustomSessionInput, setEditCustomSessionInput] = useState('');
+  const [editCustomSessionError, setEditCustomSessionError] = useState<string | null>(null);
+  const reopenPickerAfterEditRef = useRef(false);
+  const pendingDropdownCloseCbRef = useRef<(() => void) | null>(null);
+  const dropdownOpIdRef = useRef(0);
+  const dropdownScrollRef = useRef<ComponentRef<typeof ScrollView> | null>(null);
+  const dropdownProgress = useSharedValue(0);
 
-  // ─── Açılır Menü Akıcı Animasyon Değerleri ───
-  const [fadeAnim] = useState(() => new Animated.Value(0));
-  const [translateAnim] = useState(() => new Animated.Value(-10));
-  const [rotateAnim] = useState(() => new Animated.Value(0));
-  const isOpeningRef = useRef(false);
-  const isClosingRef = useRef(false);
+  const dropdownOuterStyle = useAnimatedStyle(() => {
+    const p = dropdownProgress.value;
+    return {
+      marginTop: SESSION_DROPDOWN_GAP * p,
+      height: SESSION_DROPDOWN_CARD_HEIGHT * p,
+      backgroundColor: '#121829',
+      borderRadius: 14,
+      borderWidth: p > 0.02 ? 1.5 : 0,
+      borderColor: 'rgba(168, 85, 247, 0.45)',
+      opacity: p > 0.005 ? 1 : 0,
+      overflow: 'hidden',
+    };
+  });
+  const dropdownInnerStyle = useAnimatedStyle(() => {
+    const p = dropdownProgress.value;
+    const t = p <= 0.15 ? 0 : (p - 0.15) / 0.85;
+    return {
+      height: SESSION_DROPDOWN_CARD_HEIGHT - 3,
+      opacity: t,
+      transform: [{ translateY: -8 * (1 - t) }],
+    };
+  });
+  const belowDropdownStyle = useAnimatedStyle(() => ({
+    marginTop: -(SESSION_DROPDOWN_GAP + SESSION_DROPDOWN_CARD_HEIGHT) * dropdownProgress.value,
+  }));
+  const chevronAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${dropdownProgress.value * 180}deg` }],
+  }));
+  const handleDropdownExited = useCallback((completedOpId: number) => {
+    if (completedOpId !== dropdownOpIdRef.current) return;
+    const cb = pendingDropdownCloseCbRef.current;
+    pendingDropdownCloseCbRef.current = null;
+    cb?.();
+  }, []);
+
+  useEffect(() => {
+    if (sessionDropdownOpen) {
+      dropdownProgress.value = withTiming(1, {
+        duration: SESSION_DROPDOWN_ANIM_DURATION,
+        easing: ReanimatedEasing.inOut(ReanimatedEasing.quad),
+      });
+    } else {
+      const opId = dropdownOpIdRef.current;
+      dropdownProgress.value = withTiming(
+        0,
+        {
+          duration: SESSION_DROPDOWN_ANIM_DURATION,
+          easing: ReanimatedEasing.inOut(ReanimatedEasing.quad),
+        },
+        (finished) => {
+          if (finished) {
+            scheduleOnRN(handleDropdownExited, opId);
+          }
+        },
+      );
+    }
+  }, [
+    sessionDropdownOpen,
+    dropdownProgress,
+    handleDropdownExited,
+  ]);
 
   // ─── Canlı / Geçmiş Kayıt Mod Butonları Yumuşak Dokunma Animasyonu ───
   const [liveBtnScale] = useState(() => new Animated.Value(1));
@@ -253,95 +377,69 @@ export default function WorkoutScreen() {
     ]).start();
   };
 
-  const chevronRotate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
-  });
-
   const openDropdownWithAnimation = () => {
-    isOpeningRef.current = true;
-    isClosingRef.current = false;
-    setTimeout(() => {
-      isOpeningRef.current = false;
-    }, 120);
-
+    dropdownOpIdRef.current += 1;
+    pendingDropdownCloseCbRef.current = null;
+    dropdownScrollRef.current?.scrollTo({ y: 0, animated: false });
     setSessionDropdownOpen(true);
-    fadeAnim.setValue(0);
-    translateAnim.setValue(-10);
-
-    // Yukarıdan aşağıya akıcı açılış
-    Animated.parallel([
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 140,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 120,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateAnim, {
-        toValue: 0,
-        duration: 140,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const closeDropdownWithAnimation = (onClosed?: () => void) => {
-    if (isClosingRef.current) return;
-    isClosingRef.current = true;
+    dropdownOpIdRef.current += 1;
+    if (!sessionDropdownOpen) {
+      onClosed?.();
+      return;
+    }
+    pendingDropdownCloseCbRef.current = onClosed ?? null;
+    setSessionDropdownOpen(false);
+  };
 
-    // Aşağıdan yukarıya doğru toplanarak akıcı kapanış
-    Animated.parallel([
-      Animated.timing(rotateAnim, {
-        toValue: 0,
-        duration: 130,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 110,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateAnim, {
-        toValue: -10,
-        duration: 130,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setSessionDropdownOpen(false);
-      isClosingRef.current = false;
-      if (onClosed) onClosed();
-    });
+  const handleDismissDropdown = () => {
+    Keyboard.dismiss();
+    closeDropdownWithAnimation(() => setCustomSessionOpen(false));
   };
 
   const handleToggleDropdown = () => {
-    if (isClosingRef.current) return;
     if (sessionDropdownOpen) {
-      closeDropdownWithAnimation();
+      handleDismissDropdown();
       return;
     }
     openDropdownWithAnimation();
   };
 
+  const hasSelectedSession = Boolean(normalizeSessionTypeLabel(draft.session_type || ''));
+
   const selectedSessionInfo = useMemo(() => {
     return getSessionInfo(draft.session_type);
   }, [draft.session_type]);
 
+  const customSessionTypeSet = useMemo(() => {
+    return new Set(customSessionTypes.map((t) => t.toLocaleLowerCase('tr-TR')));
+  }, [customSessionTypes]);
+
   const availableSessionTypes = useMemo(() => {
-    if (draft.session_type && !ORDERED_SESSION_TYPES.includes(draft.session_type as any)) {
-      return [draft.session_type, ...ORDERED_SESSION_TYPES];
+    const merged: string[] = [...customSessionTypes];
+    const seen = new Set(merged.map((t) => t.toLocaleLowerCase('tr-TR')));
+
+    for (const builtIn of ORDERED_SESSION_TYPES) {
+      merged.push(builtIn);
+      seen.add(builtIn.toLocaleLowerCase('tr-TR'));
     }
-    return ORDERED_SESSION_TYPES as unknown as string[];
-  }, [draft.session_type]);
+
+    const active = normalizeSessionTypeLabel(draft.session_type || '');
+    if (
+      active &&
+      !seen.has(active.toLocaleLowerCase('tr-TR')) &&
+      active !== 'Üst Vücut' &&
+      active !== 'Alt Vücut' &&
+      active !== 'Tam Vücut' &&
+      active !== 'Custom'
+    ) {
+      return [active, ...merged];
+    }
+
+    return merged;
+  }, [customSessionTypes, draft.session_type]);
 
   // Seçili olan kart listede ikinci kez görünmesin (kullanıcı talebi)
   const filteredSessionTypes = useMemo(() => {
@@ -461,6 +559,8 @@ export default function WorkoutScreen() {
     triggerSmoothTransition();
     animateModePress(liveBtnScale);
     setEntryMode('live');
+    setEditingWorkoutId(null);
+    setManualDurationMinutes(45);
     workoutDraft.setDate(todayIso);
   };
 
@@ -469,10 +569,15 @@ export default function WorkoutScreen() {
     triggerSmoothTransition();
     animateModePress(manualBtnScale);
     setEntryMode('manual');
+    setEditingWorkoutId(null);
+    setManualDurationMinutes(45);
     workoutDraft.setDate(todayIso);
   };
 
   const handleStartFromLanding = () => {
+    setEditingWorkoutId(null);
+    setSessionDropdownOpen(false);
+    setCustomSessionOpen(false);
     if (entryMode === 'live') {
       workoutDraft.setDate(todayIso);
       setHasStarted(true);
@@ -480,25 +585,54 @@ export default function WorkoutScreen() {
       if (startTimeRef.current === null) {
         startTimeRef.current = Date.now();
       }
-      router.push('/(app)/workout/add-exercise');
     } else {
       if (draft.date > todayIso) {
         setFutureModalOpen(true);
         return;
       }
       setHasStarted(true);
-      router.push('/(app)/workout/add-exercise');
     }
+  };
+
+  const loadExistingWorkoutIntoEditor = (targetWorkout: Workout) => {
+    workoutDraft.loadWorkout(targetWorkout);
+    setEntryMode('manual');
+    setEditingWorkoutId(targetWorkout.id);
+    setHasStarted(true);
+    setIsTimerRunning(false);
+    setDurationSeconds(0);
+    startTimeRef.current = null;
+    pausedSecondsRef.current = 0;
+    setSessionDropdownOpen(false);
+    setCustomSessionOpen(false);
+    setDayWorkoutPickerOpen(false);
+    if (targetWorkout.duration_seconds && targetWorkout.duration_seconds > 0) {
+      setManualDurationMinutes(Math.max(1, Math.round(targetWorkout.duration_seconds / 60)));
+    } else {
+      setManualDurationMinutes(45);
+    }
+  };
+
+  const handleEditFromLanding = () => {
+    if (selectedDateWorkouts.length === 0) return;
+    if (selectedDateWorkouts.length === 1) {
+      loadExistingWorkoutIntoEditor(selectedDateWorkouts[0]);
+      return;
+    }
+    setDayWorkoutPickerOpen(true);
   };
 
   const handleCancelWorkout = () => {
     workoutDraft.reset();
     setHasStarted(false);
+    setEditingWorkoutId(null);
+    setManualDurationMinutes(45);
     setIsTimerRunning(false);
     setDurationSeconds(0);
     startTimeRef.current = null;
     pausedSecondsRef.current = 0;
     setCancelDialogOpen(false);
+    setDayWorkoutPickerOpen(false);
     setSessionDropdownOpen(false);
   };
 
@@ -512,11 +646,111 @@ export default function WorkoutScreen() {
   };
 
   const handleCustomSessionSubmit = () => {
-    if (customSessionText.trim()) {
-      workoutDraft.setSessionType(customSessionText.trim());
-      setCustomSessionOpen(false);
-      closeDropdownWithAnimation();
+    const clean = normalizeSessionTypeLabel(customSessionText);
+    if (!clean) return;
+    if (clean.length > 48) {
+      Alert.alert('Geçersiz İsim', 'Özel seans türü adı en fazla 48 karakter olabilir.');
+      return;
     }
+
+    const { nextTypes, selectedType, didAdd } = addCustomSessionTypeToList(
+      customSessionTypes,
+      clean,
+    );
+    if (didAdd && nextTypes.length === customSessionTypes.length) {
+      Alert.alert('Limit Doldu', 'En fazla 30 özel seans türü kaydedebilirsiniz.');
+      return;
+    }
+
+    if (selectedType) {
+      workoutDraft.setSessionType(selectedType);
+    }
+    setCustomSessionText('');
+    setCustomSessionOpen(false);
+    closeDropdownWithAnimation();
+
+    if (didAdd) {
+      updateCustomSessionTypes(nextTypes).catch((err: any) => {
+        Alert.alert(
+          'Kaydedilemedi',
+          err?.message || 'Özel seans türü sunucuya kaydedilirken bir hata oluştu.',
+        );
+      });
+    }
+  };
+
+  const handleDeleteCustomSessionType = (targetType: string) => {
+    const nextTypes = removeCustomSessionTypeFromList(customSessionTypes, targetType);
+    if (
+      normalizeSessionTypeLabel(draft.session_type || '').toLocaleLowerCase('tr-TR') ===
+      normalizeSessionTypeLabel(targetType).toLocaleLowerCase('tr-TR')
+    ) {
+      workoutDraft.setSessionType('');
+    }
+    updateCustomSessionTypes(nextTypes).catch((err: any) => {
+      Alert.alert(
+        'Silinemedi',
+        err?.message || 'Özel seans türü silinirken bir hata oluştu.',
+      );
+    });
+  };
+
+  const handleOpenEditCustomSession = (targetType: string, fromPickerModal = false) => {
+    reopenPickerAfterEditRef.current = fromPickerModal;
+    if (fromPickerModal) {
+      setSessionPickerOpen(false);
+    }
+    setEditingCustomSession(targetType);
+    setEditCustomSessionInput(targetType);
+    setEditCustomSessionError(null);
+  };
+
+  const handleCloseEditCustomSession = () => {
+    setEditingCustomSession(null);
+    setEditCustomSessionInput('');
+    setEditCustomSessionError(null);
+    if (reopenPickerAfterEditRef.current) {
+      reopenPickerAfterEditRef.current = false;
+      setSessionPickerOpen(true);
+    }
+  };
+
+  const handleSaveCustomSessionEdit = () => {
+    if (!editingCustomSession) return;
+    const { nextTypes, renamedTo, error } = renameCustomSessionTypeInList(
+      customSessionTypes,
+      editingCustomSession,
+      editCustomSessionInput,
+    );
+    if (error) {
+      setEditCustomSessionError(error);
+      return;
+    }
+
+    const oldKey = normalizeSessionTypeLabel(editingCustomSession).toLocaleLowerCase('tr-TR');
+    const activeKey = normalizeSessionTypeLabel(draft.session_type || '').toLocaleLowerCase('tr-TR');
+    if (activeKey === oldKey) {
+      workoutDraft.setSessionType(renamedTo);
+    }
+
+    const didChange = renamedTo !== editingCustomSession;
+    handleCloseEditCustomSession();
+
+    if (didChange) {
+      updateCustomSessionTypes(nextTypes).catch((err: any) => {
+        Alert.alert(
+          'Güncellenemedi',
+          err?.message || 'Özel seans türü güncellenirken bir hata oluştu.',
+        );
+      });
+    }
+  };
+
+  const handleDeleteFromEditModal = () => {
+    if (!editingCustomSession) return;
+    const targetType = editingCustomSession;
+    handleCloseEditCustomSession();
+    handleDeleteCustomSessionType(targetType);
   };
 
   // Etkin Antrenman Süresi (Canlıysa saniyeler, Manuel ise seçilen dakika)
@@ -525,14 +759,28 @@ export default function WorkoutScreen() {
 
   // Bitir / Kaydet Butonuna Basıldığında Onay Diyaloğunu Aç
   const handleOpenFinishDialog = () => {
+    if (!hasSelectedSession) {
+      setValidationModal({
+        visible: true,
+        title: 'Seans Türü Seçilmedi',
+        message: 'Antrenmanı kaydedebilmek için lütfen bir seans türü seçin.',
+        actionLabel: 'Seans Seç',
+        showCancel: false,
+        onAction: () => {
+          setValidationModal((prev) => ({ ...prev, visible: false }));
+          setSessionPickerOpen(true);
+        },
+      });
+      return;
+    }
+
     if (draft.exercises.length === 0) {
       setValidationModal({
         visible: true,
         title: 'Egzersiz Eklenmedi',
         message: 'Antrenmanı kaydetmek için lütfen listenize en az bir egzersiz ekleyin.',
         actionLabel: '+ Egzersiz Ekle',
-        showCancel: true,
-        cancelLabel: 'Vazgeç',
+        showCancel: false,
         onAction: () => {
           setValidationModal((prev) => ({ ...prev, visible: false }));
           router.push('/(app)/workout/add-exercise');
@@ -561,7 +809,7 @@ export default function WorkoutScreen() {
     setFinishDialogOpen(true);
   };
 
-  // Onay Panosunda Onaylandığında DB'ye Kaydet
+  // Onay Panosunda Onaylandığında DB'ye Kaydet / Güncelle
   const handleConfirmFinish = async () => {
     try {
       const payload = {
@@ -572,23 +820,36 @@ export default function WorkoutScreen() {
         entry_mode: entryMode,
       };
 
-      await saveWorkout(payload);
+      const wasEditing = editingWorkoutId !== null;
+      if (editingWorkoutId !== null) {
+        await updateWorkout({ id: editingWorkoutId, data: payload });
+      } else {
+        await saveWorkout(payload);
+      }
       setFinishDialogOpen(false);
 
-      Alert.alert('Tebrikler! 💪', 'Antrenmanınız başarıyla kaydedildi.', [
-        {
-          text: 'Tamam',
-          onPress: () => {
-            workoutDraft.reset();
-            setHasStarted(false);
-            setIsTimerRunning(false);
-            setDurationSeconds(0);
-            startTimeRef.current = null;
-            pausedSecondsRef.current = 0;
-            router.push('/(app)/history');
+      Alert.alert(
+        'Tebrikler! 💪',
+        wasEditing
+          ? 'Antrenmanınız başarıyla güncellendi.'
+          : 'Antrenmanınız başarıyla kaydedildi.',
+        [
+          {
+            text: 'Tamam',
+            onPress: () => {
+              workoutDraft.reset();
+              setEditingWorkoutId(null);
+              setManualDurationMinutes(45);
+              setHasStarted(false);
+              setIsTimerRunning(false);
+              setDurationSeconds(0);
+              startTimeRef.current = null;
+              pausedSecondsRef.current = 0;
+              router.push('/(app)/history');
+            },
           },
-        },
-      ]);
+        ]
+      );
     } catch (err: any) {
       Alert.alert(
         'Kayıt Başarısız',
@@ -623,6 +884,12 @@ export default function WorkoutScreen() {
                 <Text style={styles.historyBtnText}>Geçmiş</Text>
               </TouchableOpacity>
             </View>
+            {sessionDropdownOpen && (
+              <Pressable
+                style={styles.dropdownDismissOverlay}
+                onPress={handleDismissDropdown}
+              />
+            )}
           </View>
         ) : (
           <View style={styles.topBar}>
@@ -631,7 +898,9 @@ export default function WorkoutScreen() {
                 <Text style={styles.screenTitle}>Antrenman Kaydı</Text>
                 <View style={styles.activeHeaderSubRow}>
                   <TouchableOpacity
+                    disabled={editingWorkoutId !== null}
                     onPress={() => {
+                      if (editingWorkoutId !== null) return;
                       if (entryMode === 'live') {
                         setValidationModal({
                           visible: true,
@@ -646,12 +915,14 @@ export default function WorkoutScreen() {
                       setDateSheetOpen(true);
                     }}
                     style={styles.dateSelector}
-                    activeOpacity={entryMode === 'live' ? 0.85 : 0.7}
+                    activeOpacity={editingWorkoutId !== null ? 1 : entryMode === 'live' ? 0.85 : 0.7}
                   >
                     <Text style={styles.dateSelectorText}>
                       {entryMode === 'live'
                         ? `Bugün ${formatDotDate(todayIso)}`
-                        : `${formatDotDate(draft.date)} ▾`}
+                        : editingWorkoutId !== null
+                          ? formatDotDate(draft.date)
+                          : `${formatDotDate(draft.date)} ▾`}
                     </Text>
                   </TouchableOpacity>
 
@@ -692,7 +963,10 @@ export default function WorkoutScreen() {
               nestedScrollEnabled={true}
             >
               {/* 1. EN ÜSTTE: ANTRENMAN SALONU */}
-              <View style={[styles.landingSection, { zIndex: 1 }]}>
+              <View
+                style={[styles.landingSection, { zIndex: 1 }]}
+                pointerEvents={sessionDropdownOpen ? 'none' : 'auto'}
+              >
                 <View style={styles.landingSectionHeaderRow}>
                   <Text style={styles.sectionTitle}>Antrenman Salonu</Text>
                   <TouchableOpacity
@@ -771,21 +1045,25 @@ export default function WorkoutScreen() {
               <View
                 style={[
                   styles.landingSection,
-                  sessionDropdownOpen && {
-                    zIndex: 1000,
-                    elevation: Platform.OS === 'android' ? 40 : undefined,
-                  },
+                  styles.landingSessionSection,
                 ]}
+                pointerEvents="box-none"
               >
-                <View style={styles.landingSectionHeaderRow}>
-                  <View style={styles.sectionTitleWithIcon}>
+                <View style={styles.landingSectionHeaderRow} pointerEvents="box-none">
+                  <View style={styles.sectionTitleWithIcon} pointerEvents="none">
                     <Text style={styles.sectionTitleIcon}>↔️</Text>
                     <Text style={styles.sectionTitle}>Seans Türü</Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => {
-                      setCustomSessionOpen((prev) => !prev);
-                      handleToggleDropdown();
+                      if (sessionDropdownOpen && customSessionOpen) {
+                        handleDismissDropdown();
+                      } else {
+                        setCustomSessionOpen(true);
+                        if (!sessionDropdownOpen) {
+                          openDropdownWithAnimation();
+                        }
+                      }
                     }}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
@@ -799,6 +1077,7 @@ export default function WorkoutScreen() {
                     styles.selectContainer,
                     sessionDropdownOpen && styles.selectContainerActive,
                   ]}
+                  pointerEvents="box-none"
                 >
                   <TouchableOpacity
                     style={[
@@ -813,43 +1092,50 @@ export default function WorkoutScreen() {
 
                     {/* Seçili Seans Başlığı ve Hedef Kas Grubu */}
                     <View style={styles.selectTriggerMiddle}>
-                      <View style={styles.selectTriggerTitleRow}>
-                        <Text style={styles.selectTriggerTitle} numberOfLines={1}>
-                          {selectedSessionInfo.name}
-                        </Text>
-                        {selectedSessionInfo.tag ? (
-                          <View style={styles.selectTagBadge}>
-                            <Text style={styles.selectTagBadgeText}>
-                              {selectedSessionInfo.tag}
+                      {hasSelectedSession ? (
+                        <>
+                          <View style={styles.selectTriggerTitleRow}>
+                            <Text style={styles.selectTriggerTitle} numberOfLines={1}>
+                              {selectedSessionInfo.name}
                             </Text>
+                            {selectedSessionInfo.tag ? (
+                              <View style={styles.selectTagBadge}>
+                                <Text style={styles.selectTagBadgeText}>
+                                  {selectedSessionInfo.tag}
+                                </Text>
+                              </View>
+                            ) : null}
                           </View>
-                        ) : null}
-                      </View>
-                      <Text style={styles.selectTriggerSubtitle} numberOfLines={1}>
-                        {selectedSessionInfo.subtitle}
-                      </Text>
+                          <Text style={styles.selectTriggerSubtitle} numberOfLines={1}>
+                            {selectedSessionInfo.subtitle}
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={styles.selectTriggerPlaceholder} numberOfLines={1}>
+                          Seans Seç
+                        </Text>
+                      )}
                     </View>
 
                     {/* Sağ: 180 derece akıcı yaylanan chevron oku */}
-                    <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
+                    <Reanimated.View style={chevronAnimatedStyle}>
                       <Text style={styles.selectChevron}>▼</Text>
-                    </Animated.View>
+                    </Reanimated.View>
                   </TouchableOpacity>
 
-                  {/* ─── KARTIN TAM ALTINA YÜZEN SEANS TÜRÜ LİSTESİ (PANOLARIN ÜZERİNE AÇILIR) ─── */}
-                  {sessionDropdownOpen && (
-                    <Animated.View
-                      style={[
-                        styles.dropdownMenuFloating,
-                        {
-                          opacity: fadeAnim,
-                          transform: [{ translateY: translateAnim }],
-                        },
-                      ]}
-                    >
+                  {/* ─── KARTIN TAM ALTINA YÜZEN & YUMUŞAK AÇILAN SEANS TÜRÜ LİSTESİ (GEÇMİŞ AKORDİYON ANİMASYONU İLE AYNI) ─── */}
+                  <Reanimated.View
+                    style={dropdownOuterStyle}
+                    pointerEvents={sessionDropdownOpen ? 'auto' : 'none'}
+                    accessibilityElementsHidden={!sessionDropdownOpen}
+                    importantForAccessibility={sessionDropdownOpen ? 'yes' : 'no-hide-descendants'}
+                  >
+                    <Reanimated.View style={dropdownInnerStyle}>
                       <ScrollView
+                        ref={dropdownScrollRef}
                         style={styles.dropdownScroll}
                         contentContainerStyle={styles.dropdownScrollContent}
+                        scrollEnabled={sessionDropdownOpen}
                         showsVerticalScrollIndicator={true}
                         persistentScrollbar={true}
                         nestedScrollEnabled={true}
@@ -857,98 +1143,111 @@ export default function WorkoutScreen() {
                         bounces={Platform.OS === 'ios'}
                         overScrollMode="always"
                       >
-                        {filteredSessionTypes.map((type, index) => {
-                          const info = getSessionInfo(type);
-                          const isLast = index === filteredSessionTypes.length - 1;
-
-                          return (
-                            <View key={type}>
+                          {customSessionOpen && (
+                            <View style={[styles.dropdownCustomBox, styles.dropdownItemBorder]}>
+                              <TextInput
+                                style={styles.dropdownCustomInput}
+                                placeholder="Özel seans adı (örn: Omuz)..."
+                                placeholderTextColor="#64748B"
+                                value={customSessionText}
+                                onChangeText={setCustomSessionText}
+                                returnKeyType="done"
+                                onSubmitEditing={handleCustomSessionSubmit}
+                                autoFocus
+                              />
                               <TouchableOpacity
                                 style={[
-                                  styles.dropdownItem,
-                                  !isLast && styles.dropdownItemBorder,
+                                  styles.dropdownCustomBtn,
+                                  !customSessionText.trim() && styles.dropdownCustomBtnDisabled,
                                 ]}
-                                onPress={() => {
-                                  handleSelectSessionType(type);
-                                  if (type !== 'Diğer') {
-                                    closeDropdownWithAnimation();
-                                  }
-                                }}
-                                activeOpacity={0.65}
+                                onPress={handleCustomSessionSubmit}
+                                disabled={!customSessionText.trim()}
+                                activeOpacity={0.75}
                               >
-                                {/* Boş Görsel Penceresi (Hedef kas görseli için) */}
-                                <View style={styles.thumbnailWindowSmall} />
-
-                                {/* Seans Adı ve Hedef Kas Grubu */}
-                                <View style={styles.dropdownItemTextCol}>
-                                  <View style={styles.dropdownItemTitleRow}>
-                                    <Text
-                                      style={styles.dropdownItemTitle}
-                                      numberOfLines={1}
-                                    >
-                                      {info.name}
-                                    </Text>
-                                    {info.tag ? (
-                                      <View style={styles.dropdownItemTag}>
-                                        <Text style={styles.dropdownItemTagText}>
-                                          {info.tag}
-                                        </Text>
-                                      </View>
-                                    ) : null}
-                                  </View>
-                                  <Text
-                                    style={styles.dropdownItemSubtitle}
-                                    numberOfLines={1}
-                                  >
-                                    {info.subtitle}
-                                  </Text>
-                                </View>
-
-                                {/* Sağ: İnce modern seçim oku */}
-                                <Text style={styles.dropdownItemArrow}>›</Text>
+                                <Text style={styles.dropdownCustomBtnText}>Ekle</Text>
                               </TouchableOpacity>
                             </View>
-                          );
-                        })}
+                          )}
 
-                        {customSessionOpen && (
-                          <View style={styles.dropdownCustomBox}>
-                            <TextInput
-                              style={styles.dropdownCustomInput}
-                              placeholder="Özel seans adı (örn: Kol Günü)..."
-                              placeholderTextColor="#64748B"
-                              value={customSessionText}
-                              onChangeText={setCustomSessionText}
-                              autoFocus
-                            />
-                            <TouchableOpacity
-                              style={[
-                                styles.dropdownCustomBtn,
-                                !customSessionText.trim() && styles.dropdownCustomBtnDisabled,
-                              ]}
-                              onPress={() => {
-                                handleCustomSessionSubmit();
-                              }}
-                              disabled={!customSessionText.trim()}
-                              activeOpacity={0.75}
-                            >
-                              <Text style={styles.dropdownCustomBtnText}>Ekle</Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
+                          {filteredSessionTypes.map((type, index) => {
+                            const info = getSessionInfo(type);
+                            const isCustomType = customSessionTypeSet.has(
+                              type.toLocaleLowerCase('tr-TR'),
+                            );
+                            const isLast = index === filteredSessionTypes.length - 1;
+
+                            return (
+                              <View
+                                key={type}
+                                style={[
+                                  styles.dropdownItemRow,
+                                  !isLast && styles.dropdownItemBorder,
+                                ]}
+                              >
+                                <TouchableOpacity
+                                  style={styles.dropdownItem}
+                                  onPress={() => {
+                                    handleSelectSessionType(type);
+                                    if (type !== 'Diğer') {
+                                      closeDropdownWithAnimation();
+                                    }
+                                  }}
+                                  activeOpacity={0.65}
+                                >
+                                  {/* Boş Görsel Penceresi (Hedef kas görseli için) */}
+                                  <View style={styles.thumbnailWindowSmall} />
+
+                                  {/* Seans Adı ve Hedef Kas Grubu */}
+                                  <View style={styles.dropdownItemTextCol}>
+                                    <View style={styles.dropdownItemTitleRow}>
+                                      <Text
+                                        style={styles.dropdownItemTitle}
+                                        numberOfLines={1}
+                                      >
+                                        {info.name}
+                                      </Text>
+                                      {info.tag ? (
+                                        <View style={styles.dropdownItemTag}>
+                                          <Text style={styles.dropdownItemTagText}>
+                                            {info.tag}
+                                          </Text>
+                                        </View>
+                                      ) : null}
+                                    </View>
+                                    <Text
+                                      style={styles.dropdownItemSubtitle}
+                                      numberOfLines={1}
+                                    >
+                                      {info.subtitle}
+                                    </Text>
+                                  </View>
+
+                                  {/* Sağ: İnce modern seçim oku */}
+                                  <Text style={styles.dropdownItemArrow}>›</Text>
+                                </TouchableOpacity>
+
+                                {isCustomType && (
+                                  <TouchableOpacity
+                                    style={styles.customSessionEditBtn}
+                                    onPress={() => handleOpenEditCustomSession(type, false)}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                    accessibilityLabel={`${type} özel seansını düzenle`}
+                                  >
+                                    <PencilEditIcon size={14} color="#C084FC" />
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            );
+                          })}
                       </ScrollView>
-                    </Animated.View>
-                  )}
+                    </Reanimated.View>
+                  </Reanimated.View>
                 </View>
               </View>
 
               {/* 3. ORTASINDA: 2 BUTON (CANLI MI / KAYIT MI) */}
-              <View
-                style={[
-                  styles.landingSection,
-                  { zIndex: 1, elevation: 0 },
-                  sessionDropdownOpen && { marginTop: -286 },
-                ]}
+              <Reanimated.View
+                style={[styles.landingSection, { zIndex: 1, elevation: 0 }, belowDropdownStyle]}
                 pointerEvents={sessionDropdownOpen ? 'none' : 'auto'}
               >
                 <Text style={styles.sectionTitle}>Antrenmanı Nasıl Yapacaksınız?</Text>
@@ -995,7 +1294,7 @@ export default function WorkoutScreen() {
                     </TouchableOpacity>
                   </Animated.View>
                 </View>
-              </View>
+              </Reanimated.View>
 
               {/* 4. TARİH ALANI: CANLI İSE O GÜNÜ GÖSTERİR, DEĞİLSE TARİH PANOSU EKRANDA BULUNUR */}
               {entryMode === 'live' ? (
@@ -1042,45 +1341,80 @@ export default function WorkoutScreen() {
                   </Text>
                 </Reanimated.View>
               )}
+
+              {sessionDropdownOpen && (
+                <Pressable
+                  style={styles.dropdownBackdropOverlay}
+                  onPress={handleDismissDropdown}
+                />
+              )}
             </ScrollView>
 
             {/* ─── EKRANIN ALTINA SABİTLENMİŞ AKSİYON BUTONU ─── */}
-            <View
-              style={styles.landingFixedBottomBar}
-              pointerEvents={sessionDropdownOpen ? 'none' : 'auto'}
-            >
-              {entryMode === 'live' ? (
-                <Reanimated.View
-                  key="live-btn"
-                  entering={FadeIn.duration(240)}
-                  exiting={FadeOut.duration(160)}
-                >
-                  <TouchableOpacity
-                    style={styles.landingStartLiveBtn}
-                    onPress={handleStartFromLanding}
-                    activeOpacity={0.85}
+            <View style={styles.landingFixedBottomBar}>
+              <View
+                style={styles.landingActionBtnSlot}
+                pointerEvents={sessionDropdownOpen ? 'none' : 'auto'}
+              >
+                {entryMode === 'live' ? (
+                  <Reanimated.View
+                    key="live-btn"
+                    entering={FadeIn.duration(220)}
+                    exiting={FadeOut.duration(140)}
+                    style={styles.landingActionBtnAnimatedWrap}
                   >
-                    <Text style={styles.landingStartLiveBtnText}>
-                      ⚡ Antrenmanı Başlat
-                    </Text>
-                  </TouchableOpacity>
-                </Reanimated.View>
-              ) : (
-                <Reanimated.View
-                  key="manual-btn"
-                  entering={FadeIn.duration(240)}
-                  exiting={FadeOut.duration(160)}
-                >
-                  <TouchableOpacity
-                    style={styles.landingStartManualBtn}
-                    onPress={handleStartFromLanding}
-                    activeOpacity={0.85}
+                    <TouchableOpacity
+                      style={styles.landingStartLiveBtn}
+                      onPress={handleStartFromLanding}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.landingStartLiveBtnText}>
+                        ⚡ Antrenmanı Başlat
+                      </Text>
+                    </TouchableOpacity>
+                  </Reanimated.View>
+                ) : isSelectedManualEditDay ? (
+                  <Reanimated.View
+                    key="manual-edit-btn"
+                    entering={FadeIn.duration(220)}
+                    exiting={FadeOut.duration(140)}
+                    style={styles.landingActionBtnAnimatedWrap}
                   >
-                    <Text style={styles.landingStartManualBtnText}>
-                      📝 Egzersiz Ekle & Kayda Başla
-                    </Text>
-                  </TouchableOpacity>
-                </Reanimated.View>
+                    <TouchableOpacity
+                      style={styles.landingEditManualBtn}
+                      onPress={handleEditFromLanding}
+                      activeOpacity={0.85}
+                    >
+                      <PencilEditIcon size={16} color="#FBBF24" />
+                      <Text style={styles.landingEditManualBtnText}>
+                        Egzersizi Düzenle
+                      </Text>
+                    </TouchableOpacity>
+                  </Reanimated.View>
+                ) : (
+                  <Reanimated.View
+                    key="manual-add-btn"
+                    entering={FadeIn.duration(220)}
+                    exiting={FadeOut.duration(140)}
+                    style={styles.landingActionBtnAnimatedWrap}
+                  >
+                    <TouchableOpacity
+                      style={styles.landingStartManualBtn}
+                      onPress={handleStartFromLanding}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.landingStartManualBtnText}>
+                        📝 Egzersiz Ekle & Kayda Başla
+                      </Text>
+                    </TouchableOpacity>
+                  </Reanimated.View>
+                )}
+              </View>
+              {sessionDropdownOpen && (
+                <Pressable
+                  style={styles.dropdownDismissOverlay}
+                  onPress={handleDismissDropdown}
+                />
               )}
             </View>
           </>
@@ -1096,7 +1430,7 @@ export default function WorkoutScreen() {
               <View style={styles.section}>
                 <LiveStatsBar
                   exercises={draft.exercises}
-                  sessionType={draft.session_type}
+                  sessionType={hasSelectedSession ? draft.session_type : 'Seans Seç'}
                   onPressSessionType={() => setSessionPickerOpen(true)}
                 />
               </View>
@@ -1205,7 +1539,9 @@ export default function WorkoutScreen() {
                     onPress={handleOpenFinishDialog}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.manualSaveBtnText}>Antrenmanı Kaydet</Text>
+                    <Text style={styles.manualSaveBtnText}>
+                      {editingWorkoutId !== null ? 'Antrenmanı Güncelle' : 'Antrenmanı Kaydet'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1223,7 +1559,7 @@ export default function WorkoutScreen() {
           note={draft.notes}
           gymName={draft.gym_name}
           onPressGym={() => setGymModalOpen(true)}
-          isSaving={isSaving}
+          isSaving={isSaving || isUpdating}
           onConfirm={handleConfirmFinish}
           onCancel={() => setFinishDialogOpen(false)}
         />
@@ -1261,11 +1597,15 @@ export default function WorkoutScreen() {
           onCancel={() => setResetDialogOpen(false)}
         />
 
-        {/* Antrenmanı İptal Et Diyaloğu (Header'daki İptal Butonu İçin) */}
+        {/* Antrenmanı / Düzenlemeyi İptal Et Diyaloğu (Header'daki İptal Butonu İçin) */}
         <ConfirmDialog
           visible={cancelDialogOpen}
-          title="Antrenmanı İptal Et"
-          message="Mevcut antrenman kaydı iptal edilecek, tüm işlemler sıfırlanacaktır. Onaylıyor musunuz?"
+          title={editingWorkoutId !== null ? 'Düzenlemeyi İptal Et' : 'Antrenmanı İptal Et'}
+          message={
+            editingWorkoutId !== null
+              ? 'Yaptığınız değişiklikler kaydedilmeden düzenleme iptal edilecektir. Onaylıyor musunuz?'
+              : 'Mevcut antrenman kaydı iptal edilecek, tüm işlemler sıfırlanacaktır. Onaylıyor musunuz?'
+          }
           confirmText="İptal Et"
           cancelText="Vazgeç"
           destructive
@@ -1332,112 +1672,24 @@ export default function WorkoutScreen() {
                   keyboardShouldPersistTaps="handled"
                   bounces={true}
                 >
-                  {availableSessionTypes.map((type, index) => {
-                    const info = getSessionInfo(type);
-                    const isSelected =
-                      draft.session_type === type ||
-                      (type === 'Upper' && draft.session_type === 'Üst Vücut') ||
-                      (type === 'Üst Vücut' && draft.session_type === 'Upper') ||
-                      (type === 'Lower' && draft.session_type === 'Alt Vücut') ||
-                      (type === 'Alt Vücut' && draft.session_type === 'Lower') ||
-                      (type === 'Full Body' && draft.session_type === 'Tam Vücut') ||
-                      (type === 'Tam Vücut' && draft.session_type === 'Full Body');
-                    const isLast = index === availableSessionTypes.length - 1;
-
-                    return (
-                      <Reanimated.View
-                        key={`picker-${type}`}
-                        entering={FadeInUp.delay(Math.min(index * 24, 200))
-                          .duration(180)
-                          .easing(ReanimatedEasing.out(ReanimatedEasing.cubic))}
-                        exiting={FadeOutUp.duration(110)
-                          .easing(ReanimatedEasing.in(ReanimatedEasing.cubic))}
-                      >
-                        <TouchableOpacity
-                          style={[
-                            styles.dropdownItem,
-                            isSelected && styles.sessionPickerItemSelected,
-                            !isLast && styles.dropdownItemBorder,
-                          ]}
-                          onPress={() => {
-                            if (type === 'Diğer') {
-                              setCustomSessionOpen(true);
-                              return;
-                            }
-                            handleSelectSessionType(type);
-                            setSessionPickerOpen(false);
-                          }}
-                          activeOpacity={0.65}
-                        >
-                          {/* Boş Görsel Penceresi (Hedef kas görseli için) */}
-                          <View
-                            style={[
-                              styles.thumbnailWindowSmall,
-                              isSelected && styles.thumbnailWindowSmallSelected,
-                            ]}
-                          />
-
-                          {/* Seans Adı ve Hedef Kas Grubu */}
-                          <View style={styles.dropdownItemTextCol}>
-                            <View style={styles.dropdownItemTitleRow}>
-                              <Text
-                                style={[
-                                  styles.dropdownItemTitle,
-                                  isSelected && styles.sessionPickerItemTitleSelected,
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {info.name}
-                              </Text>
-                              {info.tag ? (
-                                <View style={styles.dropdownItemTag}>
-                                  <Text style={styles.dropdownItemTagText}>
-                                    {info.tag}
-                                  </Text>
-                                </View>
-                              ) : null}
-                            </View>
-                            <Text
-                              style={[
-                                styles.dropdownItemSubtitle,
-                                isSelected && styles.sessionPickerItemSubtitleSelected,
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {info.subtitle}
-                            </Text>
-                          </View>
-
-                          {/* Sağ: Seçili kartın yeşil tik işareti (GymPickerModal ile birebir) */}
-                          <View
-                            style={[
-                              styles.sessionPickerCheckCircle,
-                              isSelected && styles.sessionPickerCheckCircleSelected,
-                            ]}
-                          >
-                            {isSelected && (
-                              <Text style={styles.sessionPickerCheckMark}>✓</Text>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      </Reanimated.View>
-                    );
-                  })}
-
-                  {/* Özel Seans Ekleme Alanı */}
                   {customSessionOpen && (
                     <Reanimated.View
                       entering={FadeInUp.duration(180).easing(
                         ReanimatedEasing.out(ReanimatedEasing.cubic)
                       )}
-                      style={styles.dropdownCustomBox}
+                      style={[styles.dropdownCustomBox, styles.dropdownItemBorder]}
                     >
                       <TextInput
                         style={styles.dropdownCustomInput}
-                        placeholder="Özel seans adı (örn: Kol Günü)..."
+                        placeholder="Özel seans adı (örn: Omuz)..."
                         placeholderTextColor="#64748B"
                         value={customSessionText}
                         onChangeText={setCustomSessionText}
+                        returnKeyType="done"
+                        onSubmitEditing={() => {
+                          handleCustomSessionSubmit();
+                          setSessionPickerOpen(false);
+                        }}
                         autoFocus
                       />
                       <TouchableOpacity
@@ -1456,6 +1708,118 @@ export default function WorkoutScreen() {
                       </TouchableOpacity>
                     </Reanimated.View>
                   )}
+
+                  {availableSessionTypes.map((type, index) => {
+                    const info = getSessionInfo(type);
+                    const isCustomType = customSessionTypeSet.has(
+                      type.toLocaleLowerCase('tr-TR'),
+                    );
+                    const isSelected =
+                      draft.session_type === type ||
+                      draft.session_type?.toLocaleLowerCase('tr-TR') ===
+                        type.toLocaleLowerCase('tr-TR') ||
+                      (type === 'Upper' && draft.session_type === 'Üst Vücut') ||
+                      (type === 'Üst Vücut' && draft.session_type === 'Upper') ||
+                      (type === 'Lower' && draft.session_type === 'Alt Vücut') ||
+                      (type === 'Alt Vücut' && draft.session_type === 'Lower') ||
+                      (type === 'Full Body' && draft.session_type === 'Tam Vücut') ||
+                      (type === 'Tam Vücut' && draft.session_type === 'Full Body');
+                    const isLast = index === availableSessionTypes.length - 1;
+
+                    return (
+                      <Reanimated.View
+                        key={`picker-${type}`}
+                        entering={FadeInUp.delay(Math.min(index * 24, 200))
+                          .duration(180)
+                          .easing(ReanimatedEasing.out(ReanimatedEasing.cubic))}
+                        exiting={FadeOutUp.duration(110)
+                          .easing(ReanimatedEasing.in(ReanimatedEasing.cubic))}
+                      >
+                        <View
+                          style={[
+                            styles.dropdownItemRow,
+                            isSelected && styles.sessionPickerItemSelected,
+                            !isLast && styles.dropdownItemBorder,
+                          ]}
+                        >
+                          <TouchableOpacity
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              if (type === 'Diğer') {
+                                setCustomSessionOpen(true);
+                                return;
+                              }
+                              handleSelectSessionType(type);
+                              setSessionPickerOpen(false);
+                            }}
+                            activeOpacity={0.65}
+                          >
+                            {/* Boş Görsel Penceresi (Hedef kas görseli için) */}
+                            <View
+                              style={[
+                                styles.thumbnailWindowSmall,
+                                isSelected && styles.thumbnailWindowSmallSelected,
+                              ]}
+                            />
+
+                            {/* Seans Adı ve Hedef Kas Grubu */}
+                            <View style={styles.dropdownItemTextCol}>
+                              <View style={styles.dropdownItemTitleRow}>
+                                <Text
+                                  style={[
+                                    styles.dropdownItemTitle,
+                                    isSelected && styles.sessionPickerItemTitleSelected,
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {info.name}
+                                </Text>
+                                {info.tag ? (
+                                  <View style={styles.dropdownItemTag}>
+                                    <Text style={styles.dropdownItemTagText}>
+                                      {info.tag}
+                                    </Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                              <Text
+                                style={[
+                                  styles.dropdownItemSubtitle,
+                                  isSelected && styles.sessionPickerItemSubtitleSelected,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {info.subtitle}
+                              </Text>
+                            </View>
+
+                            {/* Sağ: Seçili kartın yeşil tik işareti (GymPickerModal ile birebir) */}
+                            <View
+                              style={[
+                                styles.sessionPickerCheckCircle,
+                                isSelected && styles.sessionPickerCheckCircleSelected,
+                              ]}
+                            >
+                              {isSelected && (
+                                <Text style={styles.sessionPickerCheckMark}>✓</Text>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+
+                          {isCustomType && (
+                            <TouchableOpacity
+                              style={styles.customSessionEditBtn}
+                              onPress={() => handleOpenEditCustomSession(type, true)}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              accessibilityLabel={`${type} özel seansını düzenle`}
+                            >
+                              <PencilEditIcon size={14} color="#C084FC" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </Reanimated.View>
+                    );
+                  })}
                 </ScrollView>
 
                 {/* Alt Kapat Butonu (GymPickerModal ile birebir) */}
@@ -1469,6 +1833,177 @@ export default function WorkoutScreen() {
                     activeOpacity={0.75}
                   >
                     <Text style={styles.sessionPickerCloseBtnText}>Kapat</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        )}
+
+        {/* Özel Seans Türünü Düzenleme / Silme Panosu (Ekranın Ortasında) */}
+        {editingCustomSession !== null && (
+          <Modal
+            visible={editingCustomSession !== null}
+            transparent
+            animationType="fade"
+            onRequestClose={handleCloseEditCustomSession}
+            statusBarTranslucent
+          >
+            <Pressable
+              style={styles.sessionPickerModalBackdrop}
+              onPress={handleCloseEditCustomSession}
+            >
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={styles.editModalKav}
+              >
+                <Pressable
+                  style={styles.editModalCard}
+                  onPress={(e) => e.stopPropagation()}
+                >
+                  <View style={styles.sessionPickerHeader}>
+                    <Text style={styles.sessionPickerTitle}>Özel Seansı Düzenle</Text>
+                    <Text style={styles.sessionPickerSubtitle}>
+                      Seans türünün adını güncelleyebilir veya listeden silebilirsiniz
+                    </Text>
+                  </View>
+
+                  <View style={styles.editModalBody}>
+                    <Text style={styles.editModalLabel}>SEANS TÜRÜ ADI</Text>
+                    <TextInput
+                      style={[
+                        styles.editModalInput,
+                        editCustomSessionError ? styles.editModalInputError : null,
+                      ]}
+                      placeholder="Özel seans adı..."
+                      placeholderTextColor="#64748B"
+                      value={editCustomSessionInput}
+                      onChangeText={(text) => {
+                        setEditCustomSessionInput(text);
+                        if (editCustomSessionError) {
+                          setEditCustomSessionError(null);
+                        }
+                      }}
+                      maxLength={48}
+                      returnKeyType="done"
+                      onSubmitEditing={handleSaveCustomSessionEdit}
+                      autoFocus
+                      selectTextOnFocus
+                    />
+                    {editCustomSessionError ? (
+                      <Text style={styles.editModalErrorText}>{editCustomSessionError}</Text>
+                    ) : null}
+
+                    <View style={styles.editModalActionRow}>
+                      <TouchableOpacity
+                        style={styles.editModalDeleteBtn}
+                        onPress={handleDeleteFromEditModal}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.editModalDeleteText}>Sil</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.editModalSaveBtn,
+                          !editCustomSessionInput.trim() && styles.dropdownCustomBtnDisabled,
+                        ]}
+                        onPress={handleSaveCustomSessionEdit}
+                        disabled={!editCustomSessionInput.trim()}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.editModalSaveText}>Kaydet</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </Pressable>
+              </KeyboardAvoidingView>
+            </Pressable>
+          </Modal>
+        )}
+
+        {/* Aynı Günde Birden Fazla Antrenman Varsa Seçim Panosu */}
+        {dayWorkoutPickerOpen && (
+          <Modal
+            visible={dayWorkoutPickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setDayWorkoutPickerOpen(false)}
+            statusBarTranslucent
+          >
+            <Pressable
+              style={styles.sessionPickerModalBackdrop}
+              onPress={() => setDayWorkoutPickerOpen(false)}
+            >
+              <Pressable
+                style={styles.sessionPickerCard}
+                onPress={(e) => e.stopPropagation()}
+              >
+                <View style={styles.sessionPickerHeader}>
+                  <Text style={styles.sessionPickerTitle}>Düzenlenecek Antrenmanı Seç</Text>
+                  <Text style={styles.sessionPickerSubtitle}>
+                    {formatTrDate(selectedManualDate)} tarihinde birden fazla antrenman kaydı bulunuyor
+                  </Text>
+                </View>
+
+                <ScrollView
+                  style={styles.sessionPickerScroll}
+                  contentContainerStyle={styles.dropdownScrollContent}
+                  showsVerticalScrollIndicator={true}
+                >
+                  {selectedDateWorkouts.map((w, index) => {
+                    const info = getSessionInfo(w.session_type);
+                    const totalSets = workoutSetCount(w.exercises || []);
+                    const vol = workoutVolume(w.exercises || []);
+                    const isLast = index === selectedDateWorkouts.length - 1;
+                    const metaParts = [
+                      `${w.exercises?.length || 0} Hareket`,
+                      `${totalSets} Set`,
+                    ];
+                    if (vol > 0) metaParts.push(formatVolume(vol));
+                    if (w.gym_name) metaParts.push(`📍 ${w.gym_name}`);
+
+                    return (
+                      <View
+                        key={w.id}
+                        style={[
+                          styles.dropdownItemRow,
+                          !isLast && styles.dropdownItemBorder,
+                        ]}
+                      >
+                        <TouchableOpacity
+                          style={styles.dropdownItem}
+                          onPress={() => loadExistingWorkoutIntoEditor(w)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.dropdownItemTextCol}>
+                            <View style={styles.dropdownItemTitleRow}>
+                              <Text style={styles.dropdownItemTitle} numberOfLines={1}>
+                                {info.name}
+                              </Text>
+                              {info.tag ? (
+                                <View style={styles.dropdownItemTag}>
+                                  <Text style={styles.dropdownItemTagText}>{info.tag}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                            <Text style={styles.dropdownItemSubtitle} numberOfLines={1}>
+                              {metaParts.join(' · ')}
+                            </Text>
+                          </View>
+                          <Text style={styles.dropdownItemArrow}>›</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+
+                <View style={styles.sessionPickerActions}>
+                  <TouchableOpacity
+                    style={styles.sessionPickerCloseBtn}
+                    onPress={() => setDayWorkoutPickerOpen(false)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.sessionPickerCloseBtnText}>Vazgeç</Text>
                   </TouchableOpacity>
                 </View>
               </Pressable>
@@ -1582,6 +2117,7 @@ const styles = StyleSheet.create({
   },
   // ─── Başlangıç Karşılama Ekranı Stilleri ───
   landingScrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 36,
@@ -1639,7 +2175,8 @@ const styles = StyleSheet.create({
   landingSessionSection: {
     position: 'relative',
     zIndex: 100,
-    elevation: Platform.OS === 'android' ? 30 : undefined,
+    shadowColor: 'transparent',
+    elevation: Platform.OS === 'android' ? 2 : undefined,
   },
   dropdownBackdropOverlay: {
     position: 'absolute',
@@ -1648,6 +2185,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 60,
+    backgroundColor: 'transparent',
+  },
+  dropdownDismissOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 20,
+    backgroundColor: 'transparent',
   },
   sectionTitleWithIcon: {
     flexDirection: 'row',
@@ -1717,6 +2264,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  selectTriggerPlaceholder: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
   selectTriggerSubtitle: {
     fontSize: 11,
     fontWeight: '500',
@@ -1743,37 +2295,39 @@ const styles = StyleSheet.create({
   },
   selectContainerActive: {
     zIndex: 1000,
-    elevation: Platform.OS === 'android' ? 40 : undefined,
-  },
-  dropdownMenuFloating: {
-    marginTop: 6,
-    height: 280,
-    backgroundColor: '#121829',
-    borderWidth: 1.5,
-    borderColor: 'rgba(168, 85, 247, 0.45)',
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: Platform.OS === 'android' ? 50 : 25,
-    zIndex: 9999,
   },
   dropdownScroll: {
-    flex: 1,
+    height: SESSION_DROPDOWN_CARD_HEIGHT - 3,
+    maxHeight: SESSION_DROPDOWN_CARD_HEIGHT - 3,
   },
   dropdownScrollContent: {
     paddingVertical: 4,
     flexGrow: 1,
   },
+  dropdownItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
   dropdownItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: 'transparent',
     gap: 10,
+  },
+  customSessionEditBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: 'rgba(139, 92, 246, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   dropdownItemSelected: {
     backgroundColor: '#2563EB', // Web ekran görüntüsündeki gibi seçili mavi vurgu
@@ -1991,6 +2545,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
+  landingActionBtnSlot: {
+    height: 52,
+    position: 'relative',
+  },
+  landingActionBtnAnimatedWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
   landingStartManualBtn: {
     height: 52,
     borderRadius: 14,
@@ -2007,6 +2571,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     color: '#FFFFFF',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  landingEditManualBtn: {
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.6,
+    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  landingEditManualBtnText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#FBBF24',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -2276,5 +2862,93 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
     color: '#94A3B8',
+  },
+  editModalKav: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  editModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#0F1527',
+    borderRadius: 18,
+    borderWidth: 1.6,
+    borderColor: 'rgba(168, 85, 247, 0.45)',
+    overflow: 'hidden',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 35,
+  },
+  editModalBody: {
+    padding: 18,
+    gap: 12,
+  },
+  editModalLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.6,
+  },
+  editModalInput: {
+    height: 44,
+    backgroundColor: '#0A0D18',
+    borderWidth: 1.4,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F8FAFC',
+  },
+  editModalInputError: {
+    borderColor: '#EF4444',
+  },
+  editModalErrorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FCA5A5',
+    marginTop: -4,
+  },
+  editModalActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  editModalSaveBtn: {
+    flex: 1.3,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1.6,
+    borderColor: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  editModalSaveText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#34D399',
+    letterSpacing: 0.2,
+  },
+  editModalDeleteBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editModalDeleteText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FCA5A5',
   },
 });

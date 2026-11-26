@@ -1,6 +1,11 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { usersApi } from '@/api/users';
+import {
+  parseCustomSessionTypes,
+  serializeWithCustomSessionTypes,
+} from '@/lib/custom-session-types';
 import type {
   ChangePasswordConfirmRequest,
   ChangePasswordRequest,
@@ -22,8 +27,40 @@ export function useUser() {
     queryFn: () => usersApi.getMe(),
   });
 
+  const customSessionTypes = useMemo(
+    () => parseCustomSessionTypes(user?.dashboard_preferences),
+    [user?.dashboard_preferences],
+  );
+
   const updateProfileMutation = useMutation({
     mutationFn: (data: UserProfile) => usersApi.updateProfile(data),
+    onSuccess: (updatedUser) => {
+      queryClient.setQueryData(USER_QUERY_KEY, updatedUser);
+    },
+  });
+
+  const customSessionTypesMutation = useMutation({
+    mutationFn: (custom_session_types: string[]) =>
+      usersApi.updateCustomSessionTypes({ custom_session_types }),
+    onMutate: async (nextCustomTypes) => {
+      await queryClient.cancelQueries({ queryKey: USER_QUERY_KEY });
+      const previousUser = queryClient.getQueryData<User>(USER_QUERY_KEY);
+      if (previousUser) {
+        queryClient.setQueryData<User>(USER_QUERY_KEY, {
+          ...previousUser,
+          dashboard_preferences: serializeWithCustomSessionTypes(
+            previousUser.dashboard_preferences,
+            nextCustomTypes,
+          ),
+        });
+      }
+      return { previousUser };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousUser) {
+        queryClient.setQueryData(USER_QUERY_KEY, context.previousUser);
+      }
+    },
     onSuccess: (updatedUser) => {
       queryClient.setQueryData(USER_QUERY_KEY, updatedUser);
     },
@@ -60,11 +97,14 @@ export function useUser() {
 
   return {
     user,
+    customSessionTypes,
     loading: isLoading,
     error: isError ? (error as Error) : null,
     refetch,
     updateProfile: updateProfileMutation.mutateAsync,
     isUpdatingProfile: updateProfileMutation.isPending,
+    updateCustomSessionTypes: customSessionTypesMutation.mutateAsync,
+    isUpdatingCustomSessionTypes: customSessionTypesMutation.isPending,
     requestEmailUpdate: emailUpdateReqMutation.mutateAsync,
     isRequestingEmail: emailUpdateReqMutation.isPending,
     confirmEmailUpdate: emailUpdateConfirmMutation.mutateAsync,

@@ -1,4 +1,4 @@
-import { useState, type Ref } from 'react';
+import { useRef, useState, type Ref } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -7,7 +7,9 @@ import {
   View,
   type TextInputProps,
   type TextInputInstance,
+  type ViewInstance,
 } from 'react-native';
+import { useFormFieldScroll } from './form-screen';
 
 type Props = Omit<TextInputProps, 'style'> & {
   label: string;
@@ -29,12 +31,15 @@ export function TextField({
 }: Props) {
   const [hidden, setHidden] = useState(true);
   const [isFocused, setIsFocused] = useState(false);
+  const wrapperRef = useRef<ViewInstance>(null);
+  const formFieldScroll = useFormFieldScroll();
   const hasError = typeof error === 'string' && error !== '';
 
   return (
-    <View style={styles.wrapper}>
+    <View ref={wrapperRef} collapsable={false} style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
       <View
+        testID="hx-text-field-container"
         style={[
           styles.field,
           isFocused && styles.fieldFocused,
@@ -51,6 +56,7 @@ export function TextField({
           secureTextEntry={passwordToggle ? hidden : inputProps.secureTextEntry}
           onFocus={(e) => {
             setIsFocused(true);
+            formFieldScroll?.notifyFieldFocus(wrapperRef);
             inputProps.onFocus?.(e);
           }}
           onBlur={(e) => {

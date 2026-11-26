@@ -13,7 +13,7 @@ export type LiveStatsBarProps = {
 
 export function LiveStatsBar({
   exercises,
-  sessionType = 'Üst Vücut',
+  sessionType = 'Seans Seç',
   onPressSessionType,
 }: LiveStatsBarProps) {
   const totalSets = workoutSetCount(exercises);

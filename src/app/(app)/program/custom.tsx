@@ -72,7 +72,7 @@ const WEEKDAYS = [
 ];
 
 const DEFAULT_DAYS: CustomDay[] = [
-  { day: 'Pazartesi', type: 'Push', focus: 'Göğüs, Ön Omuz, Triceps', isRest: false },
+  { day: 'Pazartesi', type: 'Push', focus: 'Göğüs, Omuz, Triceps', isRest: false },
   { day: 'Salı', type: 'Pull', focus: 'Sırt, Arka Omuz, Biceps', isRest: false },
   { day: 'Çarşamba', type: 'Dinlenme', focus: 'Toparlanma', isRest: true },
   { day: 'Perşembe', type: 'Legs', focus: 'Quadriceps, Hamstring, Calf', isRest: false },
@@ -196,7 +196,7 @@ export default function CustomProgramBuilderScreen() {
         ? 'Toparlanma'
         : dayData?.focus && dayData.focus !== 'Toparlanma'
         ? dayData.focus
-        : 'Göğüs, Ön Omuz',
+        : 'Göğüs, Omuz',
     });
   };
 
@@ -432,7 +432,7 @@ export default function CustomProgramBuilderScreen() {
                           value={dayData.focus}
                           onChangeText={(text) => handleUpdateDay(idx, { focus: text })}
                           onFocus={() => scrollToInput(idx, 'focus')}
-                          placeholder="Örn: Göğüs, Ön Omuz, Triceps"
+                          placeholder="Örn: Göğüs, Omuz, Triceps"
                           placeholderTextColor={colors.textDim}
                         />
                       </View>

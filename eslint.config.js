@@ -6,7 +6,7 @@ const globals = require("globals");
 module.exports = defineConfig([
   expoConfig,
   {
-    files: ["scripts/**/*.js"],
+    files: ["scripts/**/*.js", "plugins/**/*.js"],
     languageOptions: {
       globals: {
         ...globals.node,

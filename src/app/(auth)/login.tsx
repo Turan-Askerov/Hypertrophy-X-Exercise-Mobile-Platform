@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
@@ -89,7 +89,6 @@ function ArrowRightIcon() {
 }
 
 export default function LoginScreen() {
-  const router = useRouter();
   const { signIn } = useAuth();
   const passwordRef = useRef<TextInputInstance>(null);
 
@@ -224,16 +223,6 @@ export default function LoginScreen() {
           Hesap oluştur →
         </Link>
       </View>
-
-      {/* Misafir Olarak Devam Et */}
-      <TouchableOpacity
-        style={styles.guestRow}
-        activeOpacity={0.8}
-        onPress={() => router.replace('/(app)/(tabs)')}
-      >
-        <Text style={styles.guestTextMuted}>Denemek için </Text>
-        <Text style={styles.guestTextLime}>misafir olarak devam et</Text>
-      </TouchableOpacity>
     </FormScreen>
   );
 }
@@ -355,22 +344,6 @@ const styles = StyleSheet.create({
   linkLime: {
     color: '#C084FC',
     fontSize: 14,
-    fontWeight: '700',
-  },
-
-  guestRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 28,
-  },
-  guestTextMuted: {
-    fontSize: 13,
-    color: '#8E99AF',
-  },
-  guestTextLime: {
-    fontSize: 13,
-    color: '#C084FC',
     fontWeight: '700',
   },
 });

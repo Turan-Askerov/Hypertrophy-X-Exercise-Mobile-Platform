@@ -56,14 +56,15 @@ export function WorkoutValidationModal({
   cancelLabel = 'Vazgeç',
   type = 'warning',
 }: WorkoutValidationModalProps) {
-  const isDumbbell = title.toLowerCase().includes('egzersiz') || title.toLowerCase().includes('hareket');
-  const accentColor = isDumbbell ? '#C084FC' : '#F59E0B';
-  const circleBorder = isDumbbell ? '#A855F7' : '#F59E0B';
-  const circleBg = isDumbbell ? 'rgba(168, 85, 247, 0.16)' : 'rgba(245, 158, 11, 0.16)';
-  const cardBorder = isDumbbell ? 'rgba(168, 85, 247, 0.55)' : 'rgba(245, 158, 11, 0.55)';
-  const btnBorder = isDumbbell ? '#A855F7' : '#F59E0B';
-  const btnBg = isDumbbell ? 'rgba(168, 85, 247, 0.18)' : 'rgba(245, 158, 11, 0.18)';
-  const btnText = isDumbbell ? '#E9D5FF' : '#FDE68A';
+  const lowerTitle = title.toLocaleLowerCase('tr-TR');
+  const isDumbbell = lowerTitle.includes('egzersiz') || lowerTitle.includes('hareket');
+  const accentColor = '#F59E0B';
+  const circleBorder = '#F59E0B';
+  const circleBg = 'rgba(245, 158, 11, 0.16)';
+  const cardBorder = 'rgba(245, 158, 11, 0.55)';
+  const btnBorder = '#F59E0B';
+  const btnBg = 'rgba(245, 158, 11, 0.18)';
+  const btnText = '#FDE68A';
 
   const handlePressAction = () => {
     if (onAction) {

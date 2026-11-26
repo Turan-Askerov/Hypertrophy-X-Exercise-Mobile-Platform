@@ -8,6 +8,7 @@ import type {
   EmailUpdateResponse,
   RequestDeleteAccountRequest,
   RequestDeleteAccountResponse,
+  UpdateCustomSessionTypesRequest,
   User,
   UserProfile,
 } from "../types/user.ts";
@@ -101,9 +102,20 @@ export function createUsersApi(client: ApiCaller) {
     );
   }
 
+  function updateCustomSessionTypes(
+    data: UpdateCustomSessionTypesRequest
+  ): Promise<User> {
+    return client.call<User>("/api/user/session-types", {
+      method: "PUT",
+      body: data,
+      auth: true,
+    });
+  }
+
   return {
     getMe,
     updateProfile,
+    updateCustomSessionTypes,
     requestEmailUpdate,
     confirmEmailUpdate,
     requestChangePassword,

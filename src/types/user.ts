@@ -69,6 +69,10 @@ export type UserProfile = {
   new_password?: string | null;
 };
 
+export type UpdateCustomSessionTypesRequest = {
+  custom_session_types: string[];
+};
+
 export type ChangePasswordRequest = {
   old_password: string;
   new_password: string;

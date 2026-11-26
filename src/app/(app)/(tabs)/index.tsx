@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Easing,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -239,8 +240,53 @@ function formatSessionTitle(rawType?: string | null): string {
   return rawType?.trim() || 'Antrenman';
 }
 
+function formatCompactTargetFocus(rawFocus: string): string {
+  const normalized = rawFocus.replace(
+    /(^|[\s,&/·])(?:Ön|Yan|Arka)\s+Omuz(?=$|[\s,&/·])/gi,
+    '$1Omuz',
+  );
+  const parts = normalized
+    .split(/[,·]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(parts)).join(', ');
+}
+
+function formatExerciseRepsRange(setsData: unknown, rawReps?: unknown): string {
+  let setsList = setsData;
+  if (typeof setsData === 'string' && setsData.trim()) {
+    try {
+      setsList = JSON.parse(setsData);
+    } catch {
+      setsList = [];
+    }
+  }
+
+  if (Array.isArray(setsList) && setsList.length > 0) {
+    const repValues = setsList
+      .map((s: any) => Number(s?.reps))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (repValues.length > 0) {
+      const minReps = Math.min(...repValues);
+      const maxReps = Math.max(...repValues);
+      return minReps === maxReps
+        ? `${minReps} tekrar`
+        : `${minReps}–${maxReps} tekrar`;
+    }
+  }
+
+  if (typeof rawReps === 'string' && rawReps.trim()) {
+    return rawReps.includes('tekrar') ? rawReps.trim() : `${rawReps.trim()} tekrar`;
+  }
+  if (typeof rawReps === 'number' && Number.isFinite(rawReps) && rawReps > 0) {
+    return `${rawReps} tekrar`;
+  }
+  return '8–12 tekrar';
+}
+
 const SESSION_DEFAULT_FOCUS: Record<string, string> = {
-  push: 'Göğüs · Ön Omuz · Triceps',
+  push: 'Göğüs · Omuz · Triceps',
   pull: 'Latissimus · Üst Sırt · Biceps',
   legs: 'Quadriceps · Hamstring · Gluteus · Calf',
   upper: 'Göğüs · Sırt · Omuz · Kollar',
@@ -251,10 +297,10 @@ const SESSION_DEFAULT_FOCUS: Record<string, string> = {
 
 // Standart Web / Uzman Önerisi Split (Özel programı olmayan veya yeni kayıt olan kullanıcılar için)
 const DEFAULT_WEEKLY_SCHEDULE = [
-  { day: 'Pazartesi', type: 'Push Day', focus: 'Göğüs, Ön Omuz, Triceps', isRest: false },
+  { day: 'Pazartesi', type: 'Push Day', focus: 'Göğüs, Omuz, Triceps', isRest: false },
   { day: 'Salı', type: 'Pull Day', focus: 'Latissimus, Üst Sırt, Biceps', isRest: false },
   { day: 'Çarşamba', type: 'Dinlenme Günü', focus: 'Dinlenme & Toparlanma', isRest: true },
-  { day: 'Perşembe', type: 'Push Day', focus: 'Göğüs, Ön Omuz, Triceps', isRest: false },
+  { day: 'Perşembe', type: 'Push Day', focus: 'Göğüs, Omuz, Triceps', isRest: false },
   { day: 'Cuma', type: 'Legs Day', focus: 'Quadriceps, Hamstring, Gluteus, Calf', isRest: false },
   { day: 'Cumartesi', type: 'Legs Day', focus: 'Quadriceps, Hamstring, Gluteus, Calf', isRest: false },
   { day: 'Pazar', type: 'Pull Day', focus: 'Latissimus, Üst Sırt, Biceps', isRest: false },
@@ -695,6 +741,7 @@ export default function DashboardScreen() {
     (state.status === 'signedIn' ? state.user.username : 'Turan');
   const avatarUrl = (user?.avatar_url ?? '').trim();
   const userInitials = username.slice(0, 1).toUpperCase();
+  const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
 
   // Tarih Bilgisi
   const today = useMemo(() => new Date(), []);
@@ -1148,7 +1195,7 @@ export default function DashboardScreen() {
           target: String(ex.muscle_group || ex.target || todayCard.plannedFocus || todayCard.subtitle),
           setsCount,
           sets: `${setsCount} set`,
-          reps: ex.sets_data?.[0]?.reps ? `${ex.sets_data[0].reps} tekrar` : '8–12 tekrar',
+          reps: formatExerciseRepsRange(ex.sets_data, ex.reps),
         };
       });
     }
@@ -1173,16 +1220,16 @@ export default function DashboardScreen() {
         new Set(actualExercises.map((ex: any) => ex.muscle_group).filter(Boolean))
       );
       if (uniqueMuscles.length > 0) {
-        return uniqueMuscles.join(', ');
+        return formatCompactTargetFocus(uniqueMuscles.join(', '));
       }
     }
     const kind = getSessionKind(todayCard.title);
-    return (
+    const rawFocus =
       todayCard.plannedFocus ||
       todayCard.subtitle ||
       SESSION_DEFAULT_FOCUS[kind || 'other'] ||
-      'Genel Kuvvet'
-    );
+      'Genel Kuvvet';
+    return formatCompactTargetFocus(rawFocus);
   }, [todayCard]);
 
   // 12 Aylık Tüm Takvim Verileri Önceden Hazırlanır (Yatay kaydırırken aylar anında görünür)
@@ -1468,18 +1515,16 @@ export default function DashboardScreen() {
           </TouchableOpacity>
 
           <View style={styles.greetingCol}>
-            <Text style={styles.greetingTitle}>Merhaba {username}</Text>
+            <Text style={styles.greetingTitle} numberOfLines={1} adjustsFontSizeToFit>
+              Tekrar Hoş Geldin {username} 👋
+            </Text>
             <Text style={styles.greetingDate}>{todayFormatted}</Text>
-          </View>
-
-          <View style={styles.streakPill}>
-            <Text style={styles.streakPillText}>🔥 4. Gün Seri</Text>
           </View>
 
           <TouchableOpacity
             style={styles.bellBtn}
             activeOpacity={0.75}
-            onPress={() => Alert.alert('Bildirimler', 'Yeni bildiriminiz bulunmuyor.')}
+            onPress={() => setNotificationsModalOpen(true)}
           >
             <BellIcon size={18} color="#A98BFF" />
           </TouchableOpacity>
@@ -1515,27 +1560,36 @@ export default function DashboardScreen() {
 
           {/* Mini 3 İstatistik */}
           <View style={styles.heroMetaRow}>
-            <View style={[styles.miniMetaBox, { flex: 0.9 }]}>
-              <Text style={styles.miniMetaLabel}>HAREKET</Text>
+            <View style={[styles.miniMetaBox, styles.miniMetaCompact]}>
+              <Text style={styles.miniMetaLabel} numberOfLines={1}>
+                HAREKET
+              </Text>
               <Text style={styles.miniMetaVal} numberOfLines={1}>
                 {todayExerciseCount} Egzersiz
               </Text>
             </View>
-            <View style={[styles.miniMetaBox, { flex: 0.9 }]}>
-              <Text style={styles.miniMetaLabel}>TOPLAM SET</Text>
+            <View style={[styles.miniMetaBox, styles.miniMetaCompact]}>
+              <Text style={styles.miniMetaLabel} numberOfLines={1}>
+                TOPLAM SET
+              </Text>
               <Text style={styles.miniMetaVal} numberOfLines={1}>
                 {todayTotalSets} Set
               </Text>
             </View>
-            <View style={[styles.miniMetaBox, { flex: 1.3 }]}>
-              <Text style={styles.miniMetaLabel}>HEDEF BÖLGE</Text>
+            <View style={[styles.miniMetaBox, styles.miniMetaWide]}>
+              <Text style={styles.miniMetaLabel} numberOfLines={1}>
+                HEDEF BÖLGE
+              </Text>
               <Text
                 style={[
                   styles.miniMetaVal,
-                  { fontSize: 10.5, color: todayCard.isRest ? '#F4C35C' : '#55D6FF' },
+                  styles.miniMetaTargetVal,
+                  { color: todayCard.isRest ? '#F4C35C' : '#55D6FF' },
                 ]}
-                numberOfLines={2}
+                numberOfLines={1}
                 ellipsizeMode="tail"
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
               >
                 {todayTargetMuscles}
               </Text>
@@ -2048,6 +2102,54 @@ export default function DashboardScreen() {
           </Animated.View>
         </View>
       </ScrollView>
+
+      {/* ─── BİLDİRİM PANOSU (EKRANIN ORTASINDA) ─── */}
+      {notificationsModalOpen && (
+        <Modal
+          visible={notificationsModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setNotificationsModalOpen(false)}
+          statusBarTranslucent
+        >
+          <Pressable
+            style={styles.notifModalOverlay}
+            onPress={() => setNotificationsModalOpen(false)}
+          >
+            <Pressable
+              style={styles.notifModalCard}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.notifModalHeader}>
+                <View style={styles.notifModalHeaderIcon}>
+                  <BellIcon size={16} color="#A98BFF" />
+                </View>
+                <Text style={styles.notifModalTitle}>Bildirimler</Text>
+              </View>
+
+              <View style={styles.notifEmptyBody}>
+                <View style={styles.notifEmptyCircle}>
+                  <BellIcon size={24} color="#A98BFF" />
+                </View>
+                <Text style={styles.notifEmptyTitle}>Henüz bildiriminiz yok</Text>
+                <Text style={styles.notifEmptySubtitle}>
+                  Yeni antrenman ve uygulama bildirimleri burada görünecektir.
+                </Text>
+              </View>
+
+              <View style={styles.notifModalFooter}>
+                <TouchableOpacity
+                  style={styles.notifCloseBtn}
+                  onPress={() => setNotificationsModalOpen(false)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.notifCloseBtnText}>Kapat</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -2110,19 +2212,6 @@ const styles = StyleSheet.create({
     color: '#8E99B5',
     marginTop: 2,
     fontWeight: '500',
-  },
-  streakPill: {
-    borderWidth: 1,
-    borderColor: 'rgba(244, 195, 92, 0.35)',
-    backgroundColor: 'rgba(244, 195, 92, 0.12)',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-  },
-  streakPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#F4C35C',
   },
   bellBtn: {
     width: 38,
@@ -2216,17 +2305,25 @@ const styles = StyleSheet.create({
   // Hero Mini Meta
   heroMetaRow: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'stretch',
+    gap: 6,
     marginTop: 14,
   },
   miniMetaBox: {
-    flex: 1,
     borderRadius: 11,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
+    justifyContent: 'center',
+  },
+  miniMetaCompact: {
+    flexShrink: 0,
+  },
+  miniMetaWide: {
+    flex: 1,
+    minWidth: 0,
   },
   miniMetaLabel: {
     fontSize: 7.5,
@@ -2239,6 +2336,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#F1F5F9',
     marginTop: 3,
+  },
+  miniMetaTargetVal: {
+    fontSize: 10.5,
   },
 
   // Hero Butonları (Detay flex:1, Antrenmanı Başlat Kompakt)
@@ -2941,5 +3041,98 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#A98BFF',
     letterSpacing: 0.2,
+  },
+  notifModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  notifModalCard: {
+    width: '100%',
+    maxWidth: 350,
+    backgroundColor: '#12182D',
+    borderRadius: 22,
+    borderWidth: 1.6,
+    borderColor: 'rgba(169, 139, 255, 0.42)',
+    overflow: 'hidden',
+    shadowColor: '#743BFF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  notifModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  notifModalHeaderIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: 'rgba(169, 139, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(169, 139, 255, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  notifEmptyBody: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+    paddingHorizontal: 22,
+    gap: 8,
+  },
+  notifEmptyCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(169, 139, 255, 0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(169, 139, 255, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  notifEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    textAlign: 'center',
+  },
+  notifEmptySubtitle: {
+    fontSize: 12,
+    color: '#8E99B5',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  notifModalFooter: {
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+  },
+  notifCloseBtn: {
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1.4,
+    borderColor: 'rgba(169, 139, 255, 0.42)',
+    backgroundColor: 'rgba(169, 139, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifCloseBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#D8CAFF',
   },
 });
